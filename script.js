@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const player1ScoreDisplay = document.getElementById('player1-score');
     const player2ScoreDisplay = document.getElementById('player2-score');
     const resetGameButton = document.getElementById('reset-game');
+    const player1HandContainer = document.getElementById('player1-hand');
+    const player2HandContainer = document.getElementById('player2-hand');
 
     let boardState = {}; // Using an object to store tile placements: 'x,y': tileObject
     let player1Hand = [];
@@ -479,6 +481,21 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPlayerDisplay.textContent = `Current Player: Player ${currentPlayer}`;
         player1ScoreDisplay.textContent = `Player 1 Score: ${player1Score}`;
         player2ScoreDisplay.textContent = `Player 2 Score: ${player2Score}`;
+        updateHandHighlights(); // Update hand highlights based on current player
+    }
+
+    function updateHandHighlights() {
+        if (currentPlayer === 1) {
+            player1HandContainer.classList.add('active-hand');
+            player1HandContainer.classList.remove('inactive-hand');
+            player2HandContainer.classList.add('inactive-hand');
+            player2HandContainer.classList.remove('active-hand');
+        } else {
+            player2HandContainer.classList.add('active-hand');
+            player2HandContainer.classList.remove('inactive-hand');
+            player1HandContainer.classList.add('inactive-hand');
+            player1HandContainer.classList.remove('active-hand');
+        }
     }
 
     // --- Game Initialization ---
@@ -498,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayPlayerHand(1, player1Hand, player1HandDisplay);
         displayPlayerHand(2, player2Hand, player2HandDisplay);
 
-        updateGameInfo();
+        updateGameInfo(); // This will now also call updateHandHighlights
         gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board.";
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
