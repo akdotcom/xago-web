@@ -555,7 +555,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.fillStyle = color; // Use the provided color, which should have alpha
         ctx.fill();
-        // ctx.setLineDash([]); // Not needed
+
+        // Add a border to the highlight
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; // Darker, semi-transparent border
+        ctx.lineWidth = 2; // Border width
+        ctx.setLineDash([]); // Ensure solid line for the border
+        ctx.stroke();
     }
 
 
@@ -773,9 +778,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const orientedEdges = tile.getOrientedEdges(); // Use current orientation
 
         if (placedTilesCount === 0) {
-            // First tile can be placed anywhere (usually center, but for grid, any empty cell)
-            if (!isDragOver) gameMessageDisplay.textContent = "First tile placed.";
-            return true;
+            // First tile must be placed at (0,0)
+            if (x === 0 && y === 0) {
+                if (!isDragOver) gameMessageDisplay.textContent = "First tile placed at (0,0).";
+                return true;
+            } else {
+                if (!isDragOver) gameMessageDisplay.textContent = "The first tile must be placed at the center (0,0).";
+                return false;
+            }
         }
 
         // Subsequent tiles must touch at least one existing tile and match edges.
