@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let player2Score = 0;
     let selectedTile = null; // { tile: tileObject, handElement: tileElement }
     let gameInitialized = false;
+    let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
+    let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
 
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
@@ -58,6 +60,62 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function removeTileFromBoardAndReturnToHand(tileToRemove) {
+        console.log(`Removing tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
+
+        // 1. Remove from boardState
+        const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
+        delete boardState[tileKey];
+
+        // 2. Return to Owner's Hand
+        if (tileToRemove.playerId === 1) {
+            player1Hand.push(tileToRemove);
+        } else {
+            player2Hand.push(tileToRemove);
+        }
+
+        // 3. Reset Tile Properties
+        tileToRemove.x = null;
+        tileToRemove.y = null;
+        tileToRemove.orientation = 0; // Reset orientation
+
+        // 4. Update Owner's Hand Display
+        if (tileToRemove.playerId === 1) {
+            displayPlayerHand(1, player1Hand, player1HandDisplay);
+        } else {
+            displayPlayerHand(2, player2Hand, player2HandDisplay);
+        }
+
+        // 5. Redraw Board
+        redrawBoardOnCanvas(); // This will also clear old highlights if isRemovingTiles becomes false
+
+        // 6. Check for More Surrounded Tiles
+        const newSurroundedList = getSurroundedTiles(boardState);
+        currentSurroundedTilesForRemoval = newSurroundedList; // Update the global list
+
+        if (newSurroundedList.length > 0) {
+            // Still more tiles to remove, continue the process
+            console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
+            // Update message and keep isRemovingTiles = true (already true)
+            gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+            redrawBoardOnCanvas(); // Redraw to update highlights if any changed
+        } else {
+            // No more tiles are surrounded, end the removal phase and proceed with game turn
+            console.log("No more surrounded tiles. Ending removal phase.");
+            isRemovingTiles = false;
+            currentSurroundedTilesForRemoval = []; // Clear the list
+
+            gameMessageDisplay.textContent = "Tile removal complete. Finishing turn."; // Temporary message
+
+            calculateScores();
+            if (checkGameEnd()) {
+                endGame();
+            } else {
+                switchTurn();
+            }
+        }
+    }
+
     // Function to redraw the entire board state onto the canvas
     function redrawBoardOnCanvas() {
         // Ensure canvas is cleared and background drawn before redrawing tiles
@@ -85,6 +143,28 @@ document.addEventListener('DOMContentLoaded', () => {
              cy = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * tile.x + Math.sqrt(3) * tile.y);
 
             drawHexTile(ctx, cx, cy, tile);
+
+            // Highlight if in removal mode and tile is one of the surrounded ones
+            if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
+                ctx.strokeStyle = 'red'; // Highlight color
+                ctx.lineWidth = 3;
+                // Re-draw the hexagon border for highlight
+                ctx.beginPath();
+                const vertices = [];
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 180 * (60 * i);
+                    vertices.push({
+                        x: cx + HEX_SIDE_LENGTH * Math.cos(angle),
+                        y: cy + HEX_SIDE_LENGTH * Math.sin(angle)
+                    });
+                }
+                ctx.moveTo(vertices[0].x, vertices[0].y);
+                for (let i = 1; i < 6; i++) {
+                    ctx.lineTo(vertices[i].x, vertices[i].y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
         }
     }
 
@@ -526,13 +606,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            calculateScores(); // Update scores after each turn
+            // Instead of directly calculating scores and switching turns,
+            // call the new function to check for surrounded tiles.
+            checkForSurroundedTilesAndProceed();
 
-            if (checkGameEnd()) {
-                endGame(); // endGame also calls calculateScores, but it's fine
-            } else {
-                switchTurn();
-            }
         } else {
             // Placement was invalid, message already set by isPlacementValid
             console.log("Invalid placement.");
@@ -559,6 +636,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Game Logic: Validation, Turns, End, Scoring ---
+        // This function will be called from handleCellClick after a tile is placed.
+        function checkForSurroundedTilesAndProceed() {
+            const surroundedTiles = getSurroundedTiles(boardState);
+            if (surroundedTiles.length > 0) {
+                isRemovingTiles = true; // This will be set true inside processTileRemoval as well
+                processTileRemoval(surroundedTiles);
+            } else {
+                isRemovingTiles = false; // Ensure it's reset if no tiles were surrounded
+                calculateScores(); // Update scores after each turn
+                if (checkGameEnd()) {
+                    endGame();
+                } else {
+                    switchTurn();
+                }
+            }
+        }
+
     function isPlacementValid(tile, x, y, isDragOver = false) {
         const targetKey = `${x},${y}`;
         if (boardState[targetKey]) {
@@ -650,6 +744,60 @@ document.addEventListener('DOMContentLoaded', () => {
         return neighbors;
     }
 
+    function isTileSurrounded(q, r, currentBoardState) {
+        const neighbors = getNeighbors(q, r);
+        if (neighbors.length < 6) { // Should always be 6 for a hex tile not on an edge of a finite board
+            return false; // Or handle as an error, but practically means not surrounded
+        }
+
+        for (const neighborInfo of neighbors) {
+            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+            if (!currentBoardState[neighborKey]) {
+                return false; // Found an empty neighboring cell
+            }
+        }
+        return true; // All 6 neighbors are occupied
+    }
+
+    function getSurroundedTiles(currentBoardState) {
+        const surroundedTiles = [];
+        for (const key in currentBoardState) {
+            const tile = currentBoardState[key];
+            // Ensure tile.x and tile.y are not null, though they should be if in boardState
+            if (tile.x !== null && tile.y !== null) {
+                if (isTileSurrounded(tile.x, tile.y, currentBoardState)) {
+                    surroundedTiles.push(tile);
+                }
+            }
+        }
+        return surroundedTiles;
+    }
+
+    function processTileRemoval(surroundedTiles) {
+        currentSurroundedTilesForRemoval = surroundedTiles; // Store the list globally
+
+        if (currentSurroundedTilesForRemoval.length > 0) {
+            isRemovingTiles = true; // Ensure this state is active
+            gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+            console.log("Tile removal phase. Surrounded tiles:", currentSurroundedTilesForRemoval.map(t => t.id));
+            redrawBoardOnCanvas(); // Redraw to show highlights
+        } else {
+            // This case should ideally be handled by the calling function (checkForSurroundedTilesAndProceed)
+            // but as a safeguard:
+            isRemovingTiles = false;
+            currentSurroundedTilesForRemoval = [];
+            console.log("No surrounded tiles to remove, proceeding with normal turn flow.");
+            // Normal turn progression (score, end check, switch turn) would follow here
+            // This is already handled by checkForSurroundedTilesAndProceed's else block
+            calculateScores();
+            if (checkGameEnd()) {
+                endGame();
+            } else {
+                switchTurn();
+            }
+        }
+    }
+
 
     function switchTurn() {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
@@ -729,25 +877,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
-        if (!selectedTile) {
-            gameMessageDisplay.textContent = "Please select a tile from your hand first.";
-            return;
-        }
-        if (selectedTile.originalPlayerId !== currentPlayer) {
-            gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen).";
-            return;
-        }
-
         const rect = gameCanvas.getBoundingClientRect();
         const pixelX = event.clientX - rect.left;
         const pixelY = event.clientY - rect.top;
-
         const { q, r } = pixelToHexGrid(pixelX, pixelY);
 
-        // For now, directly use q,r as x,y for game logic.
-        // This assumes our game logic (isPlacementValid, getNeighbors) will also use q,r.
         console.log(`Canvas clicked at pixel (${pixelX}, ${pixelY}), converted to hex grid (q=${q}, r=${r})`);
-        handleCellClick(q, r);
+
+        if (isRemovingTiles) {
+            // --- Handle Tile Removal Click ---
+            const tileKey = `${q},${r}`;
+            const clickedTile = boardState[tileKey];
+
+            if (clickedTile && currentSurroundedTilesForRemoval.some(st => st.id === clickedTile.id)) {
+                // Valid tile selected for removal
+                removeTileFromBoardAndReturnToHand(clickedTile); // This function will be created in the next step
+            } else {
+                gameMessageDisplay.textContent = "Invalid selection. Click on a highlighted (surrounded) tile to remove it.";
+            }
+        } else {
+            // --- Handle Tile Placement Click (existing logic) ---
+            if (!selectedTile) {
+                gameMessageDisplay.textContent = "Please select a tile from your hand first.";
+                return;
+            }
+            if (selectedTile.originalPlayerId !== currentPlayer) {
+                gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen).";
+                return;
+            }
+            // For now, directly use q,r as x,y for game logic.
+            // This assumes our game logic (isPlacementValid, getNeighbors) will also use q,r.
+            handleCellClick(q, r);
+        }
     });
 
     // Converts pixel coordinates on canvas to logical hex grid coordinates (q, r - axial)
