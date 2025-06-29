@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagon Tile Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Hexagon Tile Game</h1>
+    </header>
+
+    <main>
+        <div id="game-info">
+            <p id="current-player">Current Player: Player 1</p>
+            <p id="game-message"></p>
+            <p id="player1-score">Player 1 Score: 0</p>
+            <p id="player2-score">Player 2 Score: 0</p>
+        </div>
+
+        <div id="game-board">
+            <!-- Tiles will be dynamically added here by JavaScript -->
+        </div>
+
+        <div id="player-hands">
+            <div id="player1-hand" class="player-hand">
+                <h2>Player 1 Hand</h2>
+                <div class="tiles-container">
+                    <!-- Player 1 tiles -->
+                </div>
+            </div>
+            <div id="player2-hand" class="player-hand">
+                <h2>Player 2 Hand</h2>
+                <div class="tiles-container">
+                    <!-- Player 2 tiles -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <button id="reset-game">Reset Game</button>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
