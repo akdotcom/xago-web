@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
         [1,0,1,0,1,0], // 3 triangles, alternating
         [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
-        [1,1,0,1,1,0], // 4 triangles (complement of 2 blanks separated by 1)
+        [1,1,1,0,1,0], // 4 triangles (TTTBTB, formerly TTBTTB)
         [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
         [1,1,1,1,1,0], // 5 triangles
         [1,1,1,1,1,1]  // 6 triangles
