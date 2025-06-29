@@ -11,10 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const player1HandDisplay = document.querySelector('#player1-hand .tiles-container');
     const player2HandDisplay = document.querySelector('#player2-hand .tiles-container');
-    const currentPlayerDisplay = document.getElementById('current-player');
-    const gameMessageDisplay = document.getElementById('game-message');
-    const player1ScoreDisplay = document.getElementById('player1-score');
-    const player2ScoreDisplay = document.getElementById('player2-score');
+    // const currentPlayerDisplay = document.getElementById('current-player'); // Removed
+    // const gameMessageDisplay = document.getElementById('game-message'); // Removed
+    // const player1ScoreDisplay = document.getElementById('player1-score'); // Removed
+    // const player2ScoreDisplay = document.getElementById('player2-score'); // Removed
+    const playerScoresContainer = document.getElementById('player-scores'); // New container for scores
+    let p1ScoreDisplayFloater, p2ScoreDisplayFloater; // Will be created dynamically
+
     const resetGameButton = document.getElementById('reset-game');
     const player1HandContainer = document.getElementById('player1-hand');
     const player2HandContainer = document.getElementById('player2-hand');
@@ -113,7 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy')) {
                 // AI's turn and more tiles to remove, let AI continue removing
-                gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is removing more tiles...`;
+                // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is removing more tiles...`; // Removed
+                console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
                 console.log("AI continues tile removal process. New list:", newSurroundedList.map(t => t.id));
                 redrawBoardOnCanvas(); // Update highlights for the AI's next choice (visual feedback)
                 // Using setTimeout to allow canvas to redraw before AI logic runs,
@@ -121,7 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(performAiTileRemoval, 250); // Short delay, performAiTileRemoval also has its own delay
             } else {
                 // Human player's turn, or AI is human - prompt for click
-                gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+                // gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`; // Removed
+                console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
                 redrawBoardOnCanvas(); // Redraw to update highlights for human player
             }
         } else {
@@ -129,7 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("No more surrounded tiles. Ending removal phase.");
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
-            gameMessageDisplay.textContent = "Tile removal complete. Finishing turn.";
+            // gameMessageDisplay.textContent = "Tile removal complete. Finishing turn."; // Removed
+            console.log("Tile removal complete. Finishing turn.");
 
             redrawBoardOnCanvas(); // Clear highlights from removed tiles before proceeding
 
@@ -495,9 +501,16 @@ document.addEventListener('DOMContentLoaded', () => {
     */
 
     function updateGameInfo() {
-        currentPlayerDisplay.textContent = `Current Player: Player ${currentPlayer}`;
-        player1ScoreDisplay.textContent = `Player 1 Score: ${player1Score}`;
-        player2ScoreDisplay.textContent = `Player 2 Score: ${player2Score}`;
+        // currentPlayerDisplay.textContent = `Current Player: Player ${currentPlayer}`; // Removed
+        console.log(`Current Player: Player ${currentPlayer}`); // Log current player
+
+        if (p1ScoreDisplayFloater && p2ScoreDisplayFloater) {
+            p1ScoreDisplayFloater.textContent = player1Score;
+            p1ScoreDisplayFloater.style.color = 'lightblue'; // Player 1 color
+
+            p2ScoreDisplayFloater.textContent = player2Score;
+            p2ScoreDisplayFloater.style.color = 'lightcoral'; // Player 2 color
+        }
         updateHandHighlights(); // Update hand highlights based on current player
     }
 
@@ -544,11 +557,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         initializeGameBoard(); // This clears the canvas and sets up background
 
+        // Create score display elements if they don't exist
+        if (!p1ScoreDisplayFloater) {
+            p1ScoreDisplayFloater = document.createElement('span');
+            p1ScoreDisplayFloater.id = 'p1-score-display'; // For potential specific styling
+            playerScoresContainer.appendChild(p1ScoreDisplayFloater);
+        }
+        if (!p2ScoreDisplayFloater) {
+            p2ScoreDisplayFloater = document.createElement('span');
+            p2ScoreDisplayFloater.id = 'p2-score-display'; // For potential specific styling
+            playerScoresContainer.appendChild(p2ScoreDisplayFloater);
+        }
+
         displayPlayerHand(1, player1Hand, player1HandDisplay);
         displayPlayerHand(2, player2Hand, player2HandDisplay);
 
         updateGameInfo(); // This will now also call updateHandHighlights
-        gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board.";
+        // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
+        console.log("Player 1's turn. Select a tile and place it on the board.");
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
 
@@ -648,7 +674,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function selectTileFromHand(tile, tileCanvasElement, playerId) {
         if (playerId !== currentPlayer) {
-            gameMessageDisplay.textContent = "It's not your turn!";
+            // gameMessageDisplay.textContent = "It's not your turn!"; // Removed
+            console.log("It's not your turn!");
             return;
         }
 
@@ -667,7 +694,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
             drawHexTile(tileCtx, cx, cy, selectedTile.tile);
 
-            gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`;
+            // gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`; // Removed
+            console.log(`Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`);
             updatePlacementHighlights(); // Update highlights after rotation
         } else {
             // This is a new selection or a switch from another tile
@@ -686,7 +714,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update selectedTile global variable
             selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
 
-            gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`;
+            // gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`; // Removed
+            console.log(`Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`);
             console.log("Selected tile:", selectedTile);
             updatePlacementHighlights(); // Update highlights on new selection
         }
@@ -710,7 +739,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawHexTile(tileCtx, cx, cy, selectedTile.tile);
 
                 // Update game message if needed, or rely on the selection message
-                gameMessageDisplay.textContent = `Tile rotated. Press 'r' to rotate again. Click board to place.`;
+                // gameMessageDisplay.textContent = `Tile rotated. Press 'r' to rotate again. Click board to place.`; // Removed
+                console.log(`Tile rotated. Press 'r' to rotate again. Click board to place.`);
                 updatePlacementHighlights(); // Update highlights after rotation via key press
             }
         }
@@ -719,11 +749,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleCellClick(x, y) {
         console.log(`Cell clicked: x=${x}, y=${y}`);
         if (!selectedTile) {
-            gameMessageDisplay.textContent = "Please select a tile from your hand first.";
+            // gameMessageDisplay.textContent = "Please select a tile from your hand first."; // Removed
+            console.log("Please select a tile from your hand first.");
             return;
         }
         if (selectedTile.originalPlayerId !== currentPlayer) {
-            gameMessageDisplay.textContent = "Error: Tile selection does not match current player."; // Should not happen
+            // gameMessageDisplay.textContent = "Error: Tile selection does not match current player."; // Removed
+            console.log("Error: Tile selection does not match current player."); // Should not happen
             return;
         }
 
@@ -802,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function isPlacementValid(tile, x, y, isDragOver = false) {
         const targetKey = `${x},${y}`;
         if (boardState[targetKey]) {
-            if (!isDragOver) gameMessageDisplay.textContent = "This cell is already occupied.";
+            if (!isDragOver) console.log("This cell is already occupied."); // gameMessageDisplay.textContent = "This cell is already occupied.";
             return false; // Cell occupied
         }
 
@@ -812,10 +844,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (placedTilesCount === 0) {
             // First tile must be placed at (0,0)
             if (x === 0 && y === 0) {
-                if (!isDragOver) gameMessageDisplay.textContent = "First tile placed at (0,0).";
+                if (!isDragOver) console.log("First tile placed at (0,0)."); // gameMessageDisplay.textContent = "First tile placed at (0,0).";
                 return true;
             } else {
-                if (!isDragOver) gameMessageDisplay.textContent = "The first tile must be placed at the center (0,0).";
+                if (!isDragOver) console.log("The first tile must be placed at the center (0,0)."); // gameMessageDisplay.textContent = "The first tile must be placed at the center (0,0).";
                 return false;
             }
         }
@@ -836,24 +868,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const neighborEdgeType = neighborOrientedEdges[edgeIndexOnNeighborTile];
 
                 if (newTileEdgeType !== neighborEdgeType) {
-                    if (!isDragOver) gameMessageDisplay.textContent = `Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`;
+                    if (!isDragOver) console.log(`Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`); // gameMessageDisplay.textContent = `Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`;
                     return false; // Edge types do not match
                 }
             }
         }
 
         if (!touchesExistingTile) {
-            if (!isDragOver) gameMessageDisplay.textContent = "Tile must touch an existing tile.";
+            if (!isDragOver) console.log("Tile must touch an existing tile."); // gameMessageDisplay.textContent = "Tile must touch an existing tile.";
             return false;
         }
 
         // New check: Ensure the target space (x,y) itself is not enclosed
         if (isSpaceEnclosed(x, y, boardState)) {
-            if (!isDragOver) gameMessageDisplay.textContent = "Cannot place tile in an enclosed space.";
+            if (!isDragOver) console.log("Cannot place tile in an enclosed space."); // gameMessageDisplay.textContent = "Cannot place tile in an enclosed space.";
             return false;
         }
 
-        if (!isDragOver) gameMessageDisplay.textContent = "Valid placement.";
+        if (!isDragOver) console.log("Valid placement."); // gameMessageDisplay.textContent = "Valid placement.";
         return true;
     }
 
@@ -959,13 +991,15 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
             if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy')) {
                 // AI's turn and tiles are surrounded by its move, start AI removal process
-                gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is starting tile removal...`;
+                // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is starting tile removal...`; // Removed
+                console.log(`Player 2 (AI - ${opponentType}) is starting tile removal...`);
                 redrawBoardOnCanvas(); // Show highlights
                 // Short delay before AI starts, allowing UI to update and give a sense of action.
                 setTimeout(performAiTileRemoval, 500); // Consistent with other AI initiation delays
             } else {
                 // Human player's turn, or AI is human - prompt for click
-                gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+                // gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`; // Removed
+                console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
                 redrawBoardOnCanvas(); // Redraw to show highlights
             }
         } else {
@@ -996,7 +1030,8 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             return; // Do not proceed with the turn
         }
 
-        gameMessageDisplay.textContent = `Player ${currentPlayer}'s turn.`;
+        // gameMessageDisplay.textContent = `Player ${currentPlayer}'s turn.`; // Removed
+        console.log(`Player ${currentPlayer}'s turn.`);
         console.log(`Switched turn to Player ${currentPlayer}`);
 
         // Clear any existing tile selection and its highlights when turns switch
@@ -1013,10 +1048,12 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
         // Check if AI needs to make a move or remove a tile
         if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
-            gameMessageDisplay.textContent = "Player 2 (AI) is thinking...";
+            // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
+            console.log("Player 2 (AI) is thinking...");
             setTimeout(performAiMove, 1000);
         } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
-            gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+            // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
+            console.log("Player 2 (AI) is choosing a tile to remove...");
             setTimeout(performAiTileRemoval, 1000);
         }
     }
@@ -1036,8 +1073,9 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         } else {
             winnerMessage = `It's a tie! Both players have ${player1Score} points.`;
         }
-        gameMessageDisplay.textContent = `Game Over! ${winnerMessage}`;
-        currentPlayerDisplay.textContent = "Game Finished";
+        // gameMessageDisplay.textContent = `Game Over! ${winnerMessage}`; // Removed
+        // currentPlayerDisplay.textContent = "Game Finished"; // Removed
+        console.log(`Game Over! ${winnerMessage}`);
         console.log("Game ended. ", winnerMessage);
         // Disable further moves, or handle via selectedTile being null / hands empty
     }
@@ -1292,12 +1330,14 @@ function animateView() {
         if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && !isRemovingTiles) {
             // Add a small delay to allow any UI updates to settle and prevent rapid consecutive moves
             // if the change happens very quickly after a human P2 move might have been expected.
-            gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately
+            // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately // Removed
+            console.log("Player 2 (AI) is thinking... (opponent type changed)");
             setTimeout(performAiMove, 500);
         }
         // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
         else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && isRemovingTiles) {
-            gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+            // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
+            console.log("Player 2 (AI) is choosing a tile to remove... (opponent type changed)");
             setTimeout(performAiTileRemoval, 500);
         }
     });
@@ -1320,16 +1360,19 @@ function animateView() {
                 // Valid tile selected for removal
                 removeTileFromBoardAndReturnToHand(clickedTile); // This function will be created in the next step
             } else {
-                gameMessageDisplay.textContent = "Invalid selection. Click on a highlighted (surrounded) tile to remove it.";
+                // gameMessageDisplay.textContent = "Invalid selection. Click on a highlighted (surrounded) tile to remove it."; // Removed
+                console.log("Invalid selection. Click on a highlighted (surrounded) tile to remove it.");
             }
         } else {
             // --- Handle Tile Placement Click (existing logic) ---
             if (!selectedTile) {
-                gameMessageDisplay.textContent = "Please select a tile from your hand first.";
+                // gameMessageDisplay.textContent = "Please select a tile from your hand first."; // Removed
+                console.log("Please select a tile from your hand first.");
                 return;
             }
             if (selectedTile.originalPlayerId !== currentPlayer) {
-                gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen).";
+                // gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen)."; // Removed
+                console.log("Error: Tile selection does not match current player (should not happen).");
                 return;
             }
             // For now, directly use q,r as x,y for game logic.
@@ -1416,7 +1459,8 @@ function animateView() {
             return;
         }
 
-        gameMessageDisplay.textContent = "Player 2 (AI) is thinking...";
+        // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
+        console.log("Player 2 (AI) is thinking... (performAiMove)");
         let bestMove = null;
 
         if (opponentType === 'random') {
@@ -1551,7 +1595,8 @@ function animateView() {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
 
                 console.log(`AI (${opponentType}): Successfully placed tile ${tileToPlace.id}.`);
-                gameMessageDisplay.textContent = `Player 2 (AI) placed tile.`;
+                // gameMessageDisplay.textContent = `Player 2 (AI) placed tile.`; // Removed
+                console.log(`Player 2 (AI) placed tile.`);
                 checkForSurroundedTilesAndProceed();
                 // Ensure view updates after AI move and any subsequent actions (like tile removal) are complete.
                 updateViewParameters();
@@ -1559,12 +1604,14 @@ function animateView() {
             } else {
                 // This should not happen if isPlacementValid was checked correctly during simulation
                 console.error(`AI (${opponentType}): Failed to place tile ${tileToPlace.id} despite it being considered a valid move.`);
-                gameMessageDisplay.textContent = `Player 2 (AI) failed to make a move.`;
+                // gameMessageDisplay.textContent = `Player 2 (AI) failed to make a move.`; // Removed
+                console.log(`Player 2 (AI) failed to make a move.`);
                 switchTurn(); // Pass turn
             }
         } else {
             console.log(`AI (${opponentType}): Could not find any valid move. Passing turn.`);
-            gameMessageDisplay.textContent = "Player 2 (AI) passes.";
+            // gameMessageDisplay.textContent = "Player 2 (AI) passes."; // Removed
+            console.log("Player 2 (AI) passes.");
             calculateScores();
             if (checkGameEnd()) {
                 endGame();
@@ -1584,7 +1631,8 @@ function animateView() {
             return;
         }
 
-        gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is choosing a tile to remove...`;
+        // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is choosing a tile to remove...`; // Removed
+        console.log(`Player 2 (AI - ${opponentType}) is choosing a tile to remove... (performAiTileRemoval)`);
         let tileToRemove = null;
 
         if (opponentType === 'random') {
@@ -1650,7 +1698,8 @@ function animateView() {
 
         if (tileToRemove) {
             console.log(`AI (${opponentType}): Decided to remove tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y})`);
-            gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) removes tile ${tileToRemove.id}.`;
+            // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) removes tile ${tileToRemove.id}.`; // Removed
+            console.log(`Player 2 (AI - ${opponentType}) removes tile ${tileToRemove.id}.`);
 
             // Simulate a slight delay for the user to see the choice
             // The iterative auto-removal will be handled by removeTileFromBoardAndReturnToHand re-triggering AI removal.
@@ -1664,7 +1713,8 @@ function animateView() {
             // As a fallback, to prevent getting stuck, exit removal mode and proceed with game flow.
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
-            gameMessageDisplay.textContent = "AI encountered an issue during tile removal. Proceeding...";
+            // gameMessageDisplay.textContent = "AI encountered an issue during tile removal. Proceeding..."; // Removed
+            console.log("AI encountered an issue during tile removal. Proceeding...");
             redrawBoardOnCanvas(); // Clear highlights
             calculateScores();
             if (checkGameEnd()) {
