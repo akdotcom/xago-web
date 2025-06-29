@@ -1075,73 +1075,77 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
 function updateViewParameters() {
     const placedTiles = Object.values(boardState);
-
-    // Define a set to store coordinates for bounding box calculation.
-    // This set will include placed tiles and an additional border around them.
-    const allRelevantCoords = new Set();
+    const coordsForBoundingBox = new Set();
 
     if (placedTiles.length === 0) {
-        // No tiles played, center on logical (0,0) and include its immediate neighbors for the initial view.
+        // No tiles played, center on logical (0,0).
+        // The view should show (0,0) and its immediate surrounding hexes for potential placement.
         targetOffsetX = gameCanvas.width / 2;
         targetOffsetY = gameCanvas.height / 2;
-        targetZoomLevel = 1.0; // Default zoom
+        targetZoomLevel = 0.8; // Start with a sensible zoom for an empty board.
 
-        allRelevantCoords.add("0,0");
+        // Add (0,0) and its direct neighbors to the bounding box calculation.
+        coordsForBoundingBox.add("0,0");
         getNeighbors(0,0).forEach(neighbor => {
-            allRelevantCoords.add(`${neighbor.nx},${neighbor.ny}`);
+            coordsForBoundingBox.add(`${neighbor.nx},${neighbor.ny}`);
         });
-        // Add one more layer of neighbors for the "tile-sized" border around (0,0)
-        const initialNeighbors = [...allRelevantCoords]; // Copy current relevant coords
-        initialNeighbors.forEach(coordStr => {
-            const [q, r] = coordStr.split(',').map(Number);
-            getNeighbors(q, r).forEach(nextNeighbor => {
-                allRelevantCoords.add(`${nextNeighbor.nx},${nextNeighbor.ny}`);
+        // Add one more layer around these initial spots to ensure they are not cut off.
+        const initialRelevantCoords = [...coordsForBoundingBox];
+        initialRelevantCoords.forEach(coordStr => {
+            const [q,r] = coordStr.split(',').map(Number);
+            getNeighbors(q,r).forEach(nextNeighbor => {
+                coordsForBoundingBox.add(`${nextNeighbor.nx},${nextNeighbor.ny}`);
             });
         });
 
     } else {
-        // If tiles are on the board, calculate view based on them and a border.
-        const coordsForBorderCalculation = new Set();
-
-        // Start with all placed tiles.
+        // Tiles are on the board.
+        // 1. Add all placed tiles to the set for bounding box calculation.
         placedTiles.forEach(tile => {
-            coordsForBorderCalculation.add(`${tile.x},${tile.y}`);
+            coordsForBoundingBox.add(`${tile.x},${tile.y}`);
         });
 
-        // Iteration 1: Add direct neighbors of placed tiles (playable locations).
-        // This is similar to the old logic but ensures we capture all immediate empty spots.
-        const placedTileCoords = [...coordsForBorderCalculation]; // Snapshot before adding neighbors
-        placedTileCoords.forEach(coordStr => {
-            const [q, r] = coordStr.split(',').map(Number);
-            getNeighbors(q, r).forEach(neighbor => {
-                // Add to border calculation set, regardless of whether it's occupied,
-                // as we want the border around the core group of tiles.
-                coordsForBorderCalculation.add(`${neighbor.nx},${neighbor.ny}`);
+        // 2. Add all valid, empty, adjacent placement spots.
+        const potentialPlacementSpots = new Set();
+        placedTiles.forEach(tile => {
+            const neighbors = getNeighbors(tile.x, tile.y);
+            neighbors.forEach(neighborInfo => {
+                const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+                if (!boardState[neighborKey]) { // If the spot is empty
+                    // Further check if placing a tile here would be valid (e.g. not enclosed)
+                    // For zoom purposes, we want to ensure *any* empty adjacent spot is potentially visible.
+                    // The strict placement validation (isPlacementValid) is for actual placement,
+                    // here we are just defining the visual boundary.
+                    // However, we must ensure it's not an enclosed spot that can never be played.
+                    if (!isSpaceEnclosed(neighborInfo.nx, neighborInfo.ny, boardState)) {
+                        potentialPlacementSpots.add(neighborKey);
+                    }
+                }
             });
         });
 
-        // Iteration 2: Add neighbors of the *previous set* to create the "tile-sized" border.
-        // This expands the view by one more ring of hexes.
-        const currentBorderCandidateCoords = [...coordsForBorderCalculation];
-        currentBorderCandidateCoords.forEach(coordStr => {
+        potentialPlacementSpots.forEach(spot => coordsForBoundingBox.add(spot));
+
+        // 3. Add a one-hex border around all collected (placed + potential) spots.
+        // This ensures the edges of these spots are fully visible.
+        const currentContentCoords = [...coordsForBoundingBox]; // Snapshot of tiles and direct playable spots
+        currentContentCoords.forEach(coordStr => {
             const [q, r] = coordStr.split(',').map(Number);
-            getNeighbors(q, r).forEach(nextNeighbor => {
-                allRelevantCoords.add(`${nextNeighbor.nx},${nextNeighbor.ny}`);
+            getNeighbors(q, r).forEach(outerNeighbor => {
+                coordsForBoundingBox.add(`${outerNeighbor.nx},${outerNeighbor.ny}`);
             });
         });
-        // Also ensure all originally placed tiles and their direct neighbors are in allRelevantCoords
-        // This ensures the core content is definitely part of the bounding box.
-        coordsForBorderCalculation.forEach(c => allRelevantCoords.add(c));
     }
 
+    if (coordsForBoundingBox.size === 0) { // Fallback, should not happen with the new logic
+        coordsForBoundingBox.add("0,0");
+         getNeighbors(0,0).forEach(neighbor => {
+            coordsForBoundingBox.add(`${neighbor.nx},${neighbor.ny}`);
+        });
+    }
 
     let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
-
-    if (allRelevantCoords.size === 0) { // Should not happen with new logic, but as a fallback
-        allRelevantCoords.add("0,0"); // Default to (0,0) if somehow empty
-    }
-
-    allRelevantCoords.forEach(coordStr => {
+    coordsForBoundingBox.forEach(coordStr => {
         const [q, r] = coordStr.split(',').map(Number);
         minQ = Math.min(minQ, q);
         maxQ = Math.max(maxQ, q);
@@ -1149,20 +1153,14 @@ function updateViewParameters() {
         maxR = Math.max(maxR, r);
     });
 
-    // Calculate the geometric center of the bounding box of relevant cells.
     const boundingBoxCenterQ = minQ + (maxQ - minQ) / 2;
     const boundingBoxCenterR = minR + (maxR - minR) / 2;
 
-    // Estimate pixel dimensions needed for the bounding box.
     let maxPixelX = -Infinity, minPixelX = Infinity, maxPixelY = -Infinity, minPixelY = Infinity;
-
-    allRelevantCoords.forEach(coordStr => {
+    coordsForBoundingBox.forEach(coordStr => {
         const [q, r] = coordStr.split(',').map(Number);
-        // Center of this hex cell at zoom 1, relative to (0,0) logical.
         const cellCX = BASE_HEX_SIDE_LENGTH * (3/2 * q);
         const cellCY = BASE_HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
-
-        // Extents from this center (full width/height of one hex)
         const hexScreenWidth = BASE_HEX_SIDE_LENGTH * 2;
         const hexScreenHeight = BASE_HEX_SIDE_LENGTH * Math.sqrt(3);
 
@@ -1175,8 +1173,7 @@ function updateViewParameters() {
     const totalPixelWidthNeeded = maxPixelX - minPixelX;
     const totalPixelHeightNeeded = maxPixelY - minPixelY;
 
-    // Calculate zoom level to fit this bounding box.
-    const padding = 0.90; // Use 90% of canvas width/height for some margin.
+    const padding = 0.95; // Reduced padding for a tighter zoom (was 0.90)
     let zoomX = 1, zoomY = 1;
 
     if (totalPixelWidthNeeded > 0) {
@@ -1186,22 +1183,19 @@ function updateViewParameters() {
       zoomY = (gameCanvas.height * padding) / totalPixelHeightNeeded;
     }
 
-    // Determine target zoom, applying limits.
-    // If only one hex (or very few) are relevant (e.g. initial (0,0) with its border),
-    // the calculated zoom might be very high. Cap it.
-    // If many hexes, zoom might be very low. Cap it.
     targetZoomLevel = Math.min(zoomX, zoomY);
-    targetZoomLevel = Math.min(targetZoomLevel, 1.5); // Max zoom cap
-    targetZoomLevel = Math.max(targetZoomLevel, 0.2); // Min zoom cap
+    // Max zoom: prevent zooming in too much on a single tile or small cluster.
+    // Min zoom: prevent zooming out too far on a very spread-out board.
+    targetZoomLevel = Math.min(targetZoomLevel, 1.8); // Increased max zoom slightly
+    targetZoomLevel = Math.max(targetZoomLevel, 0.15); // Decreased min zoom slightly
 
-    // If board was initially empty, use a default reasonable zoom rather than trying to zoom to fit a small area.
+    // If board was initially empty, and the default calculation leads to a very different zoom,
+    // stick to a reasonable default. The initial 0.8 might be overridden by the calculation,
+    // so this ensures a good starting view.
     if (placedTiles.length === 0) {
-        targetZoomLevel = 0.8; // A sensible default zoom for an empty board showing (0,0) and its border.
+        targetZoomLevel = Math.min(targetZoomLevel, 0.8); // Ensure initial zoom is not too large
     }
 
-
-    // Target offset should place the boundingBoxCenterQ, boundingBoxCenterR (logical)
-    // at the canvas center (pixel).
     const scaledSideLength = BASE_HEX_SIDE_LENGTH * targetZoomLevel;
     targetOffsetX = gameCanvas.width / 2 - scaledSideLength * (3/2 * boundingBoxCenterQ);
     targetOffsetY = gameCanvas.height / 2 - scaledSideLength * (Math.sqrt(3)/2 * boundingBoxCenterQ + Math.sqrt(3) * boundingBoxCenterR);
