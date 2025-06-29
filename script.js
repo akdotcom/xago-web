@@ -1126,44 +1126,44 @@ function updateViewParameters() {
             coordsForBoundingBox.add(`${tile.x},${tile.y}`);
         });
 
-        // 2. Add all valid, empty, adjacent placement spots.
-        const potentialPlacementSpots = new Set();
-        placedTiles.forEach(tile => {
-            const neighbors = getNeighbors(tile.x, tile.y);
-            neighbors.forEach(neighborInfo => {
-                const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                if (!boardState[neighborKey]) { // If the spot is empty
-                    // Further check if placing a tile here would be valid (e.g. not enclosed)
-                    // For zoom purposes, we want to ensure *any* empty adjacent spot is potentially visible.
-                    // The strict placement validation (isPlacementValid) is for actual placement,
-                    // here we are just defining the visual boundary.
-                    // However, we must ensure it's not an enclosed spot that can never be played.
-                    if (!isSpaceEnclosed(neighborInfo.nx, neighborInfo.ny, boardState)) {
-                        potentialPlacementSpots.add(neighborKey);
-                    }
-                }
-            });
-        });
-
-        potentialPlacementSpots.forEach(spot => coordsForBoundingBox.add(spot));
-
-        // 3. Add a one-hex border around all collected (placed + potential) spots.
-        // This ensures the edges of these spots are fully visible.
-        const currentContentCoords = [...coordsForBoundingBox]; // Snapshot of tiles and direct playable spots
-        currentContentCoords.forEach(coordStr => {
+        // 2. Add a one-hex border *only around placed tiles*.
+        // This ensures the edges of the outermost placed tiles are fully visible
+        // and provides a small margin for the viewport.
+        const currentPlacedTileCoords = [...coordsForBoundingBox]; // Snapshot of only placed tiles
+        currentPlacedTileCoords.forEach(coordStr => {
             const [q, r] = coordStr.split(',').map(Number);
             getNeighbors(q, r).forEach(outerNeighbor => {
+                // We add these neighbors to the set that defines the bounding box
+                // for zoom and centering. This provides a small margin around played tiles.
                 coordsForBoundingBox.add(`${outerNeighbor.nx},${outerNeighbor.ny}`);
             });
         });
+        // NOTE: Logic for adding all `potentialPlacementSpots` to `coordsForBoundingBox`
+        // (which previously influenced zoom and centering) has been removed.
+        // Potential placement spots will still be drawn if they fall within the viewport
+        // determined by the placed tiles and their immediate border.
     }
 
-    if (coordsForBoundingBox.size === 0) { // Fallback, should not happen with the new logic
+    // Fallback if, for some reason (e.g., error in logic above), coordsForBoundingBox is empty.
+    // This ensures min/max calculations don't fail with Infinity.
+    if (coordsForBoundingBox.size === 0 && placedTiles.length > 0) {
+        // This case should ideally not be reached if placedTiles is not empty.
+        // As a safety, re-add placed tiles.
+        placedTiles.forEach(tile => {
+            coordsForBoundingBox.add(`${tile.x},${tile.y}`);
+        });
+         // If still empty (e.g. tiles have null x/y), default to 0,0
+        if (coordsForBoundingBox.size === 0) {
+            coordsForBoundingBox.add("0,0");
+        }
+    } else if (coordsForBoundingBox.size === 0 && placedTiles.length === 0) {
+        // This is handled by the initial empty board logic, but as a safeguard here:
         coordsForBoundingBox.add("0,0");
-         getNeighbors(0,0).forEach(neighbor => {
+        getNeighbors(0,0).forEach(neighbor => { // Add a bit more context for empty board default
             coordsForBoundingBox.add(`${neighbor.nx},${neighbor.ny}`);
         });
     }
+
 
     let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
     coordsForBoundingBox.forEach(coordStr => {
