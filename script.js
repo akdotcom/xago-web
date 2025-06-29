@@ -1553,6 +1553,9 @@ function animateView() {
                 console.log(`AI (${opponentType}): Successfully placed tile ${tileToPlace.id}.`);
                 gameMessageDisplay.textContent = `Player 2 (AI) placed tile.`;
                 checkForSurroundedTilesAndProceed();
+                // Ensure view updates after AI move and any subsequent actions (like tile removal) are complete.
+                updateViewParameters();
+                animateView();
             } else {
                 // This should not happen if isPlacementValid was checked correctly during simulation
                 console.error(`AI (${opponentType}): Failed to place tile ${tileToPlace.id} despite it being considered a valid move.`);
