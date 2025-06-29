@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetGameButton = document.getElementById('reset-game');
     const player1HandContainer = document.getElementById('player1-hand');
     const player2HandContainer = document.getElementById('player2-hand');
+    const aiToggle = document.getElementById('ai-toggle');
 
     let boardState = {}; // Using an object to store tile placements: 'x,y': tileObject
     let player1Hand = [];
@@ -29,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameInitialized = false;
     let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
+    let isAiPlayerActive = false;
 
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
@@ -821,6 +823,14 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGameInfo();
         gameMessageDisplay.textContent = `Player ${currentPlayer}'s turn.`;
         console.log(`Switched turn to Player ${currentPlayer}`);
+
+        if (isAiPlayerActive && currentPlayer === 2 && !isRemovingTiles) {
+            // If AI is active, it's Player 2's turn, and not in tile removal phase
+            setTimeout(performAiMove, 1000); // AI makes a move after a short delay
+        } else if (isAiPlayerActive && currentPlayer === 2 && isRemovingTiles) {
+            // If AI is active, it's Player 2's turn, AND it's in tile removal phase
+            setTimeout(performAiTileRemoval, 1000); // AI handles tile removal
+        }
     }
 
     function checkGameEnd() {
@@ -891,6 +901,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Start the game ---
     initializeGame();
+
+    // --- AI Toggle Event Listener ---
+    aiToggle.addEventListener('change', () => {
+        isAiPlayerActive = aiToggle.checked;
+        console.log(`AI Player (Player 2) Active: ${isAiPlayerActive}`);
+        // Potentially reset the game or update UI if needed when toggling mid-game
+        // For now, it simply changes the flag. If it's AI's turn and it was just activated,
+        // the AI might need to be triggered manually or wait for the next turn.
+        // If a human was about to play as P2 and AI is toggled on, AI should take over.
+        if (isAiPlayerActive && currentPlayer === 2 && !isRemovingTiles) {
+            // If it's AI's turn (and not in removal phase), and AI was just activated, let AI make a move.
+            // This prevents the game from stalling if AI is activated during P2's turn.
+            // Add a small delay to ensure any ongoing human interactions (like tile selection) are cleared.
+            setTimeout(performAiMove, 500);
+        }
+    });
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
@@ -970,4 +996,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return { q: q_round, r: r_round };
     }
+
+    // --- AI Player Logic ---
+    function performAiMove() {
+        if (currentPlayer !== 2 || !isAiPlayerActive || player2Hand.length === 0) {
+            console.log("AI: Not my turn, not active, or no tiles left.");
+            return;
+        }
+
+        gameMessageDisplay.textContent = "Player 2 (AI) is thinking...";
+
+        // 1. Select a random tile from AI's hand
+        const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
+
+        // 2. Randomly decide how many times to rotate the tile (0 to 5 times)
+        const rotations = Math.floor(Math.random() * 6);
+        for (let i = 0; i < rotations; i++) {
+            tileToPlay.rotate();
+        }
+        console.log(`AI: Selected tile ${tileToPlay.id}, rotated ${rotations} times. Orientation: ${tileToPlay.orientation}`);
+
+        // 3. Find all possible valid placements for this tile
+        const possiblePlacements = [];
+        // Iterate over a reasonable area of the board or use a more sophisticated approach
+        // For simplicity, let's try placing around existing tiles or a predefined area.
+        // A common strategy for finding placement spots is to look at empty cells adjacent to existing tiles.
+        // If board is empty, place at a default starting position (e.g., 0,0)
+        if (Object.keys(boardState).length === 0) {
+            possiblePlacements.push({ x: 0, y: 0 }); // Center of the logical grid
+        } else {
+            for (const key in boardState) {
+                const existingTile = boardState[key];
+                const neighbors = getNeighbors(existingTile.x, existingTile.y);
+                for (const neighborInfo of neighbors) {
+                    const potentialPos = { x: neighborInfo.nx, y: neighborInfo.ny };
+                    if (!boardState[`${potentialPos.x},${potentialPos.y}`]) { // If cell is empty
+                        possiblePlacements.push(potentialPos);
+                    }
+                }
+            }
+        }
+
+        // Filter for unique positions
+        const uniquePlacements = possiblePlacements.filter((pos, index, self) =>
+            index === self.findIndex((p) => p.x === pos.x && p.y === pos.y)
+        );
+
+        // Shuffle placements to make it random
+        for (let i = uniquePlacements.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [uniquePlacements[i], uniquePlacements[j]] = [uniquePlacements[j], uniquePlacements[i]];
+        }
+
+        let placed = false;
+        for (const pos of uniquePlacements) {
+            if (isPlacementValid(tileToPlay, pos.x, pos.y, true)) { // true for isDragOver to suppress messages
+                console.log(`AI: Attempting to place tile ${tileToPlay.id} at (${pos.x}, ${pos.y})`);
+                if (placeTileOnBoard(tileToPlay, pos.x, pos.y)) {
+                    player2Hand = player2Hand.filter(t => t.id !== tileToPlay.id);
+                    displayPlayerHand(2, player2Hand, player2HandDisplay); // Update AI's hand display
+
+                    console.log(`AI: Successfully placed tile ${tileToPlay.id} at (${pos.x}, ${pos.y})`);
+                    gameMessageDisplay.textContent = `Player 2 (AI) placed tile ${tileToPlay.id}.`;
+
+                    // After placing, check for surrounded tiles and proceed
+                    checkForSurroundedTilesAndProceed(); // This will handle score, turn switch, or removal phase
+                    placed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!placed) {
+            // This scenario should be rare if there are any valid moves.
+            // If AI cannot find a valid move with the selected tile and orientation,
+            // it could try other tiles or orientations. For now, just pass the turn.
+            console.log("AI: Could not find a valid placement for the selected tile and orientation. Passing turn.");
+            gameMessageDisplay.textContent = "Player 2 (AI) could not make a move and passes.";
+            // Ensure to switch turn even if AI passes.
+            // checkForSurroundedTilesAndProceed would normally handle this, but if no placement, call directly.
+            calculateScores(); // Update scores
+            if (checkGameEnd()) {
+                endGame();
+            } else {
+                switchTurn(); // Manually switch turn if AI couldn't place.
+            }
+        }
+    }
+
+    function performAiTileRemoval() {
+        if (currentPlayer !== 2 || !isAiPlayerActive || !isRemovingTiles || currentSurroundedTilesForRemoval.length === 0) {
+            console.log("AI: Not my turn for removal, not active, not in removal phase, or no tiles to remove.");
+            return;
+        }
+
+        gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+
+        // AI randomly selects one of the highlighted tiles to remove.
+        // In a more advanced AI, it might choose strategically.
+        const tileToRemove = currentSurroundedTilesForRemoval[Math.floor(Math.random() * currentSurroundedTilesForRemoval.length)];
+
+        console.log(`AI: Decided to remove tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y})`);
+        gameMessageDisplay.textContent = `Player 2 (AI) removes tile ${tileToRemove.id}.`;
+
+        // Simulate a slight delay for the user to see the choice
+        setTimeout(() => {
+            removeTileFromBoardAndReturnToHand(tileToRemove);
+            // removeTileFromBoardAndReturnToHand will call redrawBoard, check for more removals,
+            // and then switch turn or end game as appropriate.
+            // If more tiles need removal and it's still AI's turn, switchTurn will call performAiTileRemoval again.
+        }, 1000); // Delay for AI "action"
+    }
+
 });
