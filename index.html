@@ -17,9 +17,13 @@
             <p id="game-message"></p>
             <p id="player1-score">Player 1 Score: 0</p>
             <p id="player2-score">Player 2 Score: 0</p>
-            <div id="ai-toggle-container">
-                <label for="ai-toggle">Play against AI (Player 2):</label>
-                <input type="checkbox" id="ai-toggle">
+            <div id="opponent-selector-container">
+                <label for="opponent-type">Opponent (Player 2):</label>
+                <select id="opponent-type">
+                    <option value="human">Human</option>
+                    <option value="random">Random (CPU)</option>
+                    <option value="greedy">Greedy 1 (CPU)</option>
+                </select>
             </div>
         </div>
 
