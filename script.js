@@ -592,21 +592,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // tile: the HexTile object to preview
     // borderColor: CSS color string for the border of the preview (e.g., 'green' or 'yellow')
     function drawPlacementPreview(q, r, tile, borderColor) {
-        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+        const PREVIEW_SCALE_FACTOR = 0.9;
+        const effectiveZoom = currentZoomLevel * PREVIEW_SCALE_FACTOR;
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom; // Use effectiveZoom for border calculations too
+
         // Convert logical grid (q,r) to screen coordinates for drawing
-        const screenX = currentOffsetX + scaledHexSideLength * (3/2 * q);
-        const screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+        const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
+        const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+        // Note: The screenX, screenY for the center of the preview should still align with the grid cell center based on currentZoomLevel,
+        // but the tile itself will be drawn smaller using effectiveZoom.
 
         // --- Draw the translucent tile ---
         ctx.save(); // Save current context state
         ctx.globalAlpha = 0.6; // Set translucency for the tile preview
-        drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel);
+        // Pass effectiveZoom to drawHexTile to render it at 90% size relative to the current board zoom
+        drawHexTile(ctx, screenX, screenY, tile, effectiveZoom);
         ctx.restore(); // Restore context state (specifically globalAlpha)
 
         // --- Draw the prominent border ---
+        // The border should also be scaled according to the preview size (effectiveZoom)
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
+            // Vertices for the border are calculated using the scaledHexSideLength which incorporates PREVIEW_SCALE_FACTOR
             const xPos = screenX + scaledHexSideLength * Math.cos(angle);
             const yPos = screenY + scaledHexSideLength * Math.sin(angle);
             if (i === 0) {
@@ -618,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.closePath();
 
         ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 3 * currentZoomLevel; // Make border prominent and scale with zoom
+        ctx.lineWidth = 3 * effectiveZoom; // Scale border line width with effectiveZoom
         ctx.setLineDash([]); // Ensure solid line
         ctx.stroke();
     }
@@ -633,52 +641,79 @@ document.addEventListener('DOMContentLoaded', () => {
         redrawBoardOnCanvas(); // Redraw existing tiles first to clear old highlights and show current board state
 
         const tileToPlace = selectedTile.tile;
-        const originalOrientation = tileToPlace.orientation;
+        const currentSelectedOrientation = tileToPlace.orientation; // Current orientation of the tile in hand
 
         // Define the area to check for highlights.
-        const checkRadius = Math.floor(BOARD_SIZE / 2) + 3; // Slightly increased radius for safety with previews
+        // Iterate over a reasonable area around existing tiles or the center if board is empty
+        const checkRadius = 8; // Increased radius for a more generous preview area
+        let qMin = -checkRadius, qMax = checkRadius, rMin = -checkRadius, rMax = checkRadius;
 
-        for (let q = -checkRadius; q <= checkRadius; q++) {
-            for (let r = -checkRadius; r <= checkRadius; r++) {
+        if (Object.keys(boardState).length > 0) {
+            let minPlacedQ = Infinity, maxPlacedQ = -Infinity, minPlacedR = Infinity, maxPlacedR = -Infinity;
+            for (const key in boardState) {
+                const tile = boardState[key];
+                minPlacedQ = Math.min(minPlacedQ, tile.x);
+                maxPlacedQ = Math.max(maxPlacedQ, tile.x);
+                minPlacedR = Math.min(minPlacedR, tile.y);
+                maxPlacedR = Math.max(maxPlacedR, tile.y);
+            }
+            qMin = minPlacedQ - checkRadius / 2; // Search around the played area
+            qMax = maxPlacedQ + checkRadius / 2;
+            rMin = minPlacedR - checkRadius / 2;
+            rMax = maxPlacedR + checkRadius / 2;
+        }
+
+
+        for (let q = Math.floor(qMin); q <= Math.ceil(qMax); q++) {
+            for (let r = Math.floor(rMin); r <= Math.ceil(rMax); r++) {
                 // Optional: Check if the cell is within cube constraints for a hexagonal area
-                // if (Math.abs(q + r) > checkRadius) continue;
+                // if (Math.abs(q + r) > checkRadius*1.5) continue; // If using a wider hexagonal search pattern
 
                 const targetKey = `${q},${r}`;
                 if (boardState[targetKey]) {
                     continue; // Cell is already occupied
                 }
 
-                // 1. Check with current orientation for GREEN border
-                tileToPlace.orientation = originalOrientation; // Ensure current orientation for this check
+                // Preserve the actual tile's orientation for the next iteration or if no valid spot is found.
+                // We will only temporarily change it for the preview if a different orientation is valid.
+                tileToPlace.orientation = currentSelectedOrientation;
+
+                // 1. Check with current selected orientation
                 if (isPlacementValid(tileToPlace, q, r, true)) { // true to suppress messages
                     drawPlacementPreview(q, r, tileToPlace, 'green');
                 } else {
-                    // 2. Check with other orientations for YELLOW border
-                    let canBePlacedWithRotation = false;
-                    // Store the orientation that makes it valid if found, to draw the preview correctly
-                    let validRotationOrientation = -1;
-                    for (let i = 0; i < 6; i++) {
-                        if (i === originalOrientation) continue; // Already checked
+                    // 2. Check if any other orientation is valid
+                    let canBePlacedWithAnyRotation = false;
+                    let validPreviewOrientation = -1;
 
-                        tileToPlace.orientation = i;
+                    for (let i = 0; i < 6; i++) {
+                        if (i === currentSelectedOrientation) continue; // Already checked above
+
+                        tileToPlace.orientation = i; // Temporarily change orientation for check
                         if (isPlacementValid(tileToPlace, q, r, true)) {
-                            canBePlacedWithRotation = true;
-                            validRotationOrientation = i;
+                            canBePlacedWithAnyRotation = true;
+                            validPreviewOrientation = i; // This is the orientation that makes it valid
                             break;
                         }
                     }
-                    if (canBePlacedWithRotation) {
-                        // Temporarily set tile orientation for preview, then restore
-                        const tempCurrentOrientation = tileToPlace.orientation;
-                        tileToPlace.orientation = validRotationOrientation; // Use the orientation that makes it valid for preview
+
+                    // Restore tile's actual orientation after checks
+                    tileToPlace.orientation = currentSelectedOrientation;
+
+                    if (canBePlacedWithAnyRotation) {
+                        // If it can be placed with a *different* rotation, show yellow preview with that orientation
+                        tileToPlace.orientation = validPreviewOrientation; // Set to the valid rotation for the preview
                         drawPlacementPreview(q, r, tileToPlace, 'yellow');
-                        tileToPlace.orientation = tempCurrentOrientation; // Restore for next check in loop
+                        tileToPlace.orientation = currentSelectedOrientation; // Restore immediately after preview call
                     }
+                    // If not valid with current orientation AND not valid with any other rotation,
+                    // then no preview is drawn for this (q,r) location, as per user request.
                 }
             }
         }
-        // Restore the original orientation of the selected tile in hand
-        tileToPlace.orientation = originalOrientation;
+        // Ensure the tile in hand (selectedTile.tile) is reset to its actual current selected orientation
+        // after all loops, just in case.
+        tileToPlace.orientation = currentSelectedOrientation;
     }
 
     function selectTileFromHand(tile, tileCanvasElement, playerId) {
