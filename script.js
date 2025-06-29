@@ -1568,7 +1568,35 @@ function animateView() {
                             simTile.y = pos.y;
                             tempBoardState[`${pos.x},${pos.y}`] = simTile;
 
-                            const scores = calculateScoresForBoard(tempBoardState);
+                            // --- Simulate tile removal after placement ---
+                            let boardAfterSimulatedRemovals = deepCopyBoardState(tempBoardState); // Operate on a copy for removal simulation
+                            let simulatedSurroundedTiles = getSurroundedTiles(boardAfterSimulatedRemovals);
+
+                            while (simulatedSurroundedTiles.length > 0) {
+                                let tileToSimulateRemove = null;
+                                // Prioritize opponent's (Player 1's) tiles for removal
+                                const opponentSimTiles = simulatedSurroundedTiles.filter(t => t.playerId === 1);
+                                if (opponentSimTiles.length > 0) {
+                                    tileToSimulateRemove = opponentSimTiles[0]; // Simple: remove the first one found
+                                } else {
+                                    // If no opponent tiles, but own (Player 2's) tiles are surrounded, remove one
+                                    const ownSimTiles = simulatedSurroundedTiles.filter(t => t.playerId === 2);
+                                    if (ownSimTiles.length > 0) {
+                                        tileToSimulateRemove = ownSimTiles[0]; // Simple: remove the first one found
+                                    }
+                                }
+
+                                if (tileToSimulateRemove) {
+                                    delete boardAfterSimulatedRemovals[`${tileToSimulateRemove.x},${tileToSimulateRemove.y}`];
+                                    // Re-check for surrounded tiles in the new simulated state
+                                    simulatedSurroundedTiles = getSurroundedTiles(boardAfterSimulatedRemovals);
+                                } else {
+                                    break; // No more tiles can be chosen for removal (e.g., all surrounded belong to a third player, or logic error)
+                                }
+                            }
+                            // --- End of simulated tile removal ---
+
+                            const scores = calculateScoresForBoard(boardAfterSimulatedRemovals); // Score based on post-removal state
                             const scoreDiff = scores.player2Score - scores.player1Score;
 
                             if (scoreDiff > bestScoreDiff) {
