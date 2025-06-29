@@ -1,8 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const BOARD_SIZE = 15; // Example size, can be adjusted
+    const BOARD_SIZE = 15; // Example size, can be adjusted. This will define the logical grid.
     const NUM_TILES_PER_PLAYER = 14;
 
-    const gameBoard = document.getElementById('game-board');
+    // Canvas setup
+    const gameCanvas = document.getElementById('game-canvas');
+    const ctx = gameCanvas.getContext('2d');
+    // gameBoard variable now refers to the canvas element for consistency,
+    // though we'll primarily use ctx for drawing.
+    const gameBoard = gameCanvas; // Keep existing references if they are used for width/height etc.
+
     const player1HandDisplay = document.querySelector('#player1-hand .tiles-container');
     const player2HandDisplay = document.querySelector('#player2-hand .tiles-container');
     const currentPlayerDisplay = document.getElementById('current-player');
@@ -48,6 +54,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Function to redraw the entire board state onto the canvas
+    function redrawBoardOnCanvas() {
+        // Ensure canvas is cleared and background drawn before redrawing tiles
+        ctx.fillStyle = '#ddd'; // Background color
+        ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+        ctx.strokeStyle = '#aaa'; // Border color
+        ctx.strokeRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+        // Placeholder for converting logical grid (tile.x, tile.y) to canvas pixels (cx, cy)
+        // This needs a proper hexagonal grid coordinate system implementation later (Step 6).
+        // Using a simple mapping for now for visualization.
+        // const CANVAS_OFFSET_X = HEX_WIDTH / 1.5; // Now global
+        // const CANVAS_OFFSET_Y = HEX_HEIGHT / 1.5; // Now global
+
+        for (const key in boardState) {
+            const tile = boardState[key];
+            if (tile.x === null || tile.y === null) continue;
+
+            let cx, cy;
+            // For flat-topped:
+            // x = size * (     3/2 * q                   )
+            // y = size * (sqrt(3)/2 * q  +  sqrt(3) * r)
+            // Assuming tile.x = q, tile.y = r
+             cx = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * tile.x);
+             cy = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * tile.x + Math.sqrt(3) * tile.y);
+
+            drawHexTile(ctx, cx, cy, tile);
+        }
+    }
+
     // --- Tile Generation ---
     const UNIQUE_TILE_PATTERNS = [
         [0,0,0,0,0,0], // 0 triangles
@@ -82,43 +118,177 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game Board Logic ---
     function initializeGameBoard() {
-        gameBoard.innerHTML = ''; // Clear previous board
-        boardState = {}; // Reset board state
+        // Clear the canvas
+        ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+        // Optionally, draw a background or grid lines on the canvas here
+        // For example, a simple background:
+        ctx.fillStyle = '#ddd'; // Same as old #game-board background
+        ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+        ctx.strokeStyle = '#aaa'; // Same as old #game-board border
+        ctx.strokeRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-        // For a true hex grid, rendering is more complex.
-        // Using a simple grid for now, where cells can be targeted.
-        // This part will need significant enhancement for hex grid interaction.
-        for (let r = 0; r < BOARD_SIZE; r++) {
-            for (let c = 0; c < BOARD_SIZE; c++) {
-                const cell = document.createElement('div');
-                cell.classList.add('board-cell');
-                cell.dataset.x = c;
-                cell.dataset.y = r;
-                cell.addEventListener('click', () => handleCellClick(c, r));
-                // Add hover effects for potential drop zones
-                cell.addEventListener('dragover', (event) => {
-                    event.preventDefault(); // Allow drop
-                    if (selectedTile && isPlacementValid(selectedTile.tile, c, r, true)) {
-                        cell.classList.add('drop-target');
-                    }
-                });
-                cell.addEventListener('dragleave', () => {
-                    cell.classList.remove('drop-target');
-                });
-                cell.addEventListener('drop', (event) => {
-                    event.preventDefault();
-                    cell.classList.remove('drop-target');
-                    handleCellClick(c,r); // Use the same logic as click for now
-                });
-                gameBoard.appendChild(cell);
+
+        boardState = {}; // Reset board state
+        // The old cell creation loop is removed.
+        // Event listeners for drag/drop on cells are removed.
+        // Click handling will be added directly to the canvas later.
+        console.log("Game board canvas initialized and cleared.");
+    }
+
+    // This function is no longer needed as we don't have individual cell DOM elements.
+    // function getBoardCell(x, y) {
+    //     return gameBoard.querySelector(`.board-cell[data-x="${x}"][data-y="${y}"]`);
+    }
+
+    // --- Tile Generation ---
+    const UNIQUE_TILE_PATTERNS = [
+        [0,0,0,0,0,0], // 0 triangles
+        [1,0,0,0,0,0], // 1 triangle
+        [1,1,0,0,0,0], // 2 triangles, adjacent
+        [1,0,1,0,0,0], // 2 triangles, separated by 1
+        [1,0,0,1,0,0], // 2 triangles, separated by 2 (opposite)
+        [1,1,1,0,0,0], // 3 triangles, block of 3
+        [1,1,0,1,0,0], // 3 triangles, pattern 110100
+        [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
+        [1,0,1,0,1,0], // 3 triangles, alternating
+        [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
+        [1,1,0,1,1,0], // 4 triangles (complement of 2 blanks separated by 1)
+        [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
+        [1,1,1,1,1,0], // 5 triangles
+        [1,1,1,1,1,1]  // 6 triangles
+    ];
+
+    function generateUniqueTilesForPlayer(playerId, count) {
+        const tiles = [];
+        if (count !== UNIQUE_TILE_PATTERNS.length) {
+            console.warn(`Requested ${count} tiles, but there are ${UNIQUE_TILE_PATTERNS.length} unique patterns defined. Using unique patterns count.`);
+        }
+
+        UNIQUE_TILE_PATTERNS.forEach((pattern, index) => {
+            // Ensure a copy of the pattern is used for the tile's edges
+            tiles.push(new HexTile(`p${playerId}t${index}`, playerId, [...pattern]));
+        });
+
+        return tiles;
+    }
+
+    // --- Game Board Logic ---
+    function initializeGameBoard() {
+        // Clear the canvas
+        ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+        // Optionally, draw a background or grid lines on the canvas here
+        // For example, a simple background:
+        ctx.fillStyle = '#ddd'; // Same as old #game-board background
+        ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+        ctx.strokeStyle = '#aaa'; // Same as old #game-board border
+        ctx.strokeRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+
+        boardState = {}; // Reset board state
+        // The old cell creation loop is removed.
+        // Event listeners for drag/drop on cells are removed.
+        // Click handling will be added directly to the canvas later.
+        console.log("Game board canvas initialized and cleared.");
+        redrawBoardOnCanvas(); // Ensure board is drawn (empty at this stage)
+    }
+
+    // --- Canvas Drawing Functions ---
+    const HEX_SIDE_LENGTH = 40; // pixels
+    const HEX_HEIGHT = Math.sqrt(3) * HEX_SIDE_LENGTH;
+    const HEX_WIDTH = 2 * HEX_SIDE_LENGTH;
+    const HEX_APOTHEM = HEX_HEIGHT / 2; // Distance from center to midpoint of a side
+    const CANVAS_OFFSET_X = HEX_WIDTH / 1.5; // Initial offset from canvas left edge for drawing grid
+    const CANVAS_OFFSET_Y = HEX_HEIGHT / 1.5; // Initial offset from canvas top edge for drawing grid
+
+    // Function to draw a single hexagonal tile on the canvas
+    // ctx: canvas rendering context
+    // cx, cy: center coordinates of the hexagon on the canvas
+    // tile: the HexTile object to draw
+    function drawHexTile(ctx, cx, cy, tile) {
+        const orientedEdges = tile.getOrientedEdges();
+
+        // Calculate hexagon vertices (flat-topped hexagon)
+        // Order: Top-right, Right, Bottom-right, Bottom-left, Left, Top-left
+        const vertices = [];
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.PI / 180 * (60 * i + 30); // +30 degrees to start from a vertex for flat top
+            vertices.push({
+                x: cx + HEX_SIDE_LENGTH * Math.cos(angle),
+                y: cy + HEX_SIDE_LENGTH * Math.sin(angle)
+            });
+        }
+
+        // Draw hexagon body
+        ctx.beginPath();
+        ctx.moveTo(vertices[0].x, vertices[0].y);
+        for (let i = 1; i < 6; i++) {
+            ctx.lineTo(vertices[i].x, vertices[i].y);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = tile.color;
+        ctx.fill();
+        ctx.strokeStyle = '#333'; // Border color for the hexagon
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Draw edges (triangles or blanks)
+        for (let i = 0; i < 6; i++) {
+            const edgeType = orientedEdges[i];
+            const v1 = vertices[i];
+            const v2 = vertices[(i + 1) % 6]; // Next vertex
+
+            // Midpoint of the current edge
+            const midX = (v1.x + v2.x) / 2;
+            const midY = (v1.y + v2.y) / 2;
+
+            // Normal vector (pointing outwards) - derived from edge vector rotated 90 deg
+            // Edge vector: (v2.x - v1.x, v2.y - v1.y)
+            // Normal: (v1.y - v2.y, v2.x - v1.x) -- then normalize and scale
+            let nx = v1.y - v2.y;
+            let ny = v2.x - v1.x;
+            const len = Math.sqrt(nx * nx + ny * ny);
+            nx /= len;
+            ny /= len;
+
+            if (edgeType === 1) { // Triangle
+                const triangleHeight = HEX_SIDE_LENGTH * 0.3; // Height of the triangle
+                const triangleBaseHalfWidth = HEX_SIDE_LENGTH * 0.4; // Half base width of triangle along the edge
+
+                // Tip of the triangle (outwards)
+                const tipX = midX + nx * triangleHeight;
+                const tipY = midY + ny * triangleHeight;
+
+                // Calculate base points of the triangle along the hexagon edge
+                // Vector along the edge, scaled to half base width
+                const edgeVecX = (v2.x - v1.x) / len * triangleBaseHalfWidth;
+                const edgeVecY = (v2.y - v1.y) / len * triangleBaseHalfWidth;
+
+                const base1X = midX - edgeVecX;
+                const base1Y = midY - edgeVecY;
+                const base2X = midX + edgeVecX;
+                const base2Y = midY + edgeVecY;
+
+                ctx.beginPath();
+                ctx.moveTo(tipX, tipY);
+                ctx.lineTo(base1X, base1Y);
+                ctx.lineTo(base2X, base2Y);
+                ctx.closePath();
+                ctx.fillStyle = 'black'; // Color of the triangle
+                ctx.fill();
+
+            } else { // Blank edge (draw a simple line or nothing)
+                // Example: Draw a subtle line for blank edges
+                ctx.beginPath();
+                ctx.moveTo(v1.x, v1.y);
+                ctx.lineTo(v2.x, v2.y);
+                ctx.strokeStyle = 'grey'; // Color for blank edge indication
+                ctx.lineWidth = 2; // Make it slightly thicker or different
+                ctx.stroke();
             }
         }
-        console.log("Game board initialized with clickable cells.");
     }
 
-    function getBoardCell(x, y) {
-        return gameBoard.querySelector(`.board-cell[data-x="${x}"][data-y="${y}"]`);
-    }
 
     // --- Display Logic ---
     function displayPlayerHand(player, hand, handDisplayElement) {
@@ -257,21 +427,13 @@ document.addEventListener('DOMContentLoaded', () => {
         tile.y = y;
         boardState[`${x},${y}`] = tile;
 
-        // Update the visual board
-        const cell = getBoardCell(x,y);
-        if (cell) {
-            cell.innerHTML = ''; // Clear any previous content (e.g. 'drop-target' text)
-            const tileElement = createTileElement(tile, true); // isBoardTile = true
-            // For a grid, we append to cell. For absolute positioning, this would be different.
-            cell.appendChild(tileElement);
-            cell.classList.remove('drop-target'); // ensure it's removed
-        } else {
-            console.error(`Could not find cell ${x},${y} to place tile.`);
-            // This should not happen if initializeGameBoard worked
-            return false;
-        }
+        // Visual update will be handled by a dedicated drawing function that iterates boardState
+        // and draws all tiles on the canvas. This function will be called after successful placement.
+        console.log(`Tile ${tile.id} placed at ${x},${y}. Board state updated.`);
+        redrawBoardOnCanvas(); // Redraw the entire board with the new tile
 
-        console.log(`Tile ${tile.id} placed at ${x},${y}`);
+        // const cell = getBoardCell(x,y); // Obsolete
+        // if (cell) { ... } // Obsolete
         return true;
     }
 
@@ -332,62 +494,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // For now, let's use a simplified square grid adjacency for demonstration,
     // understanding this needs to be replaced with proper hex logic.
     // Edges: 0:Top, 1:TopRight, 2:BottomRight, 3:Bottom, 4:BottomLeft, 5:TopLeft (clockwise)
-    // This function needs to map (x,y) + edge to neighbor (nx,ny) + corresponding edge on neighbor
-    function getNeighbors(x, y) {
-        // This is a placeholder for square grid logic. Will need to be updated for hex.
-        // For a square grid interpretation, these are not hex edges.
-        // This needs a full rewrite for hex geometry.
-        const potentialNeighbors = []; // Corrected line: was an unterminated array literal containing subsequent code.
-            // For a simple square grid:
-            // { dx: 0, dy: -1, edgeOnNew: 0 (N), edgeOnNeighbor: 2 (S) on tile above }
-            // { dx: 1, dy: 0,  edgeOnNew: 1 (E), edgeOnNeighbor: 3 (W) on tile to right }
-            // ... this is not how hex edges work.
-
-            // Placeholder for conceptual hex neighbors (e.g., using axial coordinates)
-            // This mapping of dx,dy to edge indices is highly dependent on the coordinate system.
-            // Example: if (0,0) is top-left, and rows are horizontal.
-            // This is a MAJOR simplification and likely incorrect for true hex.
-            // It assumes a simple grid and tries to map to hex edge numbers.
-            // THIS IS THE HARDEST PART TO GET RIGHT WITHOUT A PROPER HEX GRID SYSTEM.
-
-            // Let's assume an "odd-r" or "even-r" layout if we are using a square grid.
-            // Parity of y (row) affects horizontal neighbors.
-        const isEvenRow = y % 2 === 0;
-        let neighborDefs = [];
-
-        if (isEvenRow) {
-            neighborDefs = [
-                { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
-                { dx: 0,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
-                { dx: -1, dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
-                { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
-                { dx: -1, dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
-                { dx: 0,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
-            ];
-        } else { // Odd row
-            neighborDefs = [
-                { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
-                { dx: 1,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
-                { dx: 0,  dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
-                { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
-                { dx: 0,  dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
-                { dx: 1,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
-            ];
-        }
-        // The above edgeIndexOnNewTile and edgeIndexOnNeighborTile must be carefully chosen
-        // such that they represent opposite edges. E.g., edge 0 of new tile connects to edge 3 of neighbor.
-        // My values: 0-3, 1-4, 2-5 are opposite pairs.
+    // This function needs to map (q,r) + edge to neighbor (nq,nr) + corresponding edge on neighbor
+    // Uses axial coordinates (q, r) for flat-topped hexagons.
+    // Canonical edge order (matches drawing loop for vertices i to i+1):
+    // 0: Right         (points to neighbor at q+1, r)
+    // 1: Bottom-Right  (points to neighbor at q,   r+1)
+    // 2: Bottom-Left   (points to neighbor at q-1, r+1)
+    // 3: Left          (points to neighbor at q-1, r)
+    // 4: Top-Left      (points to neighbor at q,   r-1)
+    // 5: Top-Right     (points to neighbor at q+1, r-1)
+    // Opposite edges: (i+3)%6
+    function getNeighbors(q, r) {
+        const axialDirections = [
+            // dq, dr define the *neighbor's* offset from current tile (q,r)
+            // edgeIndexOnNewTile is the edge of the *current* tile that points to this neighbor
+            // edgeIndexOnNeighborTile is the corresponding edge on the *neighbor* tile
+            { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }, // Right
+            { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Bottom-Right
+            { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Left
+            { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Left
+            { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Top-Left
+            { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }  // Top-Right
+        ];
 
         const neighbors = [];
-        for (const def of neighborDefs) {
-                neighbors.push({
-                    nx: x + def.dx,
-                    ny: y + def.dy,
-                    edgeIndexOnNewTile: def.edgeIndexOnNewTile, // Which edge of the tile being placed
-                    edgeIndexOnNeighborTile: def.edgeIndexOnNeighborTile // Which edge of the existing neighbor
-                });
-            }
-            return neighbors;
+        for (const dir of axialDirections) {
+            neighbors.push({
+                nx: q + dir.dq, // Using nx, ny for consistency with isPlacementValid which expects these field names
+                ny: r + dir.dr,
+                edgeIndexOnNewTile: dir.edgeIndexOnNewTile,
+                edgeIndexOnNeighborTile: dir.edgeIndexOnNeighborTile
+            });
+        }
+        return neighbors;
     }
 
 
@@ -460,14 +599,76 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     resetGameButton.addEventListener('click', () => {
         console.log("Reset game button clicked.");
-        if (gameInitialized) {
-             // Clear visual board cells content
-            const cells = gameBoard.querySelectorAll('.board-cell');
-            cells.forEach(cell => cell.innerHTML = '');
-        }
+        // initializeGame() already handles clearing the canvas and resetting state.
         initializeGame();
     });
 
     // --- Start the game ---
     initializeGame();
+
+    // --- Canvas Click Handling ---
+    gameCanvas.addEventListener('click', (event) => {
+        if (!selectedTile) {
+            gameMessageDisplay.textContent = "Please select a tile from your hand first.";
+            return;
+        }
+        if (selectedTile.originalPlayerId !== currentPlayer) {
+            gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen).";
+            return;
+        }
+
+        const rect = gameCanvas.getBoundingClientRect();
+        const pixelX = event.clientX - rect.left;
+        const pixelY = event.clientY - rect.top;
+
+        const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+        // For now, directly use q,r as x,y for game logic.
+        // This assumes our game logic (isPlacementValid, getNeighbors) will also use q,r.
+        console.log(`Canvas clicked at pixel (${pixelX}, ${pixelY}), converted to hex grid (q=${q}, r=${r})`);
+        handleCellClick(q, r);
+    });
+
+    // Converts pixel coordinates on canvas to logical hex grid coordinates (q, r - axial)
+    function pixelToHexGrid(pixelX, pixelY) {
+        // Inverse of the drawing formula:
+        // x_pixel = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * q)
+        // y_pixel = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (sqrt(3)/2 * q + sqrt(3) * r)
+
+        const size = HEX_SIDE_LENGTH;
+        const x = pixelX - CANVAS_OFFSET_X;
+        const y = pixelY - CANVAS_OFFSET_Y;
+
+        // Convert to fractional axial coordinates (q_frac, r_frac)
+        // q_frac = (2/3 * x) / size
+        // r_frac = (-1/3 * x + sqrt(3)/3 * y) / size
+        let q_frac = (2/3 * x) / size;
+        let r_frac = (-1/3 * x + Math.sqrt(3)/3 * y) / size;
+
+        // To round to the nearest hex, we can convert to cube coordinates, round, then convert back.
+        // x_cube = q
+        // z_cube = r
+        // y_cube = -x_cube - z_cube
+        let x_cube_frac = q_frac;
+        let z_cube_frac = r_frac;
+        let y_cube_frac = -x_cube_frac - z_cube_frac;
+
+        let q_round = Math.round(x_cube_frac);
+        let r_round = Math.round(z_cube_frac);
+        let s_round = Math.round(y_cube_frac);
+
+        const q_diff = Math.abs(q_round - x_cube_frac);
+        const r_diff = Math.abs(r_round - z_cube_frac);
+        const s_diff = Math.abs(s_round - y_cube_frac);
+
+        if (q_diff > r_diff && q_diff > s_diff) {
+            q_round = -r_round - s_round;
+        } else if (r_diff > s_diff) {
+            r_round = -q_round - s_round;
+        } else {
+            // s_round = -q_round - r_round; // Not needed, q and r are what we want
+        }
+
+        return { q: q_round, r: r_round };
+    }
 });

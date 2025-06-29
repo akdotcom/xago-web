@@ -36,30 +36,23 @@ main {
     margin: 5px 0;
 }
 
-#game-board {
-    width: 600px; /* Adjust as needed */
-    height: 500px; /* Adjust as needed */
+/* Style for the canvas if needed, e.g., centering or border */
+#game-canvas {
+    display: block; /* To enable margin auto for centering */
     margin: 20px auto;
-    background-color: #ddd;
-    border: 2px solid #aaa;
-    position: relative; /* For positioning tiles absolutely */
-    border-radius: 8px;
-    overflow: hidden; /* In case tiles go slightly out */
-    display: grid; /* Using grid for simplicity for now, might change to SVG or canvas */
-    /* For a hex grid, this will need more complex setup or a library. */
-    /* For now, a simple grid to place tile elements. */
-    grid-template-columns: repeat(10, 1fr); /* Example: 10x10 grid */
-    grid-template-rows: repeat(10, 1fr);
-    gap: 2px;
+    /* border: 1px solid black; */ /* Example border, JS draws one now */
 }
 
-.board-cell { /* If we use explicit cells for the board */
+/* .board-cell is obsolete */
+/*
+.board-cell {
     background-color: #eee;
     border: 1px solid #ccc;
     display: flex;
     align-items: center;
     justify-content: center;
 }
+*/
 
 #player-hands {
     display: flex;
@@ -105,7 +98,7 @@ main {
     display: flex; /* Kept for potential future direct children, though edges are absolute */
     align-items: center; /* Kept for potential future direct children */
     justify-content: center; /* Kept for potential future direct children */
-    font-size: 10px; /* For tile ID or other info - this will be hidden by edges */
+    font-size: 10px; /* For tile ID or other info - this will be hidden by edges if using DOM elements for edges */
     box-sizing: border-box;
 }
 
@@ -117,122 +110,61 @@ main {
     background-color: lightcoral; /* Player 2 color */
 }
 
-/* New styles for hexagon edges */
+/* Styles for hexagon edges (.hexagon-edge, .edge-triangle, .edge-blank, .edge-0 etc.) */
+/* are still used by createTileElement for tiles in player hands (DOM based). */
+/* If hand tiles were also canvas, these could be removed. */
+/* For now, we keep them for the hand tiles. */
+
+/* Specific styles for DOM-based edges (used in player hands) */
 .hexagon-edge {
     position: absolute;
-    width: 0; /* For triangles made with borders */
-    height: 0; /* For triangles made with borders */
+    width: 0;
+    height: 0;
     box-sizing: border-box;
 }
 
 .edge-blank {
-    /* A line representing the blank edge */
-    /* For a side length of approx 46px, 80% is ~37px */
-    /* This will be a line of width ~37px and height (thickness) 2px */
-    /* Positioning will be handled by edge-N classes */
+    /* This is a line of width ~37px and height (thickness) 2px */
+    /* Actual styling is done by .edge-N.edge-blank */
 }
 
 .edge-triangle {
-    /* Triangle points outwards from the center of the hexagon */
-    /* Base width of triangle (S): 46.19px (Hexagon Side Length) */
-    /* Height of equilateral triangle (TH): 40.00px ((sqrt(3)/2) * S) */
-    /* Using border technique: width is 0, height is 0 */
     width: 0;
     height: 0;
-    border-left: 23.095px solid transparent; /* S/2 */
-    border-right: 23.095px solid transparent; /* S/2 */
-    border-bottom: 40.00px solid black; /* TH and color */
-    /* This creates an upward-pointing triangle. The 0x0 div is at its tip. */
-    /* The base of this triangle is aligned with the hexagon edge by adjusting transforms. */
+    border-left: 23.095px solid transparent; /* S/2 for a hex side of ~46px */
+    border-right: 23.095px solid transparent;
+    border-bottom: 40.00px solid black; /* Approx height for S=46px triangle */
 }
 
-/*
-Hexagon properties (flat-top):
-Tile Width (flat-to-flat): 80px (let's call it W)
-Tile Height (vertex-to-vertex): 92.38px (let's call it H)
-Side Length (S): 46.19px (H/2 or W/sqrt(3))
-
-Triangle Base Width (TBW): 0.8 * S = 36.95px (Using approx 37px for calculations)
-Triangle Height (TH): Let's choose 10px for visual appearance.
-
-For .edge-blank, we'll create a line.
-Line Width (LW): TBW = 36.95px
-Line Thickness (LT): 2px
-*/
-
-/* Positioning strategy for edges:
-   Each edge container (.edge-N) will be positioned at the center of the hexagon tile.
-   Then, we use translate and rotate to move it to the edge and orient it.
-   The triangle itself (.edge-triangle) is defined to point "up" (border-bottom creates the shape).
-   Rotations will correctly orient this upward-pointing triangle.
-*/
-
+/* Positioning for DOM-based edges in hand tiles */
+/* These values are based on the original CSS for an 80px wide hexagon tile. */
 .edge-0, .edge-1, .edge-2, .edge-3, .edge-4, .edge-5 {
-    position: absolute; /* Ensure this is set for the edge containers if not already */
+    position: absolute;
     left: 50%;
     top: 50%;
-    /* transform-origin: center center; */ /* Default, but good to be explicit if needed */
 }
 
 /* Edge 0: Top */
-/* Apothem (distance from center to edge midpoint) = 40.00px */
-/* New Triangle Height (TH_new) = 40.00px */
-/* Blank edge lines are translated by -apothem to center them on the edge. */
-/* Triangle tips are translated by -(apothem + TH_new) to make their bases flush with the edge. */
-.edge-0.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555; /* Old width, can be S = 46.19px */
-    transform: translate(-50%, -50%) translateY(-40.00px);
-}
-.edge-0.edge-triangle {
-    transform: translate(-50%, -50%) translateY(-80.00px); /* -(apothem + TH_new) */
-}
-
+.edge-0.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) translateY(-40px); }
+.edge-0.edge-triangle { transform: translate(-50%, -50%) translateY(-80px); }
 /* Edge 1: Top-Right */
-.edge-1.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(60deg) translateY(-40.00px);
-}
-.edge-1.edge-triangle {
-    transform: translate(-50%, -50%) rotate(60deg) translateY(-80.00px);
-}
-
+.edge-1.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(60deg) translateY(-40px); }
+.edge-1.edge-triangle { transform: translate(-50%, -50%) rotate(60deg) translateY(-80px); }
 /* Edge 2: Bottom-Right */
-.edge-2.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(120deg) translateY(-40.00px);
-}
-.edge-2.edge-triangle {
-    transform: translate(-50%, -50%) rotate(120deg) translateY(-80.00px);
-}
-
+.edge-2.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(120deg) translateY(-40px); }
+.edge-2.edge-triangle { transform: translate(-50%, -50%) rotate(120deg) translateY(-80px); }
 /* Edge 3: Bottom */
-.edge-3.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(180deg) translateY(-40.00px);
-}
-.edge-3.edge-triangle {
-    transform: translate(-50%, -50%) rotate(180deg) translateY(-80.00px);
-}
-
+.edge-3.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(180deg) translateY(-40px); }
+.edge-3.edge-triangle { transform: translate(-50%, -50%) rotate(180deg) translateY(-80px); }
 /* Edge 4: Bottom-Left */
-.edge-4.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(240deg) translateY(-40.00px);
-}
-.edge-4.edge-triangle {
-    transform: translate(-50%, -50%) rotate(240deg) translateY(-80.00px);
-}
-
+.edge-4.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(240deg) translateY(-40px); }
+.edge-4.edge-triangle { transform: translate(-50%, -50%) rotate(240deg) translateY(-80px); }
 /* Edge 5: Top-Left */
-.edge-5.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(300deg) translateY(-40.00px);
-}
-.edge-5.edge-triangle {
-    transform: translate(-50%, -50%) rotate(300deg) translateY(-80.00px);
-}
+.edge-5.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(300deg) translateY(-40px); }
+.edge-5.edge-triangle { transform: translate(-50%, -50%) rotate(300deg) translateY(-80px); }
 
-/* Remove old placeholder styles */
+
+/* Old placeholder styles for edges (can be fully removed) */
 /*
 .edge {
     position: absolute;
