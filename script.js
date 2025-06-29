@@ -232,6 +232,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.lineWidth = 1;
         ctx.stroke();
 
+        // Check if the tile is all blank
+        const isAllBlank = orientedEdges.every(edge => edge === 0);
+
+        if (isAllBlank) {
+            // Draw a small hexagon in the center
+            const innerHexSideLength = HEX_SIDE_LENGTH / 3; // Adjust size as needed
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = Math.PI / 180 * (60 * i);
+                const x = cx + innerHexSideLength * Math.cos(angle);
+                const y = cy + innerHexSideLength * Math.sin(angle);
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.fillStyle = tile.getPlayerColor;
+            ctx.fill();
+        }
+
         // Draw edges (triangles or blanks)
         for (let i = 0; i < 6; i++) {
             const edgeType = orientedEdges[i];
