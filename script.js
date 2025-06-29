@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Order: Top-right, Right, Bottom-right, Bottom-left, Left, Top-left
         const vertices = [];
         for (let i = 0; i < 6; i++) {
-            const angle = Math.PI / 180 * (60 * i + 30); // +30 degrees to start from a vertex for flat top
+            const angle = Math.PI / 180 * (60 * i); // Removed +30 degrees
             vertices.push({
                 x: cx + HEX_SIDE_LENGTH * Math.cos(angle),
                 y: cy + HEX_SIDE_LENGTH * Math.sin(angle)
