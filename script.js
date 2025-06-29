@@ -49,30 +49,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Tile Generation ---
+    const UNIQUE_TILE_PATTERNS = [
+        [0,0,0,0,0,0], // 0 triangles
+        [1,0,0,0,0,0], // 1 triangle
+        [1,1,0,0,0,0], // 2 triangles, adjacent
+        [1,0,1,0,0,0], // 2 triangles, separated by 1
+        [1,0,0,1,0,0], // 2 triangles, separated by 2 (opposite)
+        [1,1,1,0,0,0], // 3 triangles, block of 3
+        [1,1,0,1,0,0], // 3 triangles, pattern 110100
+        [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
+        [1,0,1,0,1,0], // 3 triangles, alternating
+        [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
+        [1,1,0,1,1,0], // 4 triangles (complement of 2 blanks separated by 1)
+        [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
+        [1,1,1,1,1,0], // 5 triangles
+        [1,1,1,1,1,1]  // 6 triangles
+    ];
+
     function generateUniqueTilesForPlayer(playerId, count) {
         const tiles = [];
-        const usedPatterns = new Set();
-
-        // Example patterns - this needs to be more robust to ensure 14 unique tiles
-        // And ensure that edges make sense for gameplay (not all blanks, not all triangles)
-        // For now, a simple random generation with a check for uniqueness
-        for (let i = 0; i < count; i++) {
-            let tilePattern;
-            let patternString;
-            do {
-                tilePattern = Array(6).fill(0).map(() => Math.round(Math.random()));
-                // Ensure not all edges are the same (e.g., all blank or all triangle)
-                const sum = tilePattern.reduce((a, b) => a + b, 0);
-                if (sum === 0 || sum === 6) { // All blanks or all triangles
-                    patternString = null; // Force retry
-                    continue;
-                }
-                patternString = tilePattern.join('');
-            } while (usedPatterns.has(patternString));
-
-            usedPatterns.add(patternString);
-            tiles.push(new HexTile(`p${playerId}t${i}`, playerId, tilePattern));
+        if (count !== UNIQUE_TILE_PATTERNS.length) {
+            console.warn(`Requested ${count} tiles, but there are ${UNIQUE_TILE_PATTERNS.length} unique patterns defined. Using unique patterns count.`);
         }
+
+        UNIQUE_TILE_PATTERNS.forEach((pattern, index) => {
+            // Ensure a copy of the pattern is used for the tile's edges
+            tiles.push(new HexTile(`p${playerId}t${index}`, playerId, [...pattern]));
+        });
+
         return tiles;
     }
 
