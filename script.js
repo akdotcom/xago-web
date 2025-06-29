@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetGameButton = document.getElementById('reset-game');
     const player1HandContainer = document.getElementById('player1-hand');
     const player2HandContainer = document.getElementById('player2-hand');
-    const aiToggle = document.getElementById('ai-toggle');
+    const opponentTypeSelector = document.getElementById('opponent-type');
 
     let boardState = {}; // Using an object to store tile placements: 'x,y': tileObject
     let player1Hand = [];
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameInitialized = false;
     let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
-    let isAiPlayerActive = false;
+    let opponentType = "human"; // Default to human opponent
 
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
@@ -952,13 +952,13 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             updatePlacementHighlights(); // This will clear the highlights by redrawing the board
         }
 
-
-        if (isAiPlayerActive && currentPlayer === 2 && !isRemovingTiles) {
-            // If AI is active, it's Player 2's turn, and not in tile removal phase
-            setTimeout(performAiMove, 1000); // AI makes a move after a short delay
-        } else if (isAiPlayerActive && currentPlayer === 2 && isRemovingTiles) {
-            // If AI is active, it's Player 2's turn, AND it's in tile removal phase
-            setTimeout(performAiTileRemoval, 1000); // AI handles tile removal
+        // Check if AI needs to make a move or remove a tile
+        if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
+            gameMessageDisplay.textContent = "Player 2 (AI) is thinking...";
+            setTimeout(performAiMove, 1000);
+        } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
+            gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+            setTimeout(performAiTileRemoval, 1000);
         }
     }
 
@@ -982,39 +982,50 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         // Disable further moves, or handle via selectedTile being null / hands empty
     }
 
-    function calculateScores() {
-        player1Score = 0;
-        player2Score = 0;
+    // Calculates scores based on a given board state
+    function calculateScoresForBoard(currentBoardState) {
+        let p1Score = 0;
+        let p2Score = 0;
 
-        for (const key in boardState) {
-            const tile = boardState[key];
+        for (const key in currentBoardState) {
+            const tile = currentBoardState[key];
+            // Ensure tile and its properties are valid, especially if board state is a copy
+            if (!tile || typeof tile.getOrientedEdges !== 'function' || typeof tile.playerId === 'undefined') {
+                console.warn("Skipping invalid tile in calculateScoresForBoard:", tile);
+                continue;
+            }
             const { x, y } = tile;
             const orientedEdges = tile.getOrientedEdges();
             const neighbors = getNeighbors(x, y);
 
             for (const neighborInfo of neighbors) {
                 const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                const neighborTile = boardState[neighborKey];
+                const neighborTile = currentBoardState[neighborKey];
 
-                if (neighborTile && neighborTile.playerId === tile.playerId) { // Only count connections of same player's tiles
+                if (neighborTile && typeof neighborTile.getOrientedEdges === 'function' && neighborTile.playerId === tile.playerId) {
                     const edgeOnThisTile = orientedEdges[neighborInfo.edgeIndexOnNewTile];
                     const neighborOrientedEdges = neighborTile.getOrientedEdges();
                     const edgeOnNeighborTile = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
 
-                    // If both connected edges are triangles (type 1)
                     if (edgeOnThisTile === 1 && edgeOnNeighborTile === 1) {
                         if (tile.playerId === 1) {
-                            player1Score++;
+                            p1Score++;
                         } else {
-                            player2Score++;
+                            p2Score++;
                         }
                     }
                 }
             }
         }
-        // Each connection is counted twice (once for each tile in the pair), so divide by 2.
-        player1Score /= 2;
-        player2Score /= 2;
+        p1Score /= 2;
+        p2Score /= 2;
+        return { player1Score: p1Score, player2Score: p2Score };
+    }
+
+    function calculateScores() {
+        const scores = calculateScoresForBoard(boardState);
+        player1Score = scores.player1Score;
+        player2Score = scores.player2Score;
 
         updateGameInfo();
         console.log(`Scores calculated: P1: ${player1Score}, P2: ${player2Score}`);
@@ -1031,19 +1042,23 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     // --- Start the game ---
     initializeGame();
 
-    // --- AI Toggle Event Listener ---
-    aiToggle.addEventListener('change', () => {
-        isAiPlayerActive = aiToggle.checked;
-        console.log(`AI Player (Player 2) Active: ${isAiPlayerActive}`);
-        // Potentially reset the game or update UI if needed when toggling mid-game
-        // For now, it simply changes the flag. If it's AI's turn and it was just activated,
-        // the AI might need to be triggered manually or wait for the next turn.
-        // If a human was about to play as P2 and AI is toggled on, AI should take over.
-        if (isAiPlayerActive && currentPlayer === 2 && !isRemovingTiles) {
-            // If it's AI's turn (and not in removal phase), and AI was just activated, let AI make a move.
-            // This prevents the game from stalling if AI is activated during P2's turn.
-            // Add a small delay to ensure any ongoing human interactions (like tile selection) are cleared.
+    // --- Opponent Type Selector Event Listener ---
+    opponentTypeSelector.addEventListener('change', (event) => {
+        opponentType = event.target.value;
+        console.log(`Opponent type changed to: ${opponentType}`);
+
+        // If it's Player 2's turn and a CPU opponent is selected, and not in removal phase,
+        // let the AI make a move.
+        if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && !isRemovingTiles) {
+            // Add a small delay to allow any UI updates to settle and prevent rapid consecutive moves
+            // if the change happens very quickly after a human P2 move might have been expected.
+            gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately
             setTimeout(performAiMove, 500);
+        }
+        // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
+        else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && isRemovingTiles) {
+            gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+            setTimeout(performAiTileRemoval, 500);
         }
     });
 
@@ -1127,114 +1142,243 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     }
 
     // --- AI Player Logic ---
+
+    // Helper function to deep copy board state and tile objects
+    function deepCopyBoardState(originalBoardState) {
+        const newBoardState = {};
+        for (const key in originalBoardState) {
+            const tile = originalBoardState[key];
+            // Create a new HexTile instance to ensure methods are available if needed,
+            // though for scoring, only data properties are strictly necessary.
+            // The HexTile constructor copies the edges array.
+            const newTile = new HexTile(tile.id, tile.playerId, tile.edges);
+            newTile.orientation = tile.orientation;
+            newTile.x = tile.x;
+            newTile.y = tile.y;
+            newBoardState[key] = newTile;
+        }
+        return newBoardState;
+    }
+
+
     function performAiMove() {
-        if (currentPlayer !== 2 || !isAiPlayerActive || player2Hand.length === 0) {
-            console.log("AI: Not my turn, not active, or no tiles left.");
+        if (currentPlayer !== 2 || player2Hand.length === 0) {
+            console.log("AI: Not my turn or no tiles left.");
+            return;
+        }
+        if (opponentType === 'human') {
+            console.log("AI: Opponent is human, AI will not move.");
             return;
         }
 
         gameMessageDisplay.textContent = "Player 2 (AI) is thinking...";
+        let bestMove = null;
 
-        // 1. Select a random tile from AI's hand
-        const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
+        if (opponentType === 'random') {
+            // --- Random AI Logic ---
+            console.log("AI: Playing Randomly");
+            const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
+            const originalOrientation = tileToPlay.orientation; // Save original orientation
 
-        // 2. Randomly decide how many times to rotate the tile (0 to 5 times)
-        const rotations = Math.floor(Math.random() * 6);
-        for (let i = 0; i < rotations; i++) {
-            tileToPlay.rotate();
-        }
-        console.log(`AI: Selected tile ${tileToPlay.id}, rotated ${rotations} times. Orientation: ${tileToPlay.orientation}`);
+            const rotations = Math.floor(Math.random() * 6);
+            for (let i = 0; i < rotations; i++) {
+                tileToPlay.rotate();
+            }
+            console.log(`AI (Random): Selected tile ${tileToPlay.id}, rotated to orientation ${tileToPlay.orientation}`);
 
-        // 3. Find all possible valid placements for this tile
-        const possiblePlacements = [];
-        // Iterate over a reasonable area of the board or use a more sophisticated approach
-        // For simplicity, let's try placing around existing tiles or a predefined area.
-        // A common strategy for finding placement spots is to look at empty cells adjacent to existing tiles.
-        // If board is empty, place at a default starting position (e.g., 0,0)
-        if (Object.keys(boardState).length === 0) {
-            possiblePlacements.push({ x: 0, y: 0 }); // Center of the logical grid
-        } else {
-            for (const key in boardState) {
-                const existingTile = boardState[key];
-                const neighbors = getNeighbors(existingTile.x, existingTile.y);
-                for (const neighborInfo of neighbors) {
-                    const potentialPos = { x: neighborInfo.nx, y: neighborInfo.ny };
-                    if (!boardState[`${potentialPos.x},${potentialPos.y}`]) { // If cell is empty
-                        possiblePlacements.push(potentialPos);
+            const possiblePlacements = [];
+            if (Object.keys(boardState).length === 0) {
+                possiblePlacements.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
+            } else {
+                for (const key in boardState) {
+                    const existingTile = boardState[key];
+                    const neighbors = getNeighbors(existingTile.x, existingTile.y);
+                    for (const neighborInfo of neighbors) {
+                        const potentialPos = { x: neighborInfo.nx, y: neighborInfo.ny };
+                        if (!boardState[`${potentialPos.x},${potentialPos.y}`]) {
+                            if (isPlacementValid(tileToPlay, potentialPos.x, potentialPos.y, true)) {
+                                possiblePlacements.push({ x: potentialPos.x, y: potentialPos.y, tile: tileToPlay, orientation: tileToPlay.orientation });
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // Filter for unique positions
-        const uniquePlacements = possiblePlacements.filter((pos, index, self) =>
-            index === self.findIndex((p) => p.x === pos.x && p.y === pos.y)
-        );
+            const uniquePlacements = possiblePlacements.filter((pos, index, self) =>
+                index === self.findIndex((p) => p.x === pos.x && p.y === pos.y)
+            );
 
-        // Shuffle placements to make it random
-        for (let i = uniquePlacements.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [uniquePlacements[i], uniquePlacements[j]] = [uniquePlacements[j], uniquePlacements[i]];
-        }
-
-        let placed = false;
-        for (const pos of uniquePlacements) {
-            if (isPlacementValid(tileToPlay, pos.x, pos.y, true)) { // true for isDragOver to suppress messages
-                console.log(`AI: Attempting to place tile ${tileToPlay.id} at (${pos.x}, ${pos.y})`);
-                if (placeTileOnBoard(tileToPlay, pos.x, pos.y)) {
-                    player2Hand = player2Hand.filter(t => t.id !== tileToPlay.id);
-                    displayPlayerHand(2, player2Hand, player2HandDisplay); // Update AI's hand display
-
-                    console.log(`AI: Successfully placed tile ${tileToPlay.id} at (${pos.x}, ${pos.y})`);
-                    gameMessageDisplay.textContent = `Player 2 (AI) placed tile ${tileToPlay.id}.`;
-
-                    // After placing, check for surrounded tiles and proceed
-                    checkForSurroundedTilesAndProceed(); // This will handle score, turn switch, or removal phase
-                    placed = true;
-                    break;
-                }
+            if (uniquePlacements.length > 0) {
+                bestMove = uniquePlacements[Math.floor(Math.random() * uniquePlacements.length)];
             }
+            tileToPlay.orientation = originalOrientation; // Restore original orientation for the actual tile in hand
+
+        } else if (opponentType === 'greedy') {
+            // --- Greedy AI Logic ---
+            console.log("AI: Playing Greedily");
+            let bestScoreDiff = -Infinity;
+
+            for (const tile of player2Hand) {
+                const originalOrientation = tile.orientation; // Save to restore later
+                for (let o = 0; o < 6; o++) {
+                    tile.orientation = o;
+
+                    const placementSpots = [];
+                    if (Object.keys(boardState).length === 0) {
+                        placementSpots.push({ x: 0, y: 0 });
+                    } else {
+                        // Consider empty spots adjacent to existing tiles
+                        const checkedSpots = new Set();
+                        for (const key in boardState) {
+                            const existingTile = boardState[key];
+                            const neighbors = getNeighbors(existingTile.x, existingTile.y);
+                            for (const neighborInfo of neighbors) {
+                                const spotKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+                                if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
+                                    placementSpots.push({ x: neighborInfo.nx, y: neighborInfo.ny });
+                                    checkedSpots.add(spotKey);
+                                }
+                            }
+                        }
+                         // Also consider a broader scan for isolated valid placements if the board is sparse
+                        if (placementSpots.length === 0 && Object.keys(boardState).length < 5) { // Heuristic for sparse board
+                            const scanRadius = 3; // Small radius scan
+                            for (let q = -scanRadius; q <= scanRadius; q++) {
+                                for (let r = -scanRadius; r <= scanRadius; r++) {
+                                     if (Math.abs(q + r) > scanRadius) continue;
+                                     const spotKey = `${q},${r}`;
+                                     if(!boardState[spotKey] && !checkedSpots.has(spotKey)){
+                                         placementSpots.push({ x: q, y: r });
+                                         checkedSpots.add(spotKey);
+                                     }
+                                }
+                            }
+                        }
+                    }
+
+
+                    for (const pos of placementSpots) {
+                        if (isPlacementValid(tile, pos.x, pos.y, true)) { // isDragOver = true to suppress messages
+                            const tempBoardState = deepCopyBoardState(boardState);
+
+                            // Create a temporary tile instance for simulation to avoid issues with the actual hand tile instance
+                            const simTile = new HexTile(tile.id, tile.playerId, tile.edges);
+                            simTile.orientation = tile.orientation;
+                            simTile.x = pos.x;
+                            simTile.y = pos.y;
+                            tempBoardState[`${pos.x},${pos.y}`] = simTile;
+
+                            const scores = calculateScoresForBoard(tempBoardState);
+                            const scoreDiff = scores.player2Score - scores.player1Score;
+
+                            if (scoreDiff > bestScoreDiff) {
+                                bestScoreDiff = scoreDiff;
+                                bestMove = { tile: tile, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff };
+                            }
+                        }
+                    }
+                }
+                tile.orientation = originalOrientation; // Restore original orientation for the tile in hand
+            }
+            if(bestMove) console.log(`AI (Greedy): Best move found - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), ScoreDiff ${bestMove.score}`);
         }
 
-        if (!placed) {
-            // This scenario should be rare if there are any valid moves.
-            // If AI cannot find a valid move with the selected tile and orientation,
-            // it could try other tiles or orientations. For now, just pass the turn.
-            console.log("AI: Could not find a valid placement for the selected tile and orientation. Passing turn.");
-            gameMessageDisplay.textContent = "Player 2 (AI) could not make a move and passes.";
-            // Ensure to switch turn even if AI passes.
-            // checkForSurroundedTilesAndProceed would normally handle this, but if no placement, call directly.
-            calculateScores(); // Update scores
+
+        if (bestMove) {
+            const tileToPlace = player2Hand.find(t => t.id === bestMove.tile.id);
+            if (!tileToPlace) { // Should not happen if logic is correct
+                console.error("AI Error: Best move tile not found in hand!");
+                switchTurn(); // Pass turn
+                return;
+            }
+            tileToPlace.orientation = bestMove.orientation; // Set the chosen orientation
+
+            console.log(`AI (${opponentType}): Attempting to place tile ${tileToPlace.id} at (${bestMove.x}, ${bestMove.y}) with orientation ${bestMove.orientation}`);
+            if (placeTileOnBoard(tileToPlace, bestMove.x, bestMove.y)) {
+                player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
+                displayPlayerHand(2, player2Hand, player2HandDisplay);
+
+                console.log(`AI (${opponentType}): Successfully placed tile ${tileToPlace.id}.`);
+                gameMessageDisplay.textContent = `Player 2 (AI) placed tile.`;
+                checkForSurroundedTilesAndProceed();
+            } else {
+                // This should not happen if isPlacementValid was checked correctly during simulation
+                console.error(`AI (${opponentType}): Failed to place tile ${tileToPlace.id} despite it being considered a valid move.`);
+                gameMessageDisplay.textContent = `Player 2 (AI) failed to make a move.`;
+                switchTurn(); // Pass turn
+            }
+        } else {
+            console.log(`AI (${opponentType}): Could not find any valid move. Passing turn.`);
+            gameMessageDisplay.textContent = "Player 2 (AI) passes.";
+            calculateScores();
             if (checkGameEnd()) {
                 endGame();
             } else {
-                switchTurn(); // Manually switch turn if AI couldn't place.
+                switchTurn();
             }
         }
     }
 
     function performAiTileRemoval() {
-        if (currentPlayer !== 2 || !isAiPlayerActive || !isRemovingTiles || currentSurroundedTilesForRemoval.length === 0) {
-            console.log("AI: Not my turn for removal, not active, not in removal phase, or no tiles to remove.");
+        if (currentPlayer !== 2 || !isRemovingTiles || currentSurroundedTilesForRemoval.length === 0) {
+            console.log("AI: Not my turn for removal, not in removal phase, or no tiles to remove.");
+            return;
+        }
+        if (opponentType === 'human') { // Make sure AI doesn't act if opponent switched to human mid-removal
+            console.log("AI: Opponent is human, AI will not remove tile.");
             return;
         }
 
-        gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove...";
+        gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is choosing a tile to remove...`;
+        let tileToRemove = null;
 
-        // AI randomly selects one of the highlighted tiles to remove.
-        // In a more advanced AI, it might choose strategically.
-        const tileToRemove = currentSurroundedTilesForRemoval[Math.floor(Math.random() * currentSurroundedTilesForRemoval.length)];
+        if (opponentType === 'random') {
+            console.log("AI (Random): Choosing random tile to remove.");
+            tileToRemove = currentSurroundedTilesForRemoval[Math.floor(Math.random() * currentSurroundedTilesForRemoval.length)];
+        } else if (opponentType === 'greedy') {
+            console.log("AI (Greedy): Choosing strategic tile to remove.");
+            // Greedy strategy:
+            // 1. Prioritize removing Player 1's tiles.
+            // 2. If multiple Player 1 tiles, pick any (e.g., first one found).
+            // 3. If no Player 1 tiles are surrounded, but Player 2 tiles are, it must remove one of its own. Pick any.
 
-        console.log(`AI: Decided to remove tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y})`);
-        gameMessageDisplay.textContent = `Player 2 (AI) removes tile ${tileToRemove.id}.`;
+            const player1SurroundedTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId === 1);
+            if (player1SurroundedTiles.length > 0) {
+                tileToRemove = player1SurroundedTiles[0]; // Remove the first Player 1 tile found
+                console.log(`AI (Greedy): Prioritizing removal of Player 1's tile: ${tileToRemove.id}`);
+            } else {
+                // All surrounded tiles must belong to Player 2. Remove the first one found.
+                // This logic assumes currentSurroundedTilesForRemoval is not empty, which is checked at the start.
+                tileToRemove = currentSurroundedTilesForRemoval[0];
+                console.log(`AI (Greedy): No Player 1 tiles to remove. Removing own tile: ${tileToRemove.id}`);
+            }
+        }
 
-        // Simulate a slight delay for the user to see the choice
-        setTimeout(() => {
-            removeTileFromBoardAndReturnToHand(tileToRemove);
-            // removeTileFromBoardAndReturnToHand will call redrawBoard, check for more removals,
-            // and then switch turn or end game as appropriate.
-            // If more tiles need removal and it's still AI's turn, switchTurn will call performAiTileRemoval again.
-        }, 1000); // Delay for AI "action"
+        if (tileToRemove) {
+            console.log(`AI (${opponentType}): Decided to remove tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y})`);
+            gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) removes tile ${tileToRemove.id}.`;
+
+            // Simulate a slight delay for the user to see the choice
+            setTimeout(() => {
+                removeTileFromBoardAndReturnToHand(tileToRemove);
+                // removeTileFromBoardAndReturnToHand will handle checking for more removals,
+                // calculating scores, and switching turns or ending the game as appropriate.
+            }, 1000); // Delay for AI "action"
+        } else {
+            // This case should ideally not be reached if currentSurroundedTilesForRemoval is not empty
+            // and opponentType is either 'random' or 'greedy'.
+            console.error("AI: Error in tile removal logic - no tile selected for removal, though removal phase is active.");
+            // As a fallback, to prevent getting stuck, exit removal mode and proceed with game flow.
+            isRemovingTiles = false;
+            currentSurroundedTilesForRemoval = [];
+            redrawBoardOnCanvas(); // Clear highlights
+            calculateScores();
+            if (checkGameEnd()) {
+                endGame();
+            } else {
+                switchTurn();
+            }
+        }
     }
 
 });
