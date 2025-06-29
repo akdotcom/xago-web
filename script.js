@@ -544,17 +544,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = isDeemphasized ? 2 : 3; // Thinner line for de-emphasized
+        // ctx.strokeStyle = color; // No longer stroking
+        // ctx.lineWidth = isDeemphasized ? 2 : 3; // Not needed for fill
 
-        if (isDeemphasized) {
-            ctx.setLineDash([5, 5]); // Dashed line for de-emphasized
-        } else {
-            ctx.setLineDash([]); // Solid line for normal highlight
-        }
+        // if (isDeemphasized) { // Line dash not applicable to fill
+        //     ctx.setLineDash([5, 5]);
+        // } else {
+        //     ctx.setLineDash([]);
+        // }
 
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset line dash for subsequent drawing operations
+        ctx.fillStyle = color; // Use the provided color, which should have alpha
+        ctx.fill();
+        // ctx.setLineDash([]); // Not needed
     }
 
 
