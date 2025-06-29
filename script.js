@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Basic representation for now
-        get color() {
+        get getPlayerColor() {
             return this.playerId === 1 ? 'lightblue' : 'lightcoral';
         }
     }
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.fillStyle = tile.color;
+        ctx.fillStyle = 'white'; // Set body to white
         ctx.fill();
         ctx.strokeStyle = '#333'; // Border color for the hexagon
         ctx.lineWidth = 1;
@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineTo(base1X, base1Y);
                 ctx.lineTo(base2X, base2Y);
                 ctx.closePath();
-                ctx.fillStyle = 'black'; // Color of the triangle
+                ctx.fillStyle = tile.getPlayerColor; // Use player's color for the triangle
                 ctx.fill();
 
             } else { // Blank edge (draw a simple line or nothing)
