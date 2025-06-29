@@ -66,6 +66,18 @@ main {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     width: 45%;
+    transition: opacity 0.3s ease, box-shadow 0.3s ease; /* Smooth transition for changes */
+}
+
+.player-hand.active-hand {
+    opacity: 1;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2), 0 0 10px #4CAF50; /* Enhanced shadow for active */
+    border: 1px solid #4CAF50; /* Optional: border to make it more prominent */
+}
+
+.player-hand.inactive-hand {
+    opacity: 0.6; /* Slightly faded */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Standard shadow for inactive */
 }
 
 .player-hand h2 {
