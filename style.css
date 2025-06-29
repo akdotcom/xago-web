@@ -134,16 +134,16 @@ main {
 
 .edge-triangle {
     /* Triangle points outwards from the center of the hexagon */
-    /* Base width of triangle: 36.95px (approx 37px) */
-    /* Height of triangle (arbitrary, e.g., 10px) */
+    /* Base width of triangle (S): 46.19px (Hexagon Side Length) */
+    /* Height of equilateral triangle (TH): 40.00px ((sqrt(3)/2) * S) */
     /* Using border technique: width is 0, height is 0 */
     width: 0;
     height: 0;
-    border-left: 18.475px solid transparent; /* TBW/2 */
-    border-right: 18.475px solid transparent; /* TBW/2 */
-    border-bottom: 10px solid black; /* TH and color */
-    /* The border perpendicular to the direction of the triangle defines its height */
-    /* The borders parallel to the direction define half its base */
+    border-left: 23.095px solid transparent; /* S/2 */
+    border-right: 23.095px solid transparent; /* S/2 */
+    border-bottom: 40.00px solid black; /* TH and color */
+    /* This creates an upward-pointing triangle. The 0x0 div is at its tip. */
+    /* The base of this triangle is aligned with the hexagon edge by adjusting transforms. */
 }
 
 /*
@@ -175,61 +175,61 @@ Line Thickness (LT): 2px
 }
 
 /* Edge 0: Top */
-/* Triangle points up. Needs to be moved to top edge. Translate Y by -(SideLength + TriangleHeight/2) approx */
-/* More accurately, translate Y by -(HexRadius + TriangleHeight) then adjust. HexRadius = SideLength = H/2 */
+/* Apothem (distance from center to edge midpoint) = 40.00px */
+/* New Triangle Height (TH_new) = 40.00px */
+/* Blank edge lines are translated by -apothem to center them on the edge. */
+/* Triangle tips are translated by -(apothem + TH_new) to make their bases flush with the edge. */
 .edge-0.edge-blank {
-    width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) translateY(calc(-46.19px + 1px)); /* Centered on edge */
+    width: 36.95px; height: 2px; background-color: #555; /* Old width, can be S = 46.19px */
+    transform: translate(-50%, -50%) translateY(-40.00px);
 }
 .edge-0.edge-triangle {
-    /* Default triangle points up, border-bottom is the base. We want it to point outwards. */
-    /* So for edge 0 (top), it should point up. translateY moves it. */
-    transform: translate(-50%, -50%) translateY(calc(-46.19px - 10px)); /* S + TH */
+    transform: translate(-50%, -50%) translateY(-80.00px); /* -(apothem + TH_new) */
 }
 
 /* Edge 1: Top-Right */
 .edge-1.edge-blank {
     width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(60deg) translateY(calc(-46.19px + 1px));
+    transform: translate(-50%, -50%) rotate(60deg) translateY(-40.00px);
 }
 .edge-1.edge-triangle {
-    transform: translate(-50%, -50%) rotate(60deg) translateY(calc(-46.19px - 10px));
+    transform: translate(-50%, -50%) rotate(60deg) translateY(-80.00px);
 }
 
 /* Edge 2: Bottom-Right */
 .edge-2.edge-blank {
     width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-46.19px + 1px));
+    transform: translate(-50%, -50%) rotate(120deg) translateY(-40.00px);
 }
 .edge-2.edge-triangle {
-    transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-46.19px - 10px));
+    transform: translate(-50%, -50%) rotate(120deg) translateY(-80.00px);
 }
 
 /* Edge 3: Bottom */
 .edge-3.edge-blank {
     width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(180deg) translateY(calc(-46.19px + 1px));
+    transform: translate(-50%, -50%) rotate(180deg) translateY(-40.00px);
 }
 .edge-3.edge-triangle {
-    transform: translate(-50%, -50%) rotate(180deg) translateY(calc(-46.19px - 10px));
+    transform: translate(-50%, -50%) rotate(180deg) translateY(-80.00px);
 }
 
 /* Edge 4: Bottom-Left */
 .edge-4.edge-blank {
     width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-46.19px + 1px));
+    transform: translate(-50%, -50%) rotate(240deg) translateY(-40.00px);
 }
 .edge-4.edge-triangle {
-    transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-46.19px - 10px));
+    transform: translate(-50%, -50%) rotate(240deg) translateY(-80.00px);
 }
 
 /* Edge 5: Top-Left */
 .edge-5.edge-blank {
     width: 36.95px; height: 2px; background-color: #555;
-    transform: translate(-50%, -50%) rotate(300deg) translateY(calc(-46.19px + 1px));
+    transform: translate(-50%, -50%) rotate(300deg) translateY(-40.00px);
 }
 .edge-5.edge-triangle {
-    transform: translate(-50%, -50%) rotate(300deg) translateY(calc(-46.19px - 10px));
+    transform: translate(-50%, -50%) rotate(300deg) translateY(-80.00px);
 }
 
 /* Remove old placeholder styles */
