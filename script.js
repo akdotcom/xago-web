@@ -433,24 +433,42 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Remove highlight from previously selected tile canvas
-        if (currentlySelectedTileCanvas) {
-            currentlySelectedTileCanvas.style.border = 'none'; // Or revert to its original border
-            currentlySelectedTileCanvas.style.boxShadow = 'none';
+        // Check if the clicked tile is already selected
+        if (selectedTile && selectedTile.tile.id === tile.id) {
+            // Tile is already selected, so rotate it
+            selectedTile.tile.rotate();
+            console.log(`Tile ${selectedTile.tile.id} rotated by clicking. New orientation: ${selectedTile.tile.orientation}`);
+
+            // Re-draw the selected tile in the hand
+            const tileCtx = tileCanvasElement.getContext('2d');
+            const cx = tileCanvasElement.width / 2;
+            const cy = tileCanvasElement.height / 2;
+
+            // Clear the specific tile canvas before redrawing
+            tileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
+            drawHexTile(tileCtx, cx, cy, selectedTile.tile);
+
+            gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`;
+        } else {
+            // This is a new selection or a switch from another tile
+
+            // Remove highlight from previously selected tile canvas
+            if (currentlySelectedTileCanvas) {
+                currentlySelectedTileCanvas.style.border = 'none'; // Or revert to its original border
+                currentlySelectedTileCanvas.style.boxShadow = 'none';
+            }
+
+            // Highlight the new selected tile canvas
+            tileCanvasElement.style.border = '3px solid gold';
+            tileCanvasElement.style.boxShadow = '0 0 10px gold';
+            currentlySelectedTileCanvas = tileCanvasElement;
+
+            // Update selectedTile global variable
+            selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
+
+            gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`;
+            console.log("Selected tile:", selectedTile);
         }
-
-        // Highlight the new selected tile canvas
-        tileCanvasElement.style.border = '3px solid gold';
-        tileCanvasElement.style.boxShadow = '0 0 10px gold';
-        currentlySelectedTileCanvas = tileCanvasElement;
-
-        // Update selectedTile global variable
-        // The `handElement` now refers to the canvas element.
-        // This is important for `placeTileOnBoard` which removes `selectedTile.handElement`.
-        selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
-
-        gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' to rotate. Click on the board to place it.`;
-        console.log("Selected tile:", selectedTile);
     }
 
     // Add a global event listener for keydown
