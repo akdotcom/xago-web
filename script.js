@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // This is a placeholder for square grid logic. Will need to be updated for hex.
         // For a square grid interpretation, these are not hex edges.
         // This needs a full rewrite for hex geometry.
-        const potentialNeighbors = [
+        const potentialNeighbors = []; // Corrected line: was an unterminated array literal containing subsequent code.
             // For a simple square grid:
             // { dx: 0, dy: -1, edgeOnNew: 0 (N), edgeOnNeighbor: 2 (S) on tile above }
             // { dx: 1, dy: 0,  edgeOnNew: 1 (E), edgeOnNeighbor: 3 (W) on tile to right }
@@ -336,34 +336,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Let's assume an "odd-r" or "even-r" layout if we are using a square grid.
             // Parity of y (row) affects horizontal neighbors.
-            const isEvenRow = y % 2 === 0;
-            let neighborDefs = [];
+        const isEvenRow = y % 2 === 0;
+        let neighborDefs = [];
 
-            if (isEvenRow) {
-                neighborDefs = [
-                    { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
-                    { dx: 0,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
-                    { dx: -1, dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
-                    { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
-                    { dx: -1, dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
-                    { dx: 0,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
-                ];
-            } else { // Odd row
-                neighborDefs = [
-                    { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
-                    { dx: 1,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
-                    { dx: 0,  dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
-                    { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
-                    { dx: 0,  dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
-                    { dx: 1,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
-                ];
-            }
-            // The above edgeIndexOnNewTile and edgeIndexOnNeighborTile must be carefully chosen
-            // such that they represent opposite edges. E.g., edge 0 of new tile connects to edge 3 of neighbor.
-            // My values: 0-3, 1-4, 2-5 are opposite pairs.
+        if (isEvenRow) {
+            neighborDefs = [
+                { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
+                { dx: 0,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
+                { dx: -1, dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
+                { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
+                { dx: -1, dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
+                { dx: 0,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
+            ];
+        } else { // Odd row
+            neighborDefs = [
+                { dx: 1,  dy: 0,  edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Right
+                { dx: 1,  dy: 1,  edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Right
+                { dx: 0,  dy: 1,  edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Bottom-Left
+                { dx: -1, dy: 0,  edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Left
+                { dx: 0,  dy: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }, // Top-Left
+                { dx: 1,  dy: -1, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }  // Top-Right
+            ];
+        }
+        // The above edgeIndexOnNewTile and edgeIndexOnNeighborTile must be carefully chosen
+        // such that they represent opposite edges. E.g., edge 0 of new tile connects to edge 3 of neighbor.
+        // My values: 0-3, 1-4, 2-5 are opposite pairs.
 
-            const neighbors = [];
-            for (const def of neighborDefs) {
+        const neighbors = [];
+        for (const def of neighborDefs) {
                 neighbors.push({
                     nx: x + def.dx,
                     ny: y + def.dy,
