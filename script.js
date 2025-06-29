@@ -137,12 +137,24 @@ document.addEventListener('DOMContentLoaded', () => {
         tileElement.dataset.tileId = tile.id;
         tileElement.style.backgroundColor = tile.color; // Redundant with class but fine
 
-        // Basic text representation of edges for now
-        // Top, TR, BR, Bottom, BL, TL
-        const edgesStr = tile.getOrientedEdges().map(e => e === 1 ? 'T' : 'B').join('');
-        tileElement.textContent = `${tile.id.substring(0,4)} (${edgesStr})`; // Short ID + Edges
-        tileElement.title = `Edges: ${edgesStr}`;
+        // Remove old text representation
+        // const edgesStr = tile.getOrientedEdges().map(e => e === 1 ? 'T' : 'B').join('');
+        // tileElement.textContent = `${tile.id.substring(0,4)} (${edgesStr})`;
+        // tileElement.title = `Edges: ${edgesStr}`;
 
+        const orientedEdges = tile.getOrientedEdges();
+        for (let i = 0; i < 6; i++) {
+            const edgeDiv = document.createElement('div');
+            edgeDiv.classList.add('hexagon-edge');
+            edgeDiv.classList.add(`edge-${i}`); // Positional class
+
+            if (orientedEdges[i] === 1) { // Triangle
+                edgeDiv.classList.add('edge-triangle');
+            } else { // Blank
+                edgeDiv.classList.add('edge-blank');
+            }
+            tileElement.appendChild(edgeDiv);
+        }
 
         if (!isBoardTile) { // Tiles in hand are draggable
             tileElement.draggable = true;

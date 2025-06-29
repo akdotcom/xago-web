@@ -94,18 +94,18 @@ main {
 
 /* Basic Hexagon Tile Styling - This will need significant work for true hex shapes and edges */
 .hexagon-tile {
-    width: 80px; /* Approximate width */
-    height: 92.38px; /* Approximate height for a regular hexagon (width * sqrt(3)/2 * 1.15) - simplified */
-    background-color: #ccc; /* Default, will be overridden by player color */
+    width: 80px; /* Flat-to-flat width for a flat-top hexagon */
+    height: 92.38px; /* Vertex-to-vertex height (width / (sqrt(3)/2)) */
+    /* background-color: #ccc; */ /* Player color will override this */
     position: relative; /* For edge indicators */
-    margin: 5px;
+    margin: 5px; /* Keep margin for spacing in hand */
     cursor: pointer;
-    /* A simple rectangular representation for now. True hexagons are complex with CSS. */
-    border: 1px solid #333;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px; /* For tile ID or other info */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); /* Flat-top hexagon */
+    /* border: 1px solid #333; */ /* Clip-path makes border look weird */
+    display: flex; /* Kept for potential future direct children, though edges are absolute */
+    align-items: center; /* Kept for potential future direct children */
+    justify-content: center; /* Kept for potential future direct children */
+    font-size: 10px; /* For tile ID or other info - this will be hidden by edges */
     box-sizing: border-box;
 }
 
@@ -117,8 +117,131 @@ main {
     background-color: lightcoral; /* Player 2 color */
 }
 
-/* Placeholder for edge indicators (triangles/blanks) */
-/* This will need to be more sophisticated, perhaps using ::before/::after pseudo-elements or SVG */
+/* New styles for hexagon edges */
+.hexagon-edge {
+    position: absolute;
+    width: 0; /* For triangles made with borders */
+    height: 0; /* For triangles made with borders */
+    box-sizing: border-box;
+}
+
+.edge-blank {
+    /* A line representing the blank edge */
+    /* For a side length of approx 46px, 80% is ~37px */
+    /* This will be a line of width ~37px and height (thickness) 2px */
+    /* Positioning will be handled by edge-N classes */
+}
+
+.edge-triangle {
+    /* Triangle points outwards from the center of the hexagon */
+    /* Base width of triangle: 36.95px (approx 37px) */
+    /* Height of triangle (arbitrary, e.g., 10px) */
+    /* Using border technique: width is 0, height is 0 */
+    /* The border perpendicular to the direction of the triangle defines its height */
+    /* The borders parallel to the direction define half its base */
+}
+
+/*
+Hexagon properties (flat-top):
+Tile Width (flat-to-flat): 80px (let's call it W)
+Tile Height (vertex-to-vertex): 92.38px (let's call it H)
+Side Length (S): 46.19px (H/2 or W/sqrt(3))
+
+Triangle Base Width (TBW): 0.8 * S = 36.95px
+Triangle Height (TH): Let's choose 10px for visual appearance.
+
+For .edge-blank, we'll create a line.
+Line Width (LW): TBW = 36.95px
+Line Thickness (LT): 2px
+*/
+
+/* This is becoming overly complex due to combined translation and rotation of individual elements.
+   A better approach is to use absolute positioning for each edge's container,
+   and then inside that container, the triangle/blank is simpler.
+   Or, use transform on the .edge-N container to place its origin, then simple offset for content.
+
+   Let's simplify the positioning strategy for edges.
+   Each edge container (.edge-N) will be positioned at the center of the hexagon tile.
+   Then, we use translate and rotate to move it to the edge and orient it.
+*/
+
+/* Resetting edge positioning strategy */
+.edge-0, .edge-1, .edge-2, .edge-3, .edge-4, .edge-5 {
+    left: 50%;
+    top: 50%;
+    /* Base transform will be set per edge number */
+}
+
+/* Edge 0: Top */
+/* Translate Y by -H/2 to reach top center of hexagon. Then move triangle/line further out. */
+.edge-0.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) translateY(calc(-46.19px)) translateY(-1px); /* H/2, LT/2 */
+}
+.edge-0.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    transform: translate(-50%, -50%) translateY(calc(-46.19px - 10px)); /* H/2, TH */
+}
+
+/* Edge 1: Top-Right */
+/* Rotate by 60 deg. Then translate Y by -H/2. Then move triangle/line further out. */
+.edge-1.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) rotate(60deg) translateY(calc(-46.19px)) translateY(-1px);
+}
+.edge-1.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    /* The triangle itself needs to be rotated if its "border-bottom" is to be the base pointing outwards */
+    /* This means the triangle's "natural" orientation (e.g. point up with border-bottom) must be rotated. */
+    transform: translate(-50%, -50%) rotate(60deg) translateY(calc(-46.19px - 10px)) ;
+}
+
+/* Edge 2: Bottom-Right */
+/* Rotate by 120 deg. Then translate Y by -H/2. */
+.edge-2.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-46.19px)) translateY(-1px);
+}
+.edge-2.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-46.19px - 10px));
+}
+
+/* Edge 3: Bottom */
+/* Rotate by 180 deg. Then translate Y by -H/2. */
+.edge-3.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) rotate(180deg) translateY(calc(-46.19px)) translateY(-1px);
+}
+.edge-3.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    transform: translate(-50%, -50%) rotate(180deg) translateY(calc(-46.19px - 10px));
+}
+
+/* Edge 4: Bottom-Left */
+/* Rotate by 240 deg. Then translate Y by -H/2. */
+.edge-4.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-46.19px)) translateY(-1px);
+}
+.edge-4.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-46.19px - 10px));
+}
+
+/* Edge 5: Top-Left */
+/* Rotate by 300 deg. Then translate Y by -H/2. */
+.edge-5.edge-blank {
+    width: 36.95px; height: 2px; background-color: #555;
+    transform: translate(-50%, -50%) rotate(300deg) translateY(calc(-46.19px)) translateY(-1px);
+}
+.edge-5.edge-triangle {
+    border-left: 18.475px solid transparent; border-right: 18.475px solid transparent; border-bottom: 10px solid black;
+    transform: translate(-50%, -50%) rotate(300deg) translateY(calc(-46.19px - 10px));
+}
+
+/* Remove old placeholder styles */
+/*
 .edge {
     position: absolute;
     width: 10px;
@@ -127,23 +250,20 @@ main {
     text-align: center;
     line-height: 10px;
 }
-
-/* Example for top edge, this is highly simplified */
 .edge-0 { top: 0; left: 50%; transform: translateX(-50%); }
-.edge-1 { top: 25%; right: 0; transform: translateY(-50%) rotate(60deg); } /* Approximate */
-.edge-2 { bottom: 25%; right: 0; transform: translateY(50%) rotate(120deg); } /* Approximate */
+.edge-1 { top: 25%; right: 0; transform: translateY(-50%) rotate(60deg); }
+.edge-2 { bottom: 25%; right: 0; transform: translateY(50%) rotate(120deg); }
 .edge-3 { bottom: 0; left: 50%; transform: translateX(-50%) rotate(180deg); }
-.edge-4 { bottom: 25%; left: 0; transform: translateY(50%) rotate(240deg); } /* Approximate */
-.edge-5 { top: 25%; left: 0; transform: translateY(-50%) rotate(300deg); } /* Approximate */
+.edge-4 { bottom: 25%; left: 0; transform: translateY(50%) rotate(240deg); }
+.edge-5 { top: 25%; left: 0; transform: translateY(-50%) rotate(300deg); }
 
 .triangle::before {
-    content: "▲"; /* Triangle symbol */
+    content: "▲";
 }
 .blank::before {
-    content: " "; /* Blank (or could be different symbol/style) */
+    content: " ";
 }
-
-
+*/
 footer {
     margin-top: 30px;
     padding: 10px;
