@@ -526,6 +526,90 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Player Actions ---
     let currentlySelectedTileCanvas = null; // Keep track of the currently selected canvas tile in hand
 
+    function drawPlacementHighlight(q, r, color, isDeemphasized) {
+        const cx = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * q);
+        const cy = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            // Using the same angle calculation as drawHexTile (flat-topped)
+            const angle = Math.PI / 180 * (60 * i);
+            const xPos = cx + HEX_SIDE_LENGTH * Math.cos(angle);
+            const yPos = cy + HEX_SIDE_LENGTH * Math.sin(angle);
+            if (i === 0) {
+                ctx.moveTo(xPos, yPos);
+            } else {
+                ctx.lineTo(xPos, yPos);
+            }
+        }
+        ctx.closePath();
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isDeemphasized ? 2 : 3; // Thinner line for de-emphasized
+
+        if (isDeemphasized) {
+            ctx.setLineDash([5, 5]); // Dashed line for de-emphasized
+        } else {
+            ctx.setLineDash([]); // Solid line for normal highlight
+        }
+
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line dash for subsequent drawing operations
+    }
+
+
+    function updatePlacementHighlights() {
+        if (!selectedTile) {
+            redrawBoardOnCanvas(); // Ensure board is clean if no tile is selected
+            return;
+        }
+
+        redrawBoardOnCanvas(); // Redraw existing tiles first to clear old highlights and show current board state
+
+        const tileToPlace = selectedTile.tile;
+        const originalOrientation = tileToPlace.orientation;
+
+        // Define the area to check for highlights.
+        // For now, a simple square area. This could be optimized later.
+        // e.g., iterate from -5 to 5 in q and r, or derive from BOARD_SIZE
+        const checkRadius = Math.floor(BOARD_SIZE / 2) + 2; // A bit larger than half the board
+
+        for (let q = -checkRadius; q <= checkRadius; q++) {
+            for (let r = -checkRadius; r <= checkRadius; r++) {
+                // Check if the cell is within cube constraints for a hexagonal area (optional, but good for large radii)
+                // if (Math.abs(q + r) > checkRadius) continue; // This creates a diamond shape, for hex it's q+r+s=0, so s = -q-r
+
+                const targetKey = `${q},${r}`;
+                if (boardState[targetKey]) {
+                    continue; // Cell is already occupied
+                }
+
+                // 1. Check with current orientation
+                tileToPlace.orientation = originalOrientation; // Ensure current orientation
+                if (isPlacementValid(tileToPlace, q, r, true)) { // true for isDragOver to suppress messages
+                    drawPlacementHighlight(q, r, 'rgba(0, 255, 0, 0.7)', false); // Green, prominent
+                } else {
+                    // 2. Check with other orientations for de-emphasized highlight
+                    let canBePlacedWithRotation = false;
+                    for (let i = 0; i < 6; i++) {
+                        if (i === originalOrientation) continue; // Already checked
+
+                        tileToPlace.orientation = i;
+                        if (isPlacementValid(tileToPlace, q, r, true)) {
+                            canBePlacedWithRotation = true;
+                            break;
+                        }
+                    }
+                    if (canBePlacedWithRotation) {
+                        drawPlacementHighlight(q, r, 'rgba(255, 255, 0, 0.5)', true); // Yellow, de-emphasized
+                    }
+                }
+            }
+        }
+        // Restore the original orientation of the selected tile
+        tileToPlace.orientation = originalOrientation;
+    }
+
     function selectTileFromHand(tile, tileCanvasElement, playerId) {
         if (playerId !== currentPlayer) {
             gameMessageDisplay.textContent = "It's not your turn!";
@@ -548,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawHexTile(tileCtx, cx, cy, selectedTile.tile);
 
             gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`;
+            updatePlacementHighlights(); // Update highlights after rotation
         } else {
             // This is a new selection or a switch from another tile
 
@@ -567,6 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`;
             console.log("Selected tile:", selectedTile);
+            updatePlacementHighlights(); // Update highlights on new selection
         }
     }
 
@@ -589,6 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update game message if needed, or rely on the selection message
                 gameMessageDisplay.textContent = `Tile rotated. Press 'r' to rotate again. Click board to place.`;
+                updatePlacementHighlights(); // Update highlights after rotation via key press
             }
         }
     });
@@ -624,6 +711,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
+
+            updatePlacementHighlights(); // Clear highlights as the tile is now placed and no longer "selected" for placement
 
             // Instead of directly calculating scores and switching turns,
             // call the new function to check for surrounded tiles.
@@ -823,6 +912,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGameInfo();
         gameMessageDisplay.textContent = `Player ${currentPlayer}'s turn.`;
         console.log(`Switched turn to Player ${currentPlayer}`);
+
+        // Clear any existing tile selection and its highlights when turns switch
+        if (selectedTile) {
+            // Deselect tile visually if it's from a hand
+            if (currentlySelectedTileCanvas) {
+                currentlySelectedTileCanvas.style.border = 'none';
+                currentlySelectedTileCanvas.style.boxShadow = 'none';
+                currentlySelectedTileCanvas = null;
+            }
+            selectedTile = null;
+            updatePlacementHighlights(); // This will clear the highlights by redrawing the board
+        }
+
 
         if (isAiPlayerActive && currentPlayer === 2 && !isRemovingTiles) {
             // If AI is active, it's Player 2's turn, and not in tile removal phase
