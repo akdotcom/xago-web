@@ -587,12 +587,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Player Actions ---
     let currentlySelectedTileCanvas = null; // Keep track of the currently selected canvas tile in hand
 
-    function drawPlacementHighlight(q, r, color, isDeemphasized) {
+    // Function to draw a preview of the tile at a given board location
+    // q, r: logical grid coordinates for the preview
+    // tile: the HexTile object to preview
+    // borderColor: CSS color string for the border of the preview (e.g., 'green' or 'yellow')
+    function drawPlacementPreview(q, r, tile, borderColor) {
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
-        // Convert logical grid (q,r) to screen coordinates for drawing highlight
+        // Convert logical grid (q,r) to screen coordinates for drawing
         const screenX = currentOffsetX + scaledHexSideLength * (3/2 * q);
         const screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
 
+        // --- Draw the translucent tile ---
+        ctx.save(); // Save current context state
+        ctx.globalAlpha = 0.6; // Set translucency for the tile preview
+        drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel);
+        ctx.restore(); // Restore context state (specifically globalAlpha)
+
+        // --- Draw the prominent border ---
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
@@ -606,13 +617,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Add a border to the highlight, scaled by zoom
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.lineWidth = 2 * currentZoomLevel; // Scale border width
-        ctx.setLineDash([]);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 3 * currentZoomLevel; // Make border prominent and scale with zoom
+        ctx.setLineDash([]); // Ensure solid line
         ctx.stroke();
     }
 
@@ -629,43 +636,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalOrientation = tileToPlace.orientation;
 
         // Define the area to check for highlights.
-        // For now, a simple square area. This could be optimized later.
-        // e.g., iterate from -5 to 5 in q and r, or derive from BOARD_SIZE
-        const checkRadius = Math.floor(BOARD_SIZE / 2) + 2; // A bit larger than half the board
+        const checkRadius = Math.floor(BOARD_SIZE / 2) + 3; // Slightly increased radius for safety with previews
 
         for (let q = -checkRadius; q <= checkRadius; q++) {
             for (let r = -checkRadius; r <= checkRadius; r++) {
-                // Check if the cell is within cube constraints for a hexagonal area (optional, but good for large radii)
-                // if (Math.abs(q + r) > checkRadius) continue; // This creates a diamond shape, for hex it's q+r+s=0, so s = -q-r
+                // Optional: Check if the cell is within cube constraints for a hexagonal area
+                // if (Math.abs(q + r) > checkRadius) continue;
 
                 const targetKey = `${q},${r}`;
                 if (boardState[targetKey]) {
                     continue; // Cell is already occupied
                 }
 
-                // 1. Check with current orientation
-                tileToPlace.orientation = originalOrientation; // Ensure current orientation
-                if (isPlacementValid(tileToPlace, q, r, true)) { // true for isDragOver to suppress messages
-                    drawPlacementHighlight(q, r, 'rgba(0, 255, 0, 0.7)', false); // Green, prominent
+                // 1. Check with current orientation for GREEN border
+                tileToPlace.orientation = originalOrientation; // Ensure current orientation for this check
+                if (isPlacementValid(tileToPlace, q, r, true)) { // true to suppress messages
+                    drawPlacementPreview(q, r, tileToPlace, 'green');
                 } else {
-                    // 2. Check with other orientations for de-emphasized highlight
+                    // 2. Check with other orientations for YELLOW border
                     let canBePlacedWithRotation = false;
+                    // Store the orientation that makes it valid if found, to draw the preview correctly
+                    let validRotationOrientation = -1;
                     for (let i = 0; i < 6; i++) {
                         if (i === originalOrientation) continue; // Already checked
 
                         tileToPlace.orientation = i;
                         if (isPlacementValid(tileToPlace, q, r, true)) {
                             canBePlacedWithRotation = true;
+                            validRotationOrientation = i;
                             break;
                         }
                     }
                     if (canBePlacedWithRotation) {
-                        drawPlacementHighlight(q, r, 'rgba(255, 255, 0, 0.5)', true); // Yellow, de-emphasized
+                        // Temporarily set tile orientation for preview, then restore
+                        const tempCurrentOrientation = tileToPlace.orientation;
+                        tileToPlace.orientation = validRotationOrientation; // Use the orientation that makes it valid for preview
+                        drawPlacementPreview(q, r, tileToPlace, 'yellow');
+                        tileToPlace.orientation = tempCurrentOrientation; // Restore for next check in loop
                     }
                 }
             }
         }
-        // Restore the original orientation of the selected tile
+        // Restore the original orientation of the selected tile in hand
         tileToPlace.orientation = originalOrientation;
     }
 
