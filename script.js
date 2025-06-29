@@ -1518,6 +1518,7 @@ function animateView() {
             // --- Greedy AI Logic ---
             console.log("AI: Playing Greedily");
             let bestScoreDiff = -Infinity;
+            let bestMoves = []; // Stores all moves with the best score
 
             for (const tile of player2Hand) {
                 const originalOrientation = tile.orientation; // Save to restore later
@@ -1602,14 +1603,23 @@ function animateView() {
 
                             if (scoreDiff > bestScoreDiff) {
                                 bestScoreDiff = scoreDiff;
-                                bestMove = { tile: tile, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff };
+                                bestMoves = [{ tile: tile, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff }];
+                            } else if (scoreDiff === bestScoreDiff) {
+                                bestMoves.push({ tile: tile, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff });
                             }
                         }
                     }
                 }
                 tile.orientation = originalOrientation; // Restore original orientation for the tile in hand
             }
-            if(bestMove) console.log(`AI (Greedy): Best move found - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), ScoreDiff ${bestMove.score}`);
+
+            if (bestMoves.length > 0) {
+                bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                console.log(`AI (Greedy): Randomly selected one of ${bestMoves.length} best moves. Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), ScoreDiff ${bestMove.score}`);
+            } else {
+                bestMove = null; // Explicitly set to null if no moves were found
+                 console.log(`AI (Greedy): No valid moves found.`);
+            }
         } else if (opponentType === 'greedy2') {
             console.log("AI: Playing Greedily with Lookahead (Greedy 2)");
             // Placeholder for Greedy 2 logic. This will call findBestMoveMinimax.
