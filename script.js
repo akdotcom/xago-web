@@ -966,7 +966,15 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
     function switchTurn() {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
-        updateGameInfo();
+        updateGameInfo(); // Update score displays and current player display first
+
+        // Check for game end condition *before* new turn actions (like AI move)
+        // This implements the rule: "game ends when either player starts their turn with no tiles"
+        if (checkGameEnd()) {
+            endGame();
+            return; // Do not proceed with the turn
+        }
+
         gameMessageDisplay.textContent = `Player ${currentPlayer}'s turn.`;
         console.log(`Switched turn to Player ${currentPlayer}`);
 
@@ -993,7 +1001,8 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     }
 
     function checkGameEnd() {
-        return player1Hand.length === 0 && player2Hand.length === 0;
+        // Game ends if either player has no tiles left in their hand.
+        return player1Hand.length === 0 || player2Hand.length === 0;
     }
 
     function endGame() {
