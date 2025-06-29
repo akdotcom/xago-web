@@ -21,20 +21,37 @@ main {
     width: 90%;
     max-width: 1200px;
     margin: 20px auto;
+    position: relative; /* Added for positioning player-scores */
 }
 
-#game-info {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-    text-align: center;
+/* Removed #game-info styles */
+
+#player-scores {
+    position: absolute;
+    bottom: 10px; /* Adjust as needed from bottom of game board area */
+    right: 10px; /* Adjust as needed from right of game board area */
+    display: flex;
+    gap: 15px; /* Space between scores */
+    background-color: rgba(255, 255, 255, 0.8); /* Optional: light background for readability */
+    padding: 5px 10px;
+    border-radius: 5px;
+    z-index: 10; /* Ensure it's above the canvas */
 }
 
-#game-info p {
-    margin: 5px 0;
+#player-scores span {
+    font-size: 1.5em; /* Larger font for scores */
+    font-weight: bold;
 }
+
+/* Player-specific score colors will be set by JS, but can have defaults */
+#p1-score-display {
+    color: lightblue; /* Default, will be overridden by JS for consistency */
+}
+
+#p2-score-display {
+    color: lightcoral; /* Default, will be overridden by JS for consistency */
+}
+
 
 #ai-toggle-container {
     margin-top: 10px;
@@ -103,6 +120,36 @@ main {
     text-align: center;
     margin-top: 0;
     color: #555;
+    margin-bottom: 5px; /* Reduce margin to bring selector closer */
+}
+
+.player2-hand-header {
+    display: flex;
+    align-items: center; /* Align items vertically in the center */
+    justify-content: space-between; /* Puts space between title and selector */
+    margin-bottom: 10px; /* Space below the header block */
+}
+
+.player2-hand-header h2 {
+    margin: 0; /* Remove default margins from h2 */
+    text-align: left; /* Align title to the left */
+}
+
+#player2-hand #opponent-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* margin-bottom is now on player2-hand-header */
+}
+
+#player2-hand #opponent-selector-container label {
+    font-size: 0.9em;
+    margin-right: 0;
+}
+
+#player2-hand #opponent-selector-container select {
+    font-size: 0.9em;
+    padding: 2px 5px;
 }
 
 .tiles-container {
