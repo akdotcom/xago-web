@@ -1615,14 +1615,22 @@ function animateView() {
             // The actual implementation of findBestMoveMinimax will be complex.
             // For now, let's ensure the structure is in place.
             bestMove = findBestMoveMinimax(boardState, player2Hand, player1Hand, 2, 1, 1); // board, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth
-            if(bestMove) console.log(`AI (Greedy 2): Best move found by minimax - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), Score ${bestMove.score}`);
+            if(bestMove && bestMove.tile) {
+                console.log(`AI (Greedy 2): Best move found by minimax - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), Score ${bestMove.score}`);
+            } else if (bestMove) {
+                // bestMove object exists, but it doesn't have a .tile (e.g. returned from minimax base case as {score: ..., tile: null})
+                console.log(`AI (Greedy 2): Minimax evaluation completed but no specific tile move selected (e.g. depth 0 or no moves). Score: ${bestMove.score}`);
+            } else {
+                // bestMove itself is null or undefined (should not happen if findBestMoveMinimax always returns an object)
+                console.log(`AI (Greedy 2): Minimax did not return a best move object.`);
+            }
         }
 
 
-        if (bestMove) {
+        if (bestMove && bestMove.tile) { // Check if a valid tile is part of the best move
             const tileToPlace = player2Hand.find(t => t.id === bestMove.tile.id);
-            if (!tileToPlace) { // Should not happen if logic is correct
-                console.error("AI Error: Best move tile not found in hand!");
+            if (!tileToPlace) { // This case should be rare if bestMove.tile.id is valid and from player2Hand
+                console.error("AI Error: Best move tile (ID: " + (bestMove.tile ? bestMove.tile.id : 'N/A') + ") not found in player 2 hand! This indicates a desync or logic error in minimax hand simulation.");
                 switchTurn(); // Pass turn
                 return;
             }
