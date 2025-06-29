@@ -1526,6 +1526,13 @@ function animateView() {
                 tile.orientation = originalOrientation; // Restore original orientation for the tile in hand
             }
             if(bestMove) console.log(`AI (Greedy): Best move found - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), ScoreDiff ${bestMove.score}`);
+        } else if (opponentType === 'greedy2') {
+            console.log("AI: Playing Greedily with Lookahead (Greedy 2)");
+            // Placeholder for Greedy 2 logic. This will call findBestMoveMinimax.
+            // The actual implementation of findBestMoveMinimax will be complex.
+            // For now, let's ensure the structure is in place.
+            bestMove = findBestMoveMinimax(boardState, player2Hand, player1Hand, 2, 1, 1); // board, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth
+            if(bestMove) console.log(`AI (Greedy 2): Best move found by minimax - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), Score ${bestMove.score}`);
         }
 
 
@@ -1596,11 +1603,47 @@ function animateView() {
                 tileToRemove = opponentTiles[0];
                 console.log(`AI (Greedy): Prioritizing removal of opponent's tile: ${tileToRemove.id}`);
             } else if (currentSurroundedTilesForRemoval.length > 0) { // Only own tiles are surrounded
-                // If only own tiles, remove the first one (current logic for greedy when forced)
                 tileToRemove = currentSurroundedTilesForRemoval[0];
                 console.log(`AI (Greedy): No opponent tiles to remove. Removing own tile: ${tileToRemove.id}`);
             }
+        } else if (opponentType === 'greedy2') {
+            console.log("AI (Greedy 2): Choosing strategic tile to remove.");
+            let bestChoice = null;
+            let bestScore = -Infinity;
+
+            const opponentTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId !== currentPlayer);
+            const ownTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId === currentPlayer);
+
+            if (opponentTiles.length > 0) {
+                console.log("AI (Greedy 2): Evaluating removal of opponent's tiles.");
+                for (const oppTile of opponentTiles) {
+                    const tempBoard = deepCopyBoardState(boardState);
+                    delete tempBoard[`${oppTile.x},${oppTile.y}`]; // Simulate removal
+                    const score = evaluateBoard(tempBoard, currentPlayer);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestChoice = oppTile;
+                    }
+                }
+                tileToRemove = bestChoice;
+                if (tileToRemove) console.log(`AI (Greedy 2): Chose opponent's tile ${tileToRemove.id} for removal, score: ${bestScore}`);
+            } else if (ownTiles.length > 0) {
+                console.log("AI (Greedy 2): Evaluating removal of own tiles (to minimize damage).");
+                 // If removing own tile, we want the one whose removal results in the least bad score (highest score)
+                for (const ownTile of ownTiles) {
+                    const tempBoard = deepCopyBoardState(boardState);
+                    delete tempBoard[`${ownTile.x},${ownTile.y}`]; // Simulate removal
+                    const score = evaluateBoard(tempBoard, currentPlayer);
+                     if (score > bestScore) { // Still maximizing our score
+                        bestScore = score;
+                        bestChoice = ownTile;
+                    }
+                }
+                tileToRemove = bestChoice;
+                 if (tileToRemove) console.log(`AI (Greedy 2): Chose own tile ${tileToRemove.id} for removal, score: ${bestScore}`);
+            }
         }
+
 
         if (tileToRemove) {
             console.log(`AI (${opponentType}): Decided to remove tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y})`);
@@ -1627,6 +1670,294 @@ function animateView() {
                 switchTurn();
             }
         }
+    }
+
+    // --- Minimax AI Helper Functions ---
+
+    // getAllPossibleMoves(boardState, playerHand, playerId)
+    // Returns an array of objects, where each object is:
+    // { tile: HexTile, orientation: number, x: number, y: number }
+    function getAllPossibleMoves(currentBoardState, hand, playerId) {
+        const possibleMoves = [];
+        const initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
+
+        for (const tile of hand) {
+            const originalOrientation = tile.orientation; // Save to restore
+            for (let o = 0; o < 6; o++) {
+                tile.orientation = o;
+
+                if (initialBoardIsEmpty) {
+                    // First move must be at (0,0)
+                    if (isPlacementValid(tile, 0, 0, true)) { // true for isDragOver to suppress messages
+                        possibleMoves.push({ tile: tile, orientation: o, x: 0, y: 0, playerId: playerId });
+                    }
+                } else {
+                    const placementSpots = new Set(); // Use a Set to avoid duplicate spot checks for different tiles
+                    for (const key in currentBoardState) {
+                        const existingTile = currentBoardState[key];
+                        const neighbors = getNeighbors(existingTile.x, existingTile.y);
+                        for (const neighborInfo of neighbors) {
+                            const spotKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+                            if (!currentBoardState[spotKey]) {
+                                placementSpots.add(spotKey);
+                            }
+                        }
+                    }
+                    // Add broader scan for sparse boards if no direct adjacent spots found
+                    // This part can be refined or made more efficient if needed.
+                    if (placementSpots.size === 0 && Object.keys(currentBoardState).length < 5) {
+                        const scanRadius = 3;
+                        for (let q = -scanRadius; q <= scanRadius; q++) {
+                            for (let r = -scanRadius; r <= scanRadius; r++) {
+                                if (Math.abs(q + r) > scanRadius) continue;
+                                const spotKey = `${q},${r}`;
+                                if (!currentBoardState[spotKey]) {
+                                    placementSpots.add(spotKey);
+                                }
+                            }
+                        }
+                    }
+
+
+                    for (const spotKey of placementSpots) {
+                        const [x, y] = spotKey.split(',').map(Number);
+                        if (isPlacementValid(tile, x, y, true)) {
+                            possibleMoves.push({ tile: tile, orientation: o, x: x, y: y, playerId: playerId });
+                        }
+                    }
+                }
+            }
+            tile.orientation = originalOrientation; // Restore
+        }
+        return possibleMoves;
+    }
+
+
+    // evaluateBoard(boardState, playerPerspectiveId)
+    // Returns a score: playerPerspective's score - opponent's score
+    function evaluateBoard(currentBoardState, playerPerspectiveId) {
+        if (Object.keys(currentBoardState).length === 0 && playerPerspectiveId === 2 && player1Hand.length === NUM_TILES_PER_PLAYER) return -1000; // Heavily penalize P2 for not making the first move if board is empty
+        if (Object.keys(currentBoardState).length === 0 && playerPerspectiveId === 1) return 0;
+
+
+        const scores = calculateScoresForBoard(currentBoardState);
+        if (playerPerspectiveId === 1) {
+            return scores.player1Score - scores.player2Score;
+        } else {
+            return scores.player2Score - scores.player1Score;
+        }
+    }
+
+    // Helper function to simulate the entire removal process for a given board state and acting player
+    // boardState: The current state of the board in the simulation
+    // actingPlayerId: The ID of the player whose turn it is in the simulation (who might get to choose a tile to remove)
+    // Returns: { boardState: newBoardState, handGains: {playerId: [tilesReturned]} }
+    // handGains will track tiles returned to any player's hand.
+    function simulateRemovalCycle(initialBoardState, actingPlayerId) {
+        let currentSimBoardState = deepCopyBoardState(initialBoardState);
+        let tilesReturnedToHands = {}; // Tracks tiles returned, e.g., { 1: [tileA], 2: [tileB] }
+
+        let surroundedTiles = getSurroundedTiles(currentSimBoardState);
+
+        while (surroundedTiles.length > 0) {
+            let tileToRemove = null;
+
+            const opponentTilesSurrounded = surroundedTiles.filter(t => t.playerId !== actingPlayerId);
+            const ownTilesSurrounded = surroundedTiles.filter(t => t.playerId === actingPlayerId);
+
+            if (opponentTilesSurrounded.length > 0) {
+                let bestRemovalChoice = null;
+                let maxScoreAfterRemoval = -Infinity;
+
+                for (const oppTile of opponentTilesSurrounded) {
+                    const tempBoard = deepCopyBoardState(currentSimBoardState);
+                    delete tempBoard[`${oppTile.x},${oppTile.y}`];
+                    const score = evaluateBoard(tempBoard, actingPlayerId);
+                    if (score > maxScoreAfterRemoval) {
+                        maxScoreAfterRemoval = score;
+                        bestRemovalChoice = oppTile;
+                    }
+                }
+                tileToRemove = bestRemovalChoice;
+            } else if (ownTilesSurrounded.length > 0) {
+                // If only own tiles are surrounded, the first one found is chosen to be returned to hand.
+                tileToRemove = ownTilesSurrounded[0];
+            }
+
+            if (tileToRemove) {
+                delete currentSimBoardState[`${tileToRemove.x},${tileToRemove.y}`];
+                if (!tilesReturnedToHands[tileToRemove.playerId]) {
+                    tilesReturnedToHands[tileToRemove.playerId] = [];
+                }
+                tilesReturnedToHands[tileToRemove.playerId].push({
+                    id: tileToRemove.id,
+                    playerId: tileToRemove.playerId,
+                    edges: [...tileToRemove.edges] // Store a copy of edges for potential re-instantiation
+                });
+                 // console.log(`Simulated removal: Tile ${tileToRemove.id} (P${tileToRemove.playerId}) removed from board ${tileToRemove.x},${tileToRemove.y}`);
+            } else {
+                // console.warn("Simulated removal: No tile chosen for removal despite surrounded tiles existing.");
+                break; // No valid tile to remove found, break loop
+            }
+            surroundedTiles = getSurroundedTiles(currentSimBoardState); // Re-check for more surrounded tiles
+        }
+        return { boardState: currentSimBoardState, handGains: tilesReturnedToHands };
+    }
+
+
+    // findBestMoveMinimax(currentBoardState, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth)
+    function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth) {
+        let bestMoveForAi = null;
+        let maxScoreForAi = -Infinity;
+
+        // Ensure hands are true copies for this level of simulation to avoid cross-contamination between AI move considerations
+        const aiHand = aiHandOriginal.map(t => new HexTile(t.id, t.playerId, [...t.edges]));
+        const opponentHand = opponentHandOriginal.map(t => new HexTile(t.id, t.playerId, [...t.edges]));
+
+        const possibleAiMoves = getAllPossibleMoves(currentBoardState, aiHand, aiPlayerId);
+        // console.log(`Minimax (Depth ${depth}): AI (P${aiPlayerId}) evaluating ${possibleAiMoves.length} moves. AI Hand: ${aiHand.length}, Opponent Hand: ${opponentHand.length}`);
+
+
+        if (depth === 0 || possibleAiMoves.length === 0) { // Base case for recursion or no moves
+             const evalScore = evaluateBoard(currentBoardState, aiPlayerId);
+            // console.log(`Minimax (Depth ${depth}, Base Case): P${aiPlayerId} eval: ${evalScore}`);
+            return { score: evalScore }; // Return score for the player whose turn it would have been
+        }
+
+        for (const aiMove of possibleAiMoves) {
+            let boardAfterAiMove_sim = deepCopyBoardState(currentBoardState);
+            const aiTileForSim = new HexTile(aiMove.tile.id, aiPlayerId, [...aiMove.tile.edges]); // Use a copy
+            aiTileForSim.orientation = aiMove.orientation;
+            aiTileForSim.x = aiMove.x;
+            aiTileForSim.y = aiMove.y;
+            boardAfterAiMove_sim[`${aiMove.x},${aiMove.y}`] = aiTileForSim;
+
+            let currentAiHandSim = aiHand.filter(t => t.id !== aiMove.tile.id);
+            let currentOpponentHandSim = opponentHand.map(t => new HexTile(t.id, t.playerId, [...t.edges]));
+
+            const removalResultAi = simulateRemovalCycle(boardAfterAiMove_sim, aiPlayerId);
+            boardAfterAiMove_sim = removalResultAi.boardState;
+
+            if (removalResultAi.handGains[aiPlayerId]) {
+                removalResultAi.handGains[aiPlayerId].forEach(rt => currentAiHandSim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+            }
+            if (removalResultAi.handGains[opponentPlayerId]) {
+                removalResultAi.handGains[opponentPlayerId].forEach(rt => currentOpponentHandSim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+            }
+
+            // Check for game end after AI move and removals
+            if (currentAiHandSim.length === 0) {
+                const score = evaluateBoard(boardAfterAiMove_sim, aiPlayerId);
+                // console.log(`Minimax (Depth ${depth}): AI (P${aiPlayerId}) runs out of tiles. Score: ${score}`);
+                if (score > maxScoreForAi) {
+                    maxScoreForAi = score;
+                    bestMoveForAi = { ...aiMove, tile: aiMove.tile, score: maxScoreForAi }; // Ensure original tile object is part of the returned move
+                }
+                continue;
+            }
+
+            // --- Opponent's Turn Simulation ---
+            let minScoreAfterOpponentResponse = Infinity;
+            const possibleOpponentMoves = getAllPossibleMoves(boardAfterAiMove_sim, currentOpponentHandSim, opponentPlayerId);
+
+            if (possibleOpponentMoves.length === 0 || currentOpponentHandSim.length === 0) {
+                minScoreAfterOpponentResponse = evaluateBoard(boardAfterAiMove_sim, aiPlayerId);
+                // console.log(`Minimax (Depth ${depth}): Opponent (P${opponentPlayerId}) has no moves/tiles. AI Score: ${minScoreAfterOpponentResponse}`);
+            } else {
+                for (const opponentMove of possibleOpponentMoves) {
+                    let boardAfterOpponentMove_sim = deepCopyBoardState(boardAfterAiMove_sim);
+                    const opponentTileForSim = new HexTile(opponentMove.tile.id, opponentPlayerId, [...opponentMove.tile.edges]);
+                    opponentTileForSim.orientation = opponentMove.orientation;
+                    opponentTileForSim.x = opponentMove.x;
+                    opponentTileForSim.y = opponentMove.y;
+                    boardAfterOpponentMove_sim[`${opponentMove.x},${opponentMove.y}`] = opponentTileForSim;
+
+                    let simOpponentHandAfterMove = currentOpponentHandSim.filter(t => t.id !== opponentMove.tile.id);
+                    // let simAiHandForNextTurn = currentAiHandSim.map(t => new HexTile(t.id, t.playerId, [...t.edges])); // Not strictly needed if not going deeper for AI
+
+                    const removalResultOpponent = simulateRemovalCycle(boardAfterOpponentMove_sim, opponentPlayerId);
+                    boardAfterOpponentMove_sim = removalResultOpponent.boardState;
+
+                    // Update hands from opponent's removal phase (opponent's perspective for choice)
+                    if (removalResultOpponent.handGains[opponentPlayerId]) {
+                        removalResultOpponent.handGains[opponentPlayerId].forEach(rt => simOpponentHandAfterMove.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+                    }
+                    // if (removalResultOpponent.handGains[aiPlayerId]) { // AI hand affected by opponent's removal
+                    //     removalResultOpponent.handGains[aiPlayerId].forEach(rt => simAiHandForNextTurn.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+                    // }
+
+                    let currentTurnScore;
+                    if (depth - 1 === 0) { // If next level is base case
+                        currentTurnScore = evaluateBoard(boardAfterOpponentMove_sim, aiPlayerId);
+                    } else {
+                        // Recursive call for deeper search (not implemented for depth=1 initial request)
+                        // For current requirement (depth=1 lookahead), this branch is not hit from top call.
+                        // If we were to implement deeper search:
+                        // const nextState = findBestMoveMinimax(boardAfterOpponentMove_sim, simAiHandForNextTurn, simOpponentHandAfterMove, aiPlayerId, opponentPlayerId, depth - 1);
+                        // currentTurnScore = nextState.score; // This would be from AI's perspective again
+                        currentTurnScore = evaluateBoard(boardAfterOpponentMove_sim, aiPlayerId); // Fallback for now
+                    }
+
+                    if (currentTurnScore < minScoreAfterOpponentResponse) {
+                        minScoreAfterOpponentResponse = currentTurnScore;
+                    }
+                }
+            }
+            // console.log(`Minimax (Depth ${depth}): AI move ${aiMove.tile.id} (${aiMove.x},${aiMove.y}) leads to opponent response score ${minScoreAfterOpponentResponse} (for AI)`);
+
+            if (minScoreAfterOpponentResponse > maxScoreForAi) {
+                maxScoreForAi = minScoreAfterOpponentResponse;
+                bestMoveForAi = { ...aiMove, tile: aiMove.tile, score: maxScoreForAi };
+            }
+        }
+
+        if (bestMoveForAi) {
+            // console.log(`Minimax (Depth ${depth}): Best overall move for AI (P${aiPlayerId}) is Tile ${bestMoveForAi.tile.id}, Orient ${bestMoveForAi.orientation}, Pos (${bestMoveForAi.x},${bestMoveForAi.y}), resulting score ${bestMoveForAi.score}`);
+        } else if (possibleAiMoves.length > 0) {
+            console.warn(`Minimax (Depth ${depth}): P${aiPlayerId} - No move improved score from initial -Infinity. Fallback to first possible move.`);
+            const firstMove = possibleAiMoves[0];
+            // Simulate this first move and its consequences to get a score
+            const tempBoard = deepCopyBoardState(currentBoardState);
+            const tileClone = new HexTile(firstMove.tile.id, aiPlayerId, [...firstMove.tile.edges]);
+            tileClone.orientation = firstMove.orientation;
+            tileClone.x = firstMove.x;
+            tileClone.y = firstMove.y;
+            tempBoard[`${firstMove.x},${firstMove.y}`] = tileClone;
+
+            let currentAiHandTemp = aiHand.filter(t => t.id !== firstMove.tile.id);
+            let currentOpponentHandTemp = opponentHand.map(t => new HexTile(t.id, t.playerId, [...t.edges]));
+
+            const r1 = simulateRemovalCycle(tempBoard, aiPlayerId);
+            let b1 = r1.boardState;
+            if(r1.handGains[aiPlayerId]) r1.handGains[aiPlayerId].forEach(rt => currentAiHandTemp.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+            if(r1.handGains[opponentPlayerId]) r1.handGains[opponentPlayerId].forEach(rt => currentOpponentHandTemp.push(new HexTile(rt.id, rt.playerId, rt.edges)));
+
+            let scoreToAssign = evaluateBoard(b1, aiPlayerId); // Default if opponent has no move
+
+            const oppMoves = getAllPossibleMoves(b1, currentOpponentHandTemp, opponentPlayerId);
+            if (oppMoves.length > 0) {
+                let minScore = Infinity;
+                for(const oppMove of oppMoves) {
+                    let b2 = deepCopyBoardState(b1);
+                    const oppTileClone = new HexTile(oppMove.tile.id, opponentPlayerId, [...oppMove.tile.edges]);
+                    oppTileClone.orientation = oppMove.orientation;
+                    oppTileClone.x = oppMove.x;
+                    oppTileClone.y = oppMove.y;
+                    b2[`${oppMove.x},${oppMove.y}`] = oppTileClone;
+                    const r2 = simulateRemovalCycle(b2, opponentPlayerId);
+                    const evalScore = evaluateBoard(r2.boardState, aiPlayerId);
+                    if (evalScore < minScore) minScore = evalScore;
+                }
+                scoreToAssign = minScore;
+            }
+            bestMoveForAi = { ...firstMove, tile: firstMove.tile, score: scoreToAssign };
+            console.log(`Minimax (Depth ${depth}): Fallback selected: Tile ${bestMoveForAi.tile.id}, Score ${bestMoveForAi.score}`);
+
+        } else {
+            // console.log(`Minimax (Depth ${depth}): AI (P${aiPlayerId}) could not find any move (no possible moves). Returning -Infinity score.`);
+             return { score: -Infinity }; // No moves possible, very bad
+        }
+        return bestMoveForAi;
     }
 
 });
