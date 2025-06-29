@@ -481,9 +481,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
+            calculateScores(); // Update scores after each turn
 
             if (checkGameEnd()) {
-                endGame();
+                endGame(); // endGame also calls calculateScores, but it's fine
             } else {
                 switchTurn();
             }
