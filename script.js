@@ -804,6 +804,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
+        // New check: Ensure the target space (x,y) itself is not enclosed
+        if (isSpaceEnclosed(x, y, boardState)) {
+            if (!isDragOver) gameMessageDisplay.textContent = "Cannot place tile in an enclosed space.";
+            return false;
+        }
+
         if (!isDragOver) gameMessageDisplay.textContent = "Valid placement.";
         return true;
     }
@@ -866,6 +872,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return true; // All 6 neighbors are occupied
     }
+
+// Function to check if an empty space (q,r) is enclosed by tiles
+function isSpaceEnclosed(q, r, currentBoardState) {
+    const neighbors = getNeighbors(q, r); // Get all potential neighbor locations
+
+    // If there are fewer than 6 neighbors (e.g., due to board edges if finite),
+    // it cannot be enclosed in the context of this game's infinite logical grid.
+    // However, our getNeighbors always returns 6 potential locations.
+    // We need to check if all these 6 locations are *occupied* by tiles.
+
+    for (const neighborInfo of neighbors) {
+        const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+        if (!currentBoardState[neighborKey]) {
+            // If any neighbor cell is empty, then the space (q,r) is not enclosed.
+            return false;
+        }
+    }
+    // If all 6 neighboring cells are occupied by tiles, the space (q,r) is enclosed.
+    return true;
+}
 
     function getSurroundedTiles(currentBoardState) {
         const surroundedTiles = [];
