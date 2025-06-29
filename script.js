@@ -140,11 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
             redrawBoardOnCanvas(); // Clear highlights from removed tiles before proceeding
 
             calculateScores();
-            if (checkGameEnd()) {
-                endGame();
-            } else {
-                switchTurn();
-            }
+            // The game end condition is now checked only at the beginning of a turn in switchTurn()
+            switchTurn();
         }
         animateView(); // Call animation loop after parameters are updated
     }
@@ -1059,8 +1056,12 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     }
 
     function checkGameEnd() {
-        // Game ends if either player has no tiles left in their hand.
-        return player1Hand.length === 0 || player2Hand.length === 0;
+        // Game ends if the current player starts their turn with no tiles left.
+        if (currentPlayer === 1) {
+            return player1Hand.length === 0;
+        } else { // currentPlayer === 2
+            return player2Hand.length === 0;
+        }
     }
 
     function endGame() {
@@ -1651,12 +1652,9 @@ function animateView() {
             console.log(`AI (${opponentType}): Could not find any valid move. Passing turn.`);
             // gameMessageDisplay.textContent = "Player 2 (AI) passes."; // Removed
             console.log("Player 2 (AI) passes.");
-            calculateScores();
-            if (checkGameEnd()) {
-                endGame();
-            } else {
-                switchTurn();
-            }
+            calculateScores(); // Calculate scores in case it's relevant for display, though game end is deferred
+            // The game end condition is now checked only at the beginning of a turn in switchTurn()
+            switchTurn();
         }
     }
 
@@ -1756,11 +1754,8 @@ function animateView() {
             console.log("AI encountered an issue during tile removal. Proceeding...");
             redrawBoardOnCanvas(); // Clear highlights
             calculateScores();
-            if (checkGameEnd()) {
-                endGame();
-            } else {
-                switchTurn();
-            }
+            // The game end condition is now checked only at the beginning of a turn in switchTurn()
+            switchTurn();
         }
     }
 
