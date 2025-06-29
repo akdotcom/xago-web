@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // This function is no longer needed as we don't have individual cell DOM elements.
     // function getBoardCell(x, y) {
     //     return gameBoard.querySelector(`.board-cell[data-x="${x}"][data-y="${y}"]`);
-    }
+    // }
 
     // --- Tile Generation ---
     const UNIQUE_TILE_PATTERNS = [
