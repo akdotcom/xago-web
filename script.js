@@ -108,10 +108,22 @@ document.addEventListener('DOMContentLoaded', () => {
         updateViewParameters(); // Update view after a tile is removed
 
         if (newSurroundedList.length > 0) {
-            // Still more tiles to remove, continue the process
             console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-            gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
-            redrawBoardOnCanvas(); // Redraw to update highlights
+            // currentSurroundedTilesForRemoval is already updated globally before this block
+
+            if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy')) {
+                // AI's turn and more tiles to remove, let AI continue removing
+                gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is removing more tiles...`;
+                console.log("AI continues tile removal process. New list:", newSurroundedList.map(t => t.id));
+                redrawBoardOnCanvas(); // Update highlights for the AI's next choice (visual feedback)
+                // Using setTimeout to allow canvas to redraw before AI logic runs,
+                // and to provide a brief visual pause if multiple tiles are removed sequentially.
+                setTimeout(performAiTileRemoval, 250); // Short delay, performAiTileRemoval also has its own delay
+            } else {
+                // Human player's turn, or AI is human - prompt for click
+                gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+                redrawBoardOnCanvas(); // Redraw to update highlights for human player
+            }
         } else {
             // No more tiles are surrounded, end the removal phase
             console.log("No more surrounded tiles. Ending removal phase.");
@@ -942,18 +954,27 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         currentSurroundedTilesForRemoval = surroundedTiles; // Store the list globally
 
         if (currentSurroundedTilesForRemoval.length > 0) {
-            isRemovingTiles = true; // Ensure this state is active
-            gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+            isRemovingTiles = true;
             console.log("Tile removal phase. Surrounded tiles:", currentSurroundedTilesForRemoval.map(t => t.id));
-            redrawBoardOnCanvas(); // Redraw to show highlights
+
+            if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy')) {
+                // AI's turn and tiles are surrounded by its move, start AI removal process
+                gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is starting tile removal...`;
+                redrawBoardOnCanvas(); // Show highlights
+                // Short delay before AI starts, allowing UI to update and give a sense of action.
+                setTimeout(performAiTileRemoval, 500); // Consistent with other AI initiation delays
+            } else {
+                // Human player's turn, or AI is human - prompt for click
+                gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
+                redrawBoardOnCanvas(); // Redraw to show highlights
+            }
         } else {
             // This case should ideally be handled by the calling function (checkForSurroundedTilesAndProceed)
-            // but as a safeguard:
+            // but as a safeguard if processTileRemoval is ever called with an empty list:
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
-            console.log("No surrounded tiles to remove, proceeding with normal turn flow.");
-            // Normal turn progression (score, end check, switch turn) would follow here
-            // This is already handled by checkForSurroundedTilesAndProceed's else block
+            console.log("No surrounded tiles to remove (handled in processTileRemoval, though checkForSurroundedTilesAndProceed should catch this).");
+            // Normal turn progression
             calculateScores();
             if (checkGameEnd()) {
                 endGame();
@@ -1564,23 +1585,26 @@ function animateView() {
 
         if (opponentType === 'random') {
             console.log("AI (Random): Choosing random tile to remove.");
-            tileToRemove = currentSurroundedTilesForRemoval[Math.floor(Math.random() * currentSurroundedTilesForRemoval.length)];
+            const opponentTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId !== currentPlayer); // Player 1's tiles for Player 2 AI
+            if (opponentTiles.length > 0) {
+                tileToRemove = opponentTiles[Math.floor(Math.random() * opponentTiles.length)];
+                console.log(`AI (Random): Selected opponent's tile ${tileToRemove.id} to remove.`);
+            } else if (currentSurroundedTilesForRemoval.length > 0) { // Only own tiles are surrounded
+                tileToRemove = currentSurroundedTilesForRemoval[Math.floor(Math.random() * currentSurroundedTilesForRemoval.length)];
+                console.log(`AI (Random): No opponent tiles to remove. Selected own tile ${tileToRemove.id} to remove.`);
+            }
         } else if (opponentType === 'greedy') {
             console.log("AI (Greedy): Choosing strategic tile to remove.");
-            // Greedy strategy:
-            // 1. Prioritize removing Player 1's tiles.
-            // 2. If multiple Player 1 tiles, pick any (e.g., first one found).
-            // 3. If no Player 1 tiles are surrounded, but Player 2 tiles are, it must remove one of its own. Pick any.
-
-            const player1SurroundedTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId === 1);
-            if (player1SurroundedTiles.length > 0) {
-                tileToRemove = player1SurroundedTiles[0]; // Remove the first Player 1 tile found
-                console.log(`AI (Greedy): Prioritizing removal of Player 1's tile: ${tileToRemove.id}`);
-            } else {
-                // All surrounded tiles must belong to Player 2. Remove the first one found.
-                // This logic assumes currentSurroundedTilesForRemoval is not empty, which is checked at the start.
+            const opponentTiles = currentSurroundedTilesForRemoval.filter(t => t.playerId !== currentPlayer); // Player 1's tiles for Player 2 AI
+            if (opponentTiles.length > 0) {
+                // For now, "greedy" still picks the first one. A more advanced greedy
+                // might score which opponent tile is most beneficial to remove.
+                tileToRemove = opponentTiles[0];
+                console.log(`AI (Greedy): Prioritizing removal of opponent's tile: ${tileToRemove.id}`);
+            } else if (currentSurroundedTilesForRemoval.length > 0) { // Only own tiles are surrounded
+                // If only own tiles, remove the first one (current logic for greedy when forced)
                 tileToRemove = currentSurroundedTilesForRemoval[0];
-                console.log(`AI (Greedy): No Player 1 tiles to remove. Removing own tile: ${tileToRemove.id}`);
+                console.log(`AI (Greedy): No opponent tiles to remove. Removing own tile: ${tileToRemove.id}`);
             }
         }
 
@@ -1589,18 +1613,18 @@ function animateView() {
             gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) removes tile ${tileToRemove.id}.`;
 
             // Simulate a slight delay for the user to see the choice
+            // The iterative auto-removal will be handled by removeTileFromBoardAndReturnToHand re-triggering AI removal.
             setTimeout(() => {
                 removeTileFromBoardAndReturnToHand(tileToRemove);
-                // removeTileFromBoardAndReturnToHand will handle checking for more removals,
-                // calculating scores, and switching turns or ending the game as appropriate.
-            }, 1000); // Delay for AI "action"
+            }, 750); // Slightly reduced delay for potentially faster auto-removal sequence
         } else {
-            // This case should ideally not be reached if currentSurroundedTilesForRemoval is not empty
-            // and opponentType is either 'random' or 'greedy'.
-            console.error("AI: Error in tile removal logic - no tile selected for removal, though removal phase is active.");
+            // This case implies currentSurroundedTilesForRemoval was empty or some other logic error.
+            // The initial check in the function should prevent currentSurroundedTilesForRemoval being empty.
+            console.error("AI: Error in tile removal logic - no tile selected for removal. currentSurroundedTilesForRemoval:", currentSurroundedTilesForRemoval);
             // As a fallback, to prevent getting stuck, exit removal mode and proceed with game flow.
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
+            gameMessageDisplay.textContent = "AI encountered an issue during tile removal. Proceeding...";
             redrawBoardOnCanvas(); // Clear highlights
             calculateScores();
             if (checkGameEnd()) {
