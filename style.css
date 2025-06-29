@@ -21,7 +21,17 @@ main {
     width: 90%;
     max-width: 1200px;
     margin: 20px auto;
-    position: relative; /* Added for positioning player-scores */
+    position: relative; /* Added for positioning player-scores - this can likely be removed if gameboard-area handles it */
+}
+
+#gameboard-area {
+    position: relative;
+    /* The width and height of this container will be determined by its content, primarily the canvas.
+       If the canvas has a fixed size, this container will wrap it.
+       Alternatively, we could set a width/height or max-width/height here if needed.
+       For now, let's assume the canvas size dictates the gameboard-area size. */
+    margin: 0 auto; /* Center the gameboard area if its width is less than main's width */
+    /* display: inline-block; might be useful if canvas is also inline-block and we want them to size together */
 }
 
 /* Removed #game-info styles */
