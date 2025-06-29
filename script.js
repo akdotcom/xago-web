@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.y = null; // Board y position
         }
 
+        rotate() {
+            this.orientation = (this.orientation + 1) % 6;
+        }
+
         // Method to get edges considering current orientation (if rotation is implemented)
         getOrientedEdges() {
             const rotatedEdges = [...this.edges];
@@ -445,9 +449,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // This is important for `placeTileOnBoard` which removes `selectedTile.handElement`.
         selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
 
-        gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Click on the board to place it.`;
+        gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' to rotate. Click on the board to place it.`;
         console.log("Selected tile:", selectedTile);
     }
+
+    // Add a global event listener for keydown
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'r' || event.key === 'R') {
+            if (selectedTile && selectedTile.tile && selectedTile.handElement) {
+                selectedTile.tile.rotate();
+                console.log(`Tile ${selectedTile.tile.id} rotated. New orientation: ${selectedTile.tile.orientation}`);
+
+                // Re-draw the selected tile in the hand
+                const tileCanvas = selectedTile.handElement;
+                const tileCtx = tileCanvas.getContext('2d');
+                const cx = tileCanvas.width / 2;
+                const cy = tileCanvas.height / 2;
+
+                // Clear the specific tile canvas before redrawing
+                tileCtx.clearRect(0, 0, tileCanvas.width, tileCanvas.height);
+                drawHexTile(tileCtx, cx, cy, selectedTile.tile);
+
+                // Update game message if needed, or rely on the selection message
+                gameMessageDisplay.textContent = `Tile rotated. Press 'r' to rotate again. Click board to place.`;
+            }
+        }
+    });
 
     function handleCellClick(x, y) {
         console.log(`Cell clicked: x=${x}, y=${y}`);
