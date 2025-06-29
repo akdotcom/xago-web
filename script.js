@@ -252,22 +252,27 @@ document.addEventListener('DOMContentLoaded', () => {
             ny /= len;
 
             if (edgeType === 1) { // Triangle
-                const triangleHeight = HEX_SIDE_LENGTH * 0.3; // Height of the triangle
-                const triangleBaseHalfWidth = HEX_SIDE_LENGTH * 0.4; // Half base width of triangle along the edge
+                // Step 1: Calculate the new dimensions for the equilateral triangle.
+                const triangleEdgeLength = HEX_SIDE_LENGTH * 0.8;
+                const triangleHeight = (Math.sqrt(3) / 2) * triangleEdgeLength;
 
-                // Tip of the triangle (outwards)
+                // Tip of the triangle (outwards from the edge midpoint along the normal)
                 const tipX = midX + nx * triangleHeight;
                 const tipY = midY + ny * triangleHeight;
 
                 // Calculate base points of the triangle along the hexagon edge
-                // Vector along the edge, scaled to half base width
-                const edgeVecX = (v2.x - v1.x) / len * triangleBaseHalfWidth;
-                const edgeVecY = (v2.y - v1.y) / len * triangleBaseHalfWidth;
+                // The base of the equilateral triangle has length triangleEdgeLength.
+                // The two base vertices are triangleEdgeLength / 2 from the midX, midY along the edge vector.
+                const halfBase = triangleEdgeLength / 2;
 
-                const base1X = midX - edgeVecX;
-                const base1Y = midY - edgeVecY;
-                const base2X = midX + edgeVecX;
-                const base2Y = midY + edgeVecY;
+                // Vector along the edge (from v1 to v2), normalized
+                const edgeDirX = (v2.x - v1.x) / len;
+                const edgeDirY = (v2.y - v1.y) / len;
+
+                const base1X = midX - edgeDirX * halfBase;
+                const base1Y = midY - edgeDirY * halfBase;
+                const base2X = midX + edgeDirX * halfBase;
+                const base2Y = midY + edgeDirY * halfBase;
 
                 ctx.beginPath();
                 ctx.moveTo(tipX, tipY);
