@@ -20,6 +20,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const player2HandContainer = document.getElementById('player2-hand');
     const opponentTypeSelector = document.getElementById('opponent-type');
 
+    // View management variables
+    let currentOffsetX = 0;
+    let currentOffsetY = 0;
+    let currentZoomLevel = 1.0;
+    let targetOffsetX = 0;
+    let targetOffsetY = 0;
+    let targetZoomLevel = 1.0;
+
     let boardState = {}; // Using an object to store tile placements: 'x,y': tileObject
     let player1Hand = [];
     let player2Hand = [];
@@ -97,19 +105,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const newSurroundedList = getSurroundedTiles(boardState);
         currentSurroundedTilesForRemoval = newSurroundedList; // Update the global list
 
+        updateViewParameters(); // Update view after a tile is removed
+
         if (newSurroundedList.length > 0) {
             // Still more tiles to remove, continue the process
             console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-            // Update message and keep isRemovingTiles = true (already true)
             gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`;
-            redrawBoardOnCanvas(); // Redraw to update highlights if any changed
+            redrawBoardOnCanvas(); // Redraw to update highlights
         } else {
-            // No more tiles are surrounded, end the removal phase and proceed with game turn
+            // No more tiles are surrounded, end the removal phase
             console.log("No more surrounded tiles. Ending removal phase.");
             isRemovingTiles = false;
-            currentSurroundedTilesForRemoval = []; // Clear the list
+            currentSurroundedTilesForRemoval = [];
+            gameMessageDisplay.textContent = "Tile removal complete. Finishing turn.";
 
-            gameMessageDisplay.textContent = "Tile removal complete. Finishing turn."; // Temporary message
+            redrawBoardOnCanvas(); // Clear highlights from removed tiles before proceeding
 
             calculateScores();
             if (checkGameEnd()) {
@@ -118,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 switchTurn();
             }
         }
+        animateView(); // Call animation loop after parameters are updated
     }
 
     // Function to redraw the entire board state onto the canvas
@@ -130,36 +141,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Placeholder for converting logical grid (tile.x, tile.y) to canvas pixels (cx, cy)
         // This needs a proper hexagonal grid coordinate system implementation later (Step 6).
+        // Placeholder for converting logical grid (tile.x, tile.y) to canvas pixels (cx, cy)
+        // This needs a proper hexagonal grid coordinate system implementation later (Step 6).
         // Using a simple mapping for now for visualization.
-        // const CANVAS_OFFSET_X = HEX_WIDTH / 1.5; // Now global
-        // const CANVAS_OFFSET_Y = HEX_HEIGHT / 1.5; // Now global
+        // currentOffsetX and currentOffsetY are used instead of CANVAS_OFFSET_X/Y
+        // currentZoomLevel is used to scale tiles
+
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
 
         for (const key in boardState) {
             const tile = boardState[key];
             if (tile.x === null || tile.y === null) continue;
 
-            let cx, cy;
-            // For flat-topped:
-            // x = size * (     3/2 * q                   )
-            // y = size * (sqrt(3)/2 * q  +  sqrt(3) * r)
-            // Assuming tile.x = q, tile.y = r
-             cx = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * tile.x);
-             cy = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * tile.x + Math.sqrt(3) * tile.y);
+            // Convert logical grid coordinates (tile.x, tile.y) to screen coordinates
+            let screenX = currentOffsetX + scaledHexSideLength * (3/2 * tile.x);
+            let screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tile.x + Math.sqrt(3) * tile.y);
 
-            drawHexTile(ctx, cx, cy, tile);
+            drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel); // Pass currentZoomLevel
 
             // Highlight if in removal mode and tile is one of the surrounded ones
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
                 ctx.strokeStyle = 'red'; // Highlight color
-                ctx.lineWidth = 3;
-                // Re-draw the hexagon border for highlight
+                ctx.lineWidth = 3 * currentZoomLevel; // Scale line width
                 ctx.beginPath();
                 const vertices = [];
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 180 * (60 * i);
                     vertices.push({
-                        x: cx + HEX_SIDE_LENGTH * Math.cos(angle),
-                        y: cy + HEX_SIDE_LENGTH * Math.sin(angle)
+                        x: screenX + scaledHexSideLength * Math.cos(angle),
+                        y: screenY + scaledHexSideLength * Math.sin(angle)
                     });
                 }
                 ctx.moveTo(vertices[0].x, vertices[0].y);
@@ -281,28 +291,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Canvas Drawing Functions ---
-    const HEX_SIDE_LENGTH = 40; // pixels
-    const HEX_HEIGHT = Math.sqrt(3) * HEX_SIDE_LENGTH;
-    const HEX_WIDTH = 2 * HEX_SIDE_LENGTH;
-    const HEX_APOTHEM = HEX_HEIGHT / 2; // Distance from center to midpoint of a side
-    const CANVAS_OFFSET_X = HEX_WIDTH / 1.5; // Initial offset from canvas left edge for drawing grid
-    const CANVAS_OFFSET_Y = HEX_HEIGHT / 1.5; // Initial offset from canvas top edge for drawing grid
+    const BASE_HEX_SIDE_LENGTH = 40; // pixels - This is the reference size at zoom 1.0
+    // const HEX_HEIGHT = Math.sqrt(3) * BASE_HEX_SIDE_LENGTH; // Dynamic
+    // const HEX_WIDTH = 2 * BASE_HEX_SIDE_LENGTH; // Dynamic
+    // const HEX_APOTHEM = HEX_HEIGHT / 2; // Dynamic
+
+    // CANVAS_OFFSET_X and CANVAS_OFFSET_Y are now replaced by currentOffsetX/Y and targetOffsetX/Y
+    // let initialCanvasOffsetX = (2 * BASE_HEX_SIDE_LENGTH) / 1.5;
+    // let initialCanvasOffsetY = (Math.sqrt(3) * BASE_HEX_SIDE_LENGTH) / 1.5;
+
 
     // Function to draw a single hexagonal tile on the canvas
     // ctx: canvas rendering context
-    // cx, cy: center coordinates of the hexagon on the canvas
+    // cx, cy: center coordinates of the hexagon on the canvas (screen coordinates)
     // tile: the HexTile object to draw
-    function drawHexTile(ctx, cx, cy, tile) {
+    // zoom: current zoom level to scale the tile
+    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0) { // Added zoom parameter, defaults to 1 for hand tiles
         const orientedEdges = tile.getOrientedEdges();
+        const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
 
         // Calculate hexagon vertices (flat-topped hexagon)
-        // Order: Top-right, Right, Bottom-right, Bottom-left, Left, Top-left
         const vertices = [];
         for (let i = 0; i < 6; i++) {
-            const angle = Math.PI / 180 * (60 * i); // Removed +30 degrees
+            const angle = Math.PI / 180 * (60 * i);
             vertices.push({
-                x: cx + HEX_SIDE_LENGTH * Math.cos(angle),
-                y: cy + HEX_SIDE_LENGTH * Math.sin(angle)
+                x: cx + sideLength * Math.cos(angle),
+                y: cy + sideLength * Math.sin(angle)
             });
         }
 
@@ -314,70 +328,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.fillStyle = 'white'; // Set body to white
+        ctx.fillStyle = 'white';
         ctx.fill();
-        ctx.strokeStyle = '#333'; // Border color for the hexagon
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1 * zoom; // Scale line width
         ctx.stroke();
 
-        // Check if the tile is all blank
         const isAllBlank = orientedEdges.every(edge => edge === 0);
 
         if (isAllBlank) {
-            // Draw a small hexagon in the center
-            const innerHexSideLength = HEX_SIDE_LENGTH / 6; // Adjust size as needed
+            const innerHexSideLength = sideLength / 6;
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = Math.PI / 180 * (60 * i);
                 const x = cx + innerHexSideLength * Math.cos(angle);
                 const y = cy + innerHexSideLength * Math.sin(angle);
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
             }
             ctx.closePath();
             ctx.fillStyle = tile.getPlayerColor;
             ctx.fill();
         }
 
-        // Draw edges (triangles or blanks)
         for (let i = 0; i < 6; i++) {
             const edgeType = orientedEdges[i];
             const v1 = vertices[i];
-            const v2 = vertices[(i + 1) % 6]; // Next vertex
+            const v2 = vertices[(i + 1) % 6];
 
-            // Midpoint of the current edge
             const midX = (v1.x + v2.x) / 2;
             const midY = (v1.y + v2.y) / 2;
 
-            // Normal vector (pointing outwards) - derived from edge vector rotated 90 deg
-            // Edge vector: (v2.x - v1.x, v2.y - v1.y)
-            // Normal: (v1.y - v2.y, v2.x - v1.x) -- then normalize and scale
             let nx = v1.y - v2.y;
             let ny = v2.x - v1.x;
-            const len = Math.sqrt(nx * nx + ny * ny);
-            nx /= len;
-            ny /= len;
+            const edgeLen = Math.sqrt(Math.pow(v2.x - v1.x, 2) + Math.pow(v2.y - v1.y, 2)); // Actual length of the hex side on screen
+
+            // Normalize normal vector
+            const normLen = Math.sqrt(nx * nx + ny * ny);
+            if (normLen === 0) continue; // Should not happen for a polygon
+            nx /= normLen;
+            ny /= normLen;
+
 
             if (edgeType === 1) { // Triangle
-                // Step 1: Calculate the new dimensions for the equilateral triangle.
-                const triangleEdgeLength = HEX_SIDE_LENGTH * 0.8;
+                const triangleEdgeLength = sideLength * 0.8; // Scale triangle size with zoom
                 const triangleHeight = (Math.sqrt(3) / 2) * triangleEdgeLength;
 
-                // Tip of the triangle (outwards from the edge midpoint along the normal)
                 const tipX = midX + nx * triangleHeight;
                 const tipY = midY + ny * triangleHeight;
 
-                // Calculate base points of the triangle along the hexagon edge
-                // The base of the equilateral triangle has length triangleEdgeLength.
-                // The two base vertices are triangleEdgeLength / 2 from the midX, midY along the edge vector.
                 const halfBase = triangleEdgeLength / 2;
 
                 // Vector along the edge (from v1 to v2), normalized
-                const edgeDirX = (v2.x - v1.x) / len;
-                const edgeDirY = (v2.y - v1.y) / len;
+                const edgeDirX = (v2.x - v1.x) / edgeLen;
+                const edgeDirY = (v2.y - v1.y) / edgeLen;
 
                 const base1X = midX - edgeDirX * halfBase;
                 const base1Y = midY - edgeDirY * halfBase;
@@ -389,16 +393,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.lineTo(base1X, base1Y);
                 ctx.lineTo(base2X, base2Y);
                 ctx.closePath();
-                ctx.fillStyle = tile.getPlayerColor; // Use player's color for the triangle
+                ctx.fillStyle = tile.getPlayerColor;
                 ctx.fill();
 
-            } else { // Blank edge (draw a simple line or nothing)
-                // Example: Draw a subtle line for blank edges
+            } else { // Blank edge
                 ctx.beginPath();
-                ctx.moveTo(v1.x, v1.y);
+                ctx.moveTo(v1.x, v1.y); // Corrected from v2.y
                 ctx.lineTo(v2.x, v2.y);
-                ctx.strokeStyle = 'grey'; // Color for blank edge indication
-                ctx.lineWidth = 2; // Make it slightly thicker or different
+                ctx.strokeStyle = 'grey';
+                ctx.lineWidth = 2 * zoom; // Scale line width
                 ctx.stroke();
             }
         }
@@ -409,26 +412,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayPlayerHand(player, hand, handDisplayElement) {
         handDisplayElement.innerHTML = ''; // Clear previous tiles
         hand.forEach(tile => {
-            // Create a canvas for each tile in hand
             const tileCanvas = document.createElement('canvas');
-            // Set canvas dimensions - ensure HEX_WIDTH and HEX_HEIGHT are appropriate for hand tiles
-            // These are defined globally, so they should be available.
-            // May need to adjust if hand tiles should be smaller than board tiles.
-            // For now, use the same size as board tiles.
-            tileCanvas.width = HEX_WIDTH + 10; // Add some padding for potential borders/effects
-            tileCanvas.height = HEX_HEIGHT + 10; // Add some padding
+            // Use BASE_HEX_SIDE_LENGTH for hand tiles, assuming they don't zoom.
+            // Or, if they should also scale with a global UI scale, that's a different feature.
+            // For now, hand tiles are fixed size.
+            const handTileSideLength = BASE_HEX_SIDE_LENGTH; // Or a smaller fixed size for hand tiles
+            const handHexWidth = 2 * handTileSideLength;
+            const handHexHeight = Math.sqrt(3) * handTileSideLength;
+
+            tileCanvas.width = handHexWidth + 10;
+            tileCanvas.height = handHexHeight + 10;
             tileCanvas.style.cursor = 'pointer';
-            tileCanvas.style.margin = '5px'; // Add some margin for spacing
+            tileCanvas.style.margin = '5px';
 
             const tileCtx = tileCanvas.getContext('2d');
-
-            // Calculate center for drawing the tile within its canvas
             const cx = tileCanvas.width / 2;
             const cy = tileCanvas.height / 2;
 
-            drawHexTile(tileCtx, cx, cy, tile); // Draw the tile
+            // Draw hand tile without board zoom, passing zoom explicilty as 1.0 or not passing it if default is 1.0
+            drawHexTile(tileCtx, cx, cy, tile, 1.0);
 
-            // Event listener for selecting the tile
             tileCanvas.addEventListener('click', () => {
                 // Pass the tile object and the canvas element itself for potential highlighting
                 selectTileFromHand(tile, tileCanvas, player);
@@ -512,7 +515,22 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedTile = null;
         boardState = {};
 
-        initializeGameBoard(); // Create the grid cells
+        // Initialize view parameters
+        // For the very first tile, center on logical (0,0)
+        // Calculate initial offset to center logical (0,0) on canvas.
+        // screenX = currentOffsetX + scaledHexSideLength * (3/2 * q);
+        // screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+        // For q=0, r=0: screenX_center = currentOffsetX, screenY_center = currentOffsetY
+        // So, currentOffsetX = gameCanvas.width / 2, currentOffsetY = gameCanvas.height / 2
+        currentOffsetX = gameCanvas.width / 2;
+        currentOffsetY = gameCanvas.height / 2;
+        currentZoomLevel = 1.0; // Start with a default zoom
+        targetOffsetX = currentOffsetX;
+        targetOffsetY = currentOffsetY;
+        targetZoomLevel = currentZoomLevel;
+
+
+        initializeGameBoard(); // This clears the canvas and sets up background
 
         displayPlayerHand(1, player1Hand, player1HandDisplay);
         displayPlayerHand(2, player2Hand, player2HandDisplay);
@@ -521,21 +539,30 @@ document.addEventListener('DOMContentLoaded', () => {
         gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board.";
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
+
+        updateViewParameters(); // Calculate initial target view
+        // Set current to target for the first draw and call animateView to start the loop if needed (e.g. if initial targets differ)
+        currentOffsetX = targetOffsetX; // Start at target for first frame
+        currentOffsetY = targetOffsetY;
+        currentZoomLevel = targetZoomLevel;
+        // redrawBoardOnCanvas(); // animateView will handle the first draw
+        animateView(); // Start animation loop (will draw immediately if no animation needed)
     }
 
     // --- Player Actions ---
     let currentlySelectedTileCanvas = null; // Keep track of the currently selected canvas tile in hand
 
     function drawPlacementHighlight(q, r, color, isDeemphasized) {
-        const cx = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * q);
-        const cy = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+        // Convert logical grid (q,r) to screen coordinates for drawing highlight
+        const screenX = currentOffsetX + scaledHexSideLength * (3/2 * q);
+        const screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
 
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            // Using the same angle calculation as drawHexTile (flat-topped)
             const angle = Math.PI / 180 * (60 * i);
-            const xPos = cx + HEX_SIDE_LENGTH * Math.cos(angle);
-            const yPos = cy + HEX_SIDE_LENGTH * Math.sin(angle);
+            const xPos = screenX + scaledHexSideLength * Math.cos(angle);
+            const yPos = screenY + scaledHexSideLength * Math.sin(angle);
             if (i === 0) {
                 ctx.moveTo(xPos, yPos);
             } else {
@@ -544,22 +571,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        // ctx.strokeStyle = color; // No longer stroking
-        // ctx.lineWidth = isDeemphasized ? 2 : 3; // Not needed for fill
-
-        // if (isDeemphasized) { // Line dash not applicable to fill
-        //     ctx.setLineDash([5, 5]);
-        // } else {
-        //     ctx.setLineDash([]);
-        // }
-
-        ctx.fillStyle = color; // Use the provided color, which should have alpha
+        ctx.fillStyle = color;
         ctx.fill();
 
-        // Add a border to the highlight
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; // Darker, semi-transparent border
-        ctx.lineWidth = 2; // Border width
-        ctx.setLineDash([]); // Ensure solid line for the border
+        // Add a border to the highlight, scaled by zoom
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = 2 * currentZoomLevel; // Scale border width
+        ctx.setLineDash([]);
         ctx.stroke();
     }
 
@@ -722,7 +740,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Instead of directly calculating scores and switching turns,
             // call the new function to check for surrounded tiles.
-            checkForSurroundedTilesAndProceed();
+            checkForSurroundedTilesAndProceed(); // This function might call redrawBoardOnCanvas internally
+            updateViewParameters();
+            animateView(); // Start animation after view parameters are updated
 
         } else {
             // Placement was invalid, message already set by isPlacementValid
@@ -1043,6 +1063,169 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
 
     // --- Event Listeners ---
+
+function updateViewParameters() {
+    const placedTiles = Object.values(boardState);
+    if (placedTiles.length === 0) {
+        // No tiles played, center on logical (0,0) with default zoom
+        targetOffsetX = gameCanvas.width / 2;
+        targetOffsetY = gameCanvas.height / 2;
+        targetZoomLevel = 1.0;
+        // console.log("No tiles, default view:", targetOffsetX, targetOffsetY, targetZoomLevel);
+        return;
+    }
+
+    let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+    // let sumQ = 0, sumR = 0; // Center of mass not used for centering view, but bounding box center
+
+    const allRelevantCoords = new Set(); // To store "q,r" strings for bounding box
+
+    placedTiles.forEach(tile => {
+        allRelevantCoords.add(`${tile.x},${tile.y}`);
+        // sumQ += tile.x;
+        // sumR += tile.y;
+
+        // Add neighbors of placed tiles to the set for bounding box calculation
+        getNeighbors(tile.x, tile.y).forEach(neighbor => {
+            if (!boardState[`${neighbor.nx},${neighbor.ny}`]) { // Only consider empty neighbors
+                allRelevantCoords.add(`${neighbor.nx},${neighbor.ny}`);
+            }
+        });
+    });
+
+    // If there's only one tile, also add its direct neighbors to ensure a minimum viewport for context
+    if (placedTiles.length === 1) {
+        const tile = placedTiles[0];
+         getNeighbors(tile.x, tile.y).forEach(neighbor => {
+            allRelevantCoords.add(`${neighbor.nx},${neighbor.ny}`);
+        });
+    }
+    // If boardState is empty but we called updateViewParameters (e.g. during init before first tile)
+    // ensure (0,0) is included for default view calculation.
+    if (allRelevantCoords.size === 0) {
+        allRelevantCoords.add("0,0");
+         getNeighbors(0,0).forEach(neighbor => { // And its neighbors
+            allRelevantCoords.add(`${neighbor.nx},${neighbor.ny}`);
+        });
+    }
+
+
+    allRelevantCoords.forEach(coordStr => {
+        const [q, r] = coordStr.split(',').map(Number);
+        minQ = Math.min(minQ, q);
+        maxQ = Math.max(maxQ, q);
+        minR = Math.min(minR, r);
+        maxR = Math.max(maxR, r);
+    });
+
+    // Calculate the geometric center of the bounding box of relevant cells.
+    const boundingBoxCenterQ = minQ + (maxQ - minQ) / 2;
+    const boundingBoxCenterR = minR + (maxR - minR) / 2;
+
+    // Approximate width/height of the bounding box in terms of number of hexes needed on screen
+    // Consider the visual extent of a hexagon. A tile at (q,r) takes up space.
+    // Its neighbors also need to be potentially visible.
+    // Width: (maxQ - minQ + 1) hexes horizontally. Each hex is effectively 3/2 * sideLength wide in a grid.
+    // Height: (maxR - minR + 1) hexes. Each row is sqrt(3) * sideLength.
+    // The q and r range alone doesn't fully capture the diagonal spread of hex grids.
+    // Let's use a slightly more robust estimation based on all points.
+    let maxPixelX = -Infinity, minPixelX = Infinity, maxPixelY = -Infinity, minPixelY = Infinity;
+
+    allRelevantCoords.forEach(coordStr => {
+        const [q, r] = coordStr.split(',').map(Number);
+        // Calculate the 4 extreme points of this hex cell (approx)
+        // Center of this hex:
+        const cellCX = BASE_HEX_SIDE_LENGTH * (3/2 * q);
+        const cellCY = BASE_HEX_SIDE_LENGTH * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+
+        // Extents from this center (at zoom 1)
+        const hexScreenWidth = BASE_HEX_SIDE_LENGTH * 2; // Full width of one hex
+        const hexScreenHeight = BASE_HEX_SIDE_LENGTH * Math.sqrt(3); // Full height of one hex
+
+        minPixelX = Math.min(minPixelX, cellCX - hexScreenWidth/2);
+        maxPixelX = Math.max(maxPixelX, cellCX + hexScreenWidth/2);
+        minPixelY = Math.min(minPixelY, cellCY - hexScreenHeight/2);
+        maxPixelY = Math.max(maxPixelY, cellCY + hexScreenHeight/2);
+    });
+
+    const totalPixelWidthNeeded = maxPixelX - minPixelX;
+    const totalPixelHeightNeeded = maxPixelY - minPixelY;
+
+    // Calculate zoom level to fit this bounding box
+    const padding = 0.90; // Use 90% of canvas width/height to leave some margin
+    let zoomX = 1, zoomY = 1;
+    if (totalPixelWidthNeeded > 0) {
+      zoomX = (gameCanvas.width * padding) / totalPixelWidthNeeded;
+    }
+    if (totalPixelHeightNeeded > 0) {
+      zoomY = (gameCanvas.height * padding) / totalPixelHeightNeeded;
+    }
+
+    targetZoomLevel = Math.min(zoomX, zoomY, 1.5); // Cap max zoom (e.g., 1.5x)
+    if (targetZoomLevel < 0.2) targetZoomLevel = 0.2; // Prevent zoom from becoming too small (e.g. 0.2x)
+    if (placedTiles.length === 0) targetZoomLevel = 1.0; // Default zoom for empty board centered on 0,0
+
+    // Target offset should place the boundingBoxCenter (logical) at the canvas center (pixel)
+    const scaledSideLength = BASE_HEX_SIDE_LENGTH * targetZoomLevel;
+    targetOffsetX = gameCanvas.width / 2 - scaledSideLength * (3/2 * boundingBoxCenterQ);
+    targetOffsetY = gameCanvas.height / 2 - scaledSideLength * (Math.sqrt(3)/2 * boundingBoxCenterQ + Math.sqrt(3) * boundingBoxCenterR);
+
+    // console.log("UpdateView:", {minQ,maxQ,minR,maxR}, "Center:", {boundingBoxCenterQ, boundingBoxCenterR});
+    // console.log("PixelDimsNeeded:", {totalPixelWidthNeeded, totalPixelHeightNeeded});
+    // console.log("Calculated Targets:", {targetZoomLevel, targetOffsetX, targetOffsetY});
+}
+
+let animationFrameId = null; // To keep track of the animation frame
+
+function animateView() {
+    // Stop any previous animation frame
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+
+    const animationSpeed = 0.1; // Adjust for faster/slower animation
+    let needsRedraw = false;
+
+    // Interpolate offset
+    if (Math.abs(targetOffsetX - currentOffsetX) > 0.1) {
+        currentOffsetX += (targetOffsetX - currentOffsetX) * animationSpeed;
+        needsRedraw = true;
+    } else {
+        currentOffsetX = targetOffsetX;
+    }
+
+    if (Math.abs(targetOffsetY - currentOffsetY) > 0.1) {
+        currentOffsetY += (targetOffsetY - currentOffsetY) * animationSpeed;
+        needsRedraw = true;
+    } else {
+        currentOffsetY = targetOffsetY;
+    }
+
+    // Interpolate zoom
+    if (Math.abs(targetZoomLevel - currentZoomLevel) > 0.001) { // Smaller threshold for zoom
+        currentZoomLevel += (targetZoomLevel - currentZoomLevel) * animationSpeed;
+        needsRedraw = true;
+    } else {
+        currentZoomLevel = targetZoomLevel;
+    }
+
+    if (needsRedraw) {
+        redrawBoardOnCanvas(); // Redraw with new current values
+        if (selectedTile) { // If a tile is selected, highlights also need to be updated during animation
+            updatePlacementHighlights();
+        }
+        animationFrameId = requestAnimationFrame(animateView); // Continue animation
+    } else {
+        animationFrameId = null; // Animation finished
+        // Final redraw to ensure exact target values are rendered if needed,
+        // though redrawBoardOnCanvas() already uses current values which should be target now.
+        // Consider if a final highlight update is needed here too.
+        if (selectedTile) updatePlacementHighlights(); // Refresh highlights at final position
+        else redrawBoardOnCanvas(); // Ensure final state is drawn clean
+    }
+}
+
+
     resetGameButton.addEventListener('click', () => {
         console.log("Reset game button clicked.");
         // initializeGame() already handles clearing the canvas and resetting state.
@@ -1110,19 +1293,24 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
     // Converts pixel coordinates on canvas to logical hex grid coordinates (q, r - axial)
     function pixelToHexGrid(pixelX, pixelY) {
-        // Inverse of the drawing formula:
-        // x_pixel = CANVAS_OFFSET_X + HEX_SIDE_LENGTH * (3/2 * q)
-        // y_pixel = CANVAS_OFFSET_Y + HEX_SIDE_LENGTH * (sqrt(3)/2 * q + sqrt(3) * r)
+        // Inverse of the drawing formula, taking into account currentOffset and currentZoomLevel
+        // screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q)
+        // screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r)
 
-        const size = HEX_SIDE_LENGTH;
-        const x = pixelX - CANVAS_OFFSET_X;
-        const y = pixelY - CANVAS_OFFSET_Y;
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+        if (scaledHexSideLength === 0) return { q:0, r:0 }; // Avoid division by zero if zoom is 0
+
+        // Adjust pixel coordinates by the current offset
+        const x = pixelX - currentOffsetX;
+        const y = pixelY - currentOffsetY;
 
         // Convert to fractional axial coordinates (q_frac, r_frac)
-        // q_frac = (2/3 * x) / size
-        // r_frac = (-1/3 * x + sqrt(3)/3 * y) / size
-        let q_frac = (2/3 * x) / size;
-        let r_frac = (-1/3 * x + Math.sqrt(3)/3 * y) / size;
+        // q_frac = (2/3 * x_adjusted_for_offset_and_zoom)
+        // r_frac = (-1/3 * x_adjusted_for_offset_and_zoom + sqrt(3)/3 * y_adjusted_for_offset_and_zoom)
+        // where x_adj = x / scaledHexSideLength and y_adj = y / scaledHexSideLength
+
+        let q_frac = (2/3 * x) / scaledHexSideLength;
+        let r_frac = (-1/3 * x + Math.sqrt(3)/3 * y) / scaledHexSideLength;
 
         // To round to the nearest hex, we can convert to cube coordinates, round, then convert back.
         // x_cube = q
