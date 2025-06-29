@@ -1217,9 +1217,20 @@ function updateViewParameters() {
         targetZoomLevel = Math.min(targetZoomLevel, 0.8); // Ensure initial zoom is not too large
     }
 
-    const scaledSideLength = BASE_HEX_SIDE_LENGTH * targetZoomLevel;
-    targetOffsetX = gameCanvas.width / 2 - scaledSideLength * (3/2 * boundingBoxCenterQ);
-    targetOffsetY = gameCanvas.height / 2 - scaledSideLength * (Math.sqrt(3)/2 * boundingBoxCenterQ + Math.sqrt(3) * boundingBoxCenterR);
+    // const scaledSideLength = BASE_HEX_SIDE_LENGTH * targetZoomLevel; // Kept for reference, but not used in the new offset calculation directly here.
+    // targetOffsetX = gameCanvas.width / 2 - scaledSideLength * (3/2 * boundingBoxCenterQ); // Old centering logic
+    // targetOffsetY = gameCanvas.height / 2 - scaledSideLength * (Math.sqrt(3)/2 * boundingBoxCenterQ + Math.sqrt(3) * boundingBoxCenterR); // Old centering logic
+
+    // Calculate the width and height of the content *at the target zoom level*
+    const contentPixelWidthAtTargetZoom = totalPixelWidthNeeded * targetZoomLevel;
+    const contentPixelHeightAtTargetZoom = totalPixelHeightNeeded * targetZoomLevel;
+
+    // New offset calculation to center the pixel bounding box
+    // This ensures that the actual rendered pixel content is centered.
+    // minPixelX and minPixelY are the coordinates of the top-left of the content's bounding box *at zoom 1.0*.
+    // We need to account for the current targetZoomLevel.
+    targetOffsetX = (gameCanvas.width - contentPixelWidthAtTargetZoom) / 2 - (minPixelX * targetZoomLevel);
+    targetOffsetY = (gameCanvas.height - contentPixelHeightAtTargetZoom) / 2 - (minPixelY * targetZoomLevel);
 }
 
 let animationFrameId = null; // To keep track of the animation frame
