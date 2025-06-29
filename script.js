@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
     let opponentType = "human"; // Default to human opponent
+    let mouseHoverQ = null;
+    let mouseHoverR = null;
 
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
@@ -589,32 +591,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to draw a preview of the tile at a given board location
     // q, r: logical grid coordinates for the preview
-    // tile: the HexTile object to preview
-    // borderColor: CSS color string for the border of the preview (e.g., 'green' or 'yellow')
+    // tile: the HexTile object to preview (used to determine if a spot is green/yellow, but not drawn directly)
+    // borderColor: CSS color string for the filled hexagon (e.g., 'green' or 'yellow')
     function drawPlacementPreview(q, r, tile, borderColor) {
-        const PREVIEW_SCALE_FACTOR = 0.9;
+        const PREVIEW_SCALE_FACTOR = 0.9; // Keep this for consistent sizing with potential mouseover
         const effectiveZoom = currentZoomLevel * PREVIEW_SCALE_FACTOR;
-        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom; // Use effectiveZoom for border calculations too
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom;
 
         // Convert logical grid (q,r) to screen coordinates for drawing
         const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
         const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
-        // Note: The screenX, screenY for the center of the preview should still align with the grid cell center based on currentZoomLevel,
-        // but the tile itself will be drawn smaller using effectiveZoom.
 
-        // --- Draw the translucent tile ---
-        ctx.save(); // Save current context state
-        ctx.globalAlpha = 0.6; // Set translucency for the tile preview
-        // Pass effectiveZoom to drawHexTile to render it at 90% size relative to the current board zoom
-        drawHexTile(ctx, screenX, screenY, tile, effectiveZoom);
-        ctx.restore(); // Restore context state (specifically globalAlpha)
-
-        // --- Draw the prominent border ---
-        // The border should also be scaled according to the preview size (effectiveZoom)
+        // --- Draw a filled hexagon with the borderColor ---
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
-            // Vertices for the border are calculated using the scaledHexSideLength which incorporates PREVIEW_SCALE_FACTOR
             const xPos = screenX + scaledHexSideLength * Math.cos(angle);
             const yPos = screenY + scaledHexSideLength * Math.sin(angle);
             if (i === 0) {
@@ -625,95 +616,93 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 3 * effectiveZoom; // Scale border line width with effectiveZoom
-        ctx.setLineDash([]); // Ensure solid line
-        ctx.stroke();
+        ctx.fillStyle = borderColor; // Use borderColor to fill
+        ctx.fill();
+
+        // Optionally, add a subtle border to the filled hexagon itself if desired
+        // ctx.strokeStyle = 'darkgrey'; // Or a darker shade of the borderColor
+        // ctx.lineWidth = 1 * effectiveZoom;
+        // ctx.stroke();
+    }
+
+    // Function to draw the full translucent tile preview on mouseover
+    function drawFullTileMouseoverPreview(q, r, tile) {
+        const PREVIEW_SCALE_FACTOR = 0.9; // Same as drawPlacementPreview for consistent sizing
+        const effectiveZoom = currentZoomLevel * PREVIEW_SCALE_FACTOR;
+
+        // Convert logical grid (q,r) to screen coordinates for drawing
+        const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
+        const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+
+        ctx.save();
+        ctx.globalAlpha = 0.6; // Translucency for the preview
+        drawHexTile(ctx, screenX, screenY, tile, effectiveZoom); // Draw the actual tile, scaled
+        ctx.restore();
     }
 
 
     function updatePlacementHighlights() {
+        // This function now only draws the board and the green/yellow spots.
+        // The mouseover full preview is handled separately by the mousemove event.
         if (!selectedTile) {
-            redrawBoardOnCanvas(); // Ensure board is clean if no tile is selected
+            redrawBoardOnCanvas();
             return;
         }
 
-        redrawBoardOnCanvas(); // Redraw existing tiles first to clear old highlights and show current board state
+        redrawBoardOnCanvas(); // Redraw existing tiles first
 
         const tileToPlace = selectedTile.tile;
-        const currentSelectedOrientation = tileToPlace.orientation; // Current orientation of the tile in hand
+        const currentSelectedOrientation = tileToPlace.orientation;
 
-        // Define the area to check for highlights.
-        // Iterate over a reasonable area around existing tiles or the center if board is empty
-        const checkRadius = 8; // Increased radius for a more generous preview area
+        const checkRadius = 8;
         let qMin = -checkRadius, qMax = checkRadius, rMin = -checkRadius, rMax = checkRadius;
 
         if (Object.keys(boardState).length > 0) {
             let minPlacedQ = Infinity, maxPlacedQ = -Infinity, minPlacedR = Infinity, maxPlacedR = -Infinity;
-            for (const key in boardState) {
-                const tile = boardState[key];
+            Object.values(boardState).forEach(tile => {
                 minPlacedQ = Math.min(minPlacedQ, tile.x);
                 maxPlacedQ = Math.max(maxPlacedQ, tile.x);
                 minPlacedR = Math.min(minPlacedR, tile.y);
                 maxPlacedR = Math.max(maxPlacedR, tile.y);
-            }
-            qMin = minPlacedQ - checkRadius / 2; // Search around the played area
+            });
+            qMin = minPlacedQ - checkRadius / 2;
             qMax = maxPlacedQ + checkRadius / 2;
             rMin = minPlacedR - checkRadius / 2;
             rMax = maxPlacedR + checkRadius / 2;
         }
 
-
         for (let q = Math.floor(qMin); q <= Math.ceil(qMax); q++) {
             for (let r = Math.floor(rMin); r <= Math.ceil(rMax); r++) {
-                // Optional: Check if the cell is within cube constraints for a hexagonal area
-                // if (Math.abs(q + r) > checkRadius*1.5) continue; // If using a wider hexagonal search pattern
+                if (boardState[`${q},${r}`]) continue;
 
-                const targetKey = `${q},${r}`;
-                if (boardState[targetKey]) {
-                    continue; // Cell is already occupied
-                }
-
-                // Preserve the actual tile's orientation for the next iteration or if no valid spot is found.
-                // We will only temporarily change it for the preview if a different orientation is valid.
                 tileToPlace.orientation = currentSelectedOrientation;
-
-                // 1. Check with current selected orientation
-                if (isPlacementValid(tileToPlace, q, r, true)) { // true to suppress messages
+                if (isPlacementValid(tileToPlace, q, r, true)) {
                     drawPlacementPreview(q, r, tileToPlace, 'green');
                 } else {
-                    // 2. Check if any other orientation is valid
-                    let canBePlacedWithAnyRotation = false;
+                    let canPlaceOtherOrientation = false;
                     let validPreviewOrientation = -1;
-
                     for (let i = 0; i < 6; i++) {
-                        if (i === currentSelectedOrientation) continue; // Already checked above
-
-                        tileToPlace.orientation = i; // Temporarily change orientation for check
+                        if (i === currentSelectedOrientation) continue;
+                        tileToPlace.orientation = i;
                         if (isPlacementValid(tileToPlace, q, r, true)) {
-                            canBePlacedWithAnyRotation = true;
-                            validPreviewOrientation = i; // This is the orientation that makes it valid
+                            canPlaceOtherOrientation = true;
+                            validPreviewOrientation = i;
                             break;
                         }
                     }
+                    tileToPlace.orientation = currentSelectedOrientation; // Restore
 
-                    // Restore tile's actual orientation after checks
-                    tileToPlace.orientation = currentSelectedOrientation;
-
-                    if (canBePlacedWithAnyRotation) {
-                        // If it can be placed with a *different* rotation, show yellow preview with that orientation
-                        tileToPlace.orientation = validPreviewOrientation; // Set to the valid rotation for the preview
-                        drawPlacementPreview(q, r, tileToPlace, 'yellow');
-                        tileToPlace.orientation = currentSelectedOrientation; // Restore immediately after preview call
+                    if (canPlaceOtherOrientation) {
+                        // For yellow spots, we pass a temporary tile with the valid orientation
+                        // to drawPlacementPreview, but the actual tile in hand remains unchanged.
+                        const tempTileForYellowPreview = new HexTile(tileToPlace.id, tileToPlace.playerId, [...tileToPlace.edges]);
+                        tempTileForYellowPreview.orientation = validPreviewOrientation;
+                        drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
                     }
-                    // If not valid with current orientation AND not valid with any other rotation,
-                    // then no preview is drawn for this (q,r) location, as per user request.
                 }
             }
         }
-        // Ensure the tile in hand (selectedTile.tile) is reset to its actual current selected orientation
-        // after all loops, just in case.
-        tileToPlace.orientation = currentSelectedOrientation;
+        tileToPlace.orientation = currentSelectedOrientation; // Ensure original orientation is set
     }
 
     function selectTileFromHand(tile, tileCanvasElement, playerId) {
@@ -1438,28 +1427,104 @@ function animateView() {
 
             if (clickedTile && currentSurroundedTilesForRemoval.some(st => st.id === clickedTile.id)) {
                 // Valid tile selected for removal
-                removeTileFromBoardAndReturnToHand(clickedTile); // This function will be created in the next step
+                removeTileFromBoardAndReturnToHand(clickedTile);
             } else {
-                // gameMessageDisplay.textContent = "Invalid selection. Click on a highlighted (surrounded) tile to remove it."; // Removed
                 console.log("Invalid selection. Click on a highlighted (surrounded) tile to remove it.");
             }
         } else {
             // --- Handle Tile Placement Click (existing logic) ---
             if (!selectedTile) {
-                // gameMessageDisplay.textContent = "Please select a tile from your hand first."; // Removed
                 console.log("Please select a tile from your hand first.");
                 return;
             }
             if (selectedTile.originalPlayerId !== currentPlayer) {
-                // gameMessageDisplay.textContent = "Error: Tile selection does not match current player (should not happen)."; // Removed
                 console.log("Error: Tile selection does not match current player (should not happen).");
                 return;
             }
-            // For now, directly use q,r as x,y for game logic.
-            // This assumes our game logic (isPlacementValid, getNeighbors) will also use q,r.
             handleCellClick(q, r);
         }
     });
+
+    // --- Canvas MouseMove Handling for Tile Preview ---
+    gameCanvas.addEventListener('mousemove', (event) => {
+        if (!selectedTile || isRemovingTiles) {
+            // If no tile is selected or if in removal mode, clear hover state and redraw to remove any lingering preview
+            if (mouseHoverQ !== null || mouseHoverR !== null) {
+                mouseHoverQ = null;
+                mouseHoverR = null;
+                updatePlacementHighlights(); // Redraw to clear potential preview
+                // If animateView is running, it might also call updatePlacementHighlights.
+                // Consider if a more direct clear is needed or if this is sufficient.
+            }
+            return;
+        }
+
+        const rect = gameCanvas.getBoundingClientRect();
+        const pixelX = event.clientX - rect.left;
+        const pixelY = event.clientY - rect.top;
+        const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+        // Update hover coordinates only if they change, to avoid excessive redraws if mouse is still but event fires
+        if (q === mouseHoverQ && r === mouseHoverR) {
+            return;
+        }
+        mouseHoverQ = q;
+        mouseHoverR = r;
+
+        // Redraw board and base highlights first. This clears previous full preview.
+        updatePlacementHighlights();
+
+        // Now, check if the hovered spot is valid for the selected tile and draw full preview if so.
+        const tileToPreview = selectedTile.tile;
+        const currentOrientation = tileToPreview.orientation;
+        let isValidForCurrentOrientation = false;
+        let isValidForAlternativeOrientation = false;
+        let alternativeOrientation = -1;
+
+        if (!boardState[`${q},${r}`]) { // Check if cell is empty
+            // Check with current selected orientation
+            tileToPreview.orientation = currentOrientation;
+            if (isPlacementValid(tileToPreview, q, r, true)) {
+                isValidForCurrentOrientation = true;
+            } else {
+                // Check if any other orientation is valid
+                for (let i = 0; i < 6; i++) {
+                    if (i === currentOrientation) continue;
+                    tileToPreview.orientation = i;
+                    if (isPlacementValid(tileToPreview, q, r, true)) {
+                        isValidForAlternativeOrientation = true;
+                        alternativeOrientation = i;
+                        break;
+                    }
+                }
+            }
+            tileToPreview.orientation = currentOrientation; // Restore original orientation
+        }
+
+        if (isValidForCurrentOrientation) {
+            drawFullTileMouseoverPreview(q, r, tileToPreview);
+        } else if (isValidForAlternativeOrientation) {
+            // If valid with an alternative orientation (yellow spot), preview with that orientation
+            const tempTileForPreview = new HexTile(tileToPreview.id, tileToPreview.playerId, [...tileToPreview.edges]);
+            tempTileForPreview.orientation = alternativeOrientation;
+            drawFullTileMouseoverPreview(q, r, tempTileForPreview);
+        }
+    });
+
+    gameCanvas.addEventListener('mouseout', () => {
+        // When mouse leaves canvas, clear hover state and redraw to remove preview
+        if (mouseHoverQ !== null || mouseHoverR !== null) {
+            mouseHoverQ = null;
+            mouseHoverR = null;
+            if (selectedTile && !isRemovingTiles) { // Only redraw if a tile is selected and not in removal mode
+                 updatePlacementHighlights();
+            } else if (!selectedTile && !isRemovingTiles) { // If no tile selected, just ensure board is clean
+                 redrawBoardOnCanvas();
+            }
+            // If in removal mode, highlights are managed by isRemovingTiles logic, so no specific action here.
+        }
+    });
+
 
     // Converts pixel coordinates on canvas to logical hex grid coordinates (q, r - axial)
     function pixelToHexGrid(pixelX, pixelY) {
