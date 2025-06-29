@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isAllBlank) {
             // Draw a small hexagon in the center
-            const innerHexSideLength = HEX_SIDE_LENGTH / 3; // Adjust size as needed
+            const innerHexSideLength = HEX_SIDE_LENGTH / 6; // Adjust size as needed
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = Math.PI / 180 * (60 * i);
