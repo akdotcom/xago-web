@@ -86,36 +86,36 @@ main {
 }
 
 /* Basic Hexagon Tile Styling - This will need significant work for true hex shapes and edges */
-.hexagon-tile {
-    width: 80px; /* Flat-to-flat width for a flat-top hexagon */
-    height: 92.38px; /* Vertex-to-vertex height (width / (sqrt(3)/2)) */
+/* .hexagon-tile { */
+    /* width: 80px; */ /* Flat-to-flat width for a flat-top hexagon */
+    /* height: 92.38px; */ /* Vertex-to-vertex height (width / (sqrt(3)/2)) */
     /* background-color: #ccc; */ /* Player color will override this */
-    position: relative; /* For edge indicators */
-    margin: 5px; /* Keep margin for spacing in hand */
-    cursor: pointer;
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); /* Flat-top hexagon */
+    /* position: relative; */ /* For edge indicators */
+    /* margin: 5px; */ /* Keep margin for spacing in hand - now applied to canvas elements for hand tiles */
+    /* cursor: pointer; */ /* Now applied to canvas elements for hand tiles */
+    /* clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); */ /* Flat-top hexagon */
     /* border: 1px solid #333; */ /* Clip-path makes border look weird */
-    display: flex; /* Kept for potential future direct children, though edges are absolute */
-    align-items: center; /* Kept for potential future direct children */
-    justify-content: center; /* Kept for potential future direct children */
-    font-size: 10px; /* For tile ID or other info - this will be hidden by edges if using DOM elements for edges */
-    box-sizing: border-box;
-}
+    /* display: flex; */ /* Kept for potential future direct children, though edges are absolute */
+    /* align-items: center; */ /* Kept for potential future direct children */
+    /* justify-content: center; */ /* Kept for potential future direct children */
+    /* font-size: 10px; */ /* For tile ID or other info - this will be hidden by edges if using DOM elements for edges */
+    /* box-sizing: border-box; */
+/* } */
 
-.hexagon-tile.player1 {
-    background-color: lightblue; /* Player 1 color */
-}
+/* .hexagon-tile.player1 { */
+    /* background-color: lightblue; */ /* Player 1 color */
+/* } */
 
-.hexagon-tile.player2 {
-    background-color: lightcoral; /* Player 2 color */
-}
+/* .hexagon-tile.player2 { */
+    /* background-color: lightcoral; */ /* Player 2 color */
+/* } */
 
 /* Styles for hexagon edges (.hexagon-edge, .edge-triangle, .edge-blank, .edge-0 etc.) */
-/* are still used by createTileElement for tiles in player hands (DOM based). */
-/* If hand tiles were also canvas, these could be removed. */
-/* For now, we keep them for the hand tiles. */
+/* are NO LONGER used for hand tiles as they are canvas based. Board tiles are also canvas. */
+/* These can be safely removed or commented out. */
 
-/* Specific styles for DOM-based edges (used in player hands) */
+/* Specific styles for DOM-based edges (used in player hands) - COMMENTED OUT */
+/*
 .hexagon-edge {
     position: absolute;
     width: 0;
@@ -126,45 +126,46 @@ main {
 .edge-blank {
     /* This is a line of width ~37px and height (thickness) 2px */
     /* Actual styling is done by .edge-N.edge-blank */
-}
-
+/* } */
+/*
 .edge-triangle {
     width: 0;
     height: 0;
     border-left: 23.095px solid transparent; /* S/2 for a hex side of ~46px */
-    border-right: 23.095px solid transparent;
-    border-bottom: 40.00px solid black; /* Approx height for S=46px triangle */
-}
+    /* border-right: 23.095px solid transparent; */
+    /* border-bottom: 40.00px solid black; */ /* Approx height for S=46px triangle */
+/* } */
 
-/* Positioning for DOM-based edges in hand tiles */
+/* Positioning for DOM-based edges in hand tiles - COMMENTED OUT */
 /* These values are based on the original CSS for an 80px wide hexagon tile. */
+/*
 .edge-0, .edge-1, .edge-2, .edge-3, .edge-4, .edge-5 {
     position: absolute;
     left: 50%;
     top: 50%;
 }
-
+*/
 /* Edge 0: Top */
-.edge-0.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) translateY(-40px); }
-.edge-0.edge-triangle { transform: translate(-50%, -50%) translateY(-80px); }
+/* .edge-0.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) translateY(-40px); } */
+/* .edge-0.edge-triangle { transform: translate(-50%, -50%) translateY(-80px); } */
 /* Edge 1: Top-Right */
-.edge-1.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(60deg) translateY(-40px); }
-.edge-1.edge-triangle { transform: translate(-50%, -50%) rotate(60deg) translateY(-80px); }
+/* .edge-1.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(60deg) translateY(-40px); } */
+/* .edge-1.edge-triangle { transform: translate(-50%, -50%) rotate(60deg) translateY(-80px); } */
 /* Edge 2: Bottom-Right */
-.edge-2.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(120deg) translateY(-40px); }
-.edge-2.edge-triangle { transform: translate(-50%, -50%) rotate(120deg) translateY(-80px); }
+/* .edge-2.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(120deg) translateY(-40px); } */
+/* .edge-2.edge-triangle { transform: translate(-50%, -50%) rotate(120deg) translateY(-80px); } */
 /* Edge 3: Bottom */
-.edge-3.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(180deg) translateY(-40px); }
-.edge-3.edge-triangle { transform: translate(-50%, -50%) rotate(180deg) translateY(-80px); }
+/* .edge-3.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(180deg) translateY(-40px); } */
+/* .edge-3.edge-triangle { transform: translate(-50%, -50%) rotate(180deg) translateY(-80px); } */
 /* Edge 4: Bottom-Left */
-.edge-4.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(240deg) translateY(-40px); }
-.edge-4.edge-triangle { transform: translate(-50%, -50%) rotate(240deg) translateY(-80px); }
+/* .edge-4.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(240deg) translateY(-40px); } */
+/* .edge-4.edge-triangle { transform: translate(-50%, -50%) rotate(240deg) translateY(-80px); } */
 /* Edge 5: Top-Left */
-.edge-5.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(300deg) translateY(-40px); }
-.edge-5.edge-triangle { transform: translate(-50%, -50%) rotate(300deg) translateY(-80px); }
+/* .edge-5.edge-blank { width: 37px; height: 2px; background-color: #555; transform: translate(-50%, -50%) rotate(300deg) translateY(-40px); } */
+/* .edge-5.edge-triangle { transform: translate(-50%, -50%) rotate(300deg) translateY(-80px); } */
 
 
-/* Old placeholder styles for edges (can be fully removed) */
+/* Old placeholder styles for edges (can be fully removed) - COMMENTED OUT */
 /*
 .edge {
     position: absolute;
@@ -188,6 +189,16 @@ main {
     content: " ";
 }
 */
+
+/* Styling for canvas elements in player hands (if needed beyond JS inline styles) */
+/* .tiles-container canvas { */
+    /* margin: 5px; */ /* Already set via JS */
+    /* cursor: pointer; */ /* Already set via JS */
+    /* Example: add a default border if not selected */
+    /* border: 1px solid #ccc; */
+/* } */
+
+
 footer {
     margin-top: 30px;
     padding: 10px;
@@ -223,10 +234,10 @@ This will be applied dynamically via JS or by having specific classes for tiles.
 */
 
 /* Styling for selected tile */
-.hexagon-tile.selected {
-    border: 3px solid gold;
-    box-shadow: 0 0 10px gold;
-}
+/* .hexagon-tile.selected { */
+    /* border: 3px solid gold; */ /* This is now handled by JS for canvas elements */
+    /* box-shadow: 0 0 10px gold; */ /* This is now handled by JS for canvas elements */
+/* } */
 
 /* Styling for potential drop zones on the board */
 .drop-target {

@@ -292,14 +292,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Display Logic ---
     function displayPlayerHand(player, hand, handDisplayElement) {
-        handDisplayElement.innerHTML = '';
+        handDisplayElement.innerHTML = ''; // Clear previous tiles
         hand.forEach(tile => {
-            const tileElement = createTileElement(tile);
-            tileElement.addEventListener('click', () => selectTileFromHand(tile, tileElement, player));
-            handDisplayElement.appendChild(tileElement);
+            // Create a canvas for each tile in hand
+            const tileCanvas = document.createElement('canvas');
+            // Set canvas dimensions - ensure HEX_WIDTH and HEX_HEIGHT are appropriate for hand tiles
+            // These are defined globally, so they should be available.
+            // May need to adjust if hand tiles should be smaller than board tiles.
+            // For now, use the same size as board tiles.
+            tileCanvas.width = HEX_WIDTH + 10; // Add some padding for potential borders/effects
+            tileCanvas.height = HEX_HEIGHT + 10; // Add some padding
+            tileCanvas.style.cursor = 'pointer';
+            tileCanvas.style.margin = '5px'; // Add some margin for spacing
+
+            const tileCtx = tileCanvas.getContext('2d');
+
+            // Calculate center for drawing the tile within its canvas
+            const cx = tileCanvas.width / 2;
+            const cy = tileCanvas.height / 2;
+
+            drawHexTile(tileCtx, cx, cy, tile); // Draw the tile
+
+            // Event listener for selecting the tile
+            tileCanvas.addEventListener('click', () => {
+                // Pass the tile object and the canvas element itself for potential highlighting
+                selectTileFromHand(tile, tileCanvas, player);
+            });
+
+            handDisplayElement.appendChild(tileCanvas);
         });
     }
 
+    /*
     function createTileElement(tile, isBoardTile = false) {
         const tileElement = document.createElement('div');
         tileElement.classList.add('hexagon-tile');
@@ -338,6 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return tileElement;
     }
+    */
 
     function updateGameInfo() {
         currentPlayerDisplay.textContent = `Current Player: Player ${currentPlayer}`;
@@ -369,16 +394,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Player Actions ---
-    function selectTileFromHand(tile, tileElement, playerId) {
+    let currentlySelectedTileCanvas = null; // Keep track of the currently selected canvas tile in hand
+
+    function selectTileFromHand(tile, tileCanvasElement, playerId) {
         if (playerId !== currentPlayer) {
             gameMessageDisplay.textContent = "It's not your turn!";
             return;
         }
-        if (selectedTile && selectedTile.handElement) {
-            selectedTile.handElement.classList.remove('selected');
+
+        // Remove highlight from previously selected tile canvas
+        if (currentlySelectedTileCanvas) {
+            currentlySelectedTileCanvas.style.border = 'none'; // Or revert to its original border
+            currentlySelectedTileCanvas.style.boxShadow = 'none';
         }
-        selectedTile = { tile: tile, handElement: tileElement, originalPlayerId: playerId };
-        tileElement.classList.add('selected');
+
+        // Highlight the new selected tile canvas
+        tileCanvasElement.style.border = '3px solid gold';
+        tileCanvasElement.style.boxShadow = '0 0 10px gold';
+        currentlySelectedTileCanvas = tileCanvasElement;
+
+        // Update selectedTile global variable
+        // The `handElement` now refers to the canvas element.
+        // This is important for `placeTileOnBoard` which removes `selectedTile.handElement`.
+        selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
+
         gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Click on the board to place it.`;
         console.log("Selected tile:", selectedTile);
     }
@@ -398,14 +437,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Remove from hand
             if (currentPlayer === 1) {
                 player1Hand = player1Hand.filter(t => t.id !== selectedTile.tile.id);
-                displayPlayerHand(1, player1Hand, player1HandDisplay);
+                // displayPlayerHand(1, player1Hand, player1HandDisplay); // Re-rendering the hand is done by initializeGame or if explicitly needed
             } else {
                 player2Hand = player2Hand.filter(t => t.id !== selectedTile.tile.id);
+                // displayPlayerHand(2, player2Hand, player2HandDisplay);
+            }
+
+            selectedTile.handElement.remove(); // Remove the canvas from DOM
+            selectedTile = null;
+            currentlySelectedTileCanvas = null; // Clear the reference to the selected canvas
+
+            // Refresh the current player's hand display after a tile is placed
+            if (currentPlayer === 1) {
+                displayPlayerHand(1, player1Hand, player1HandDisplay);
+            } else {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            selectedTile.handElement.remove(); // Remove from DOM
-            selectedTile = null;
 
             if (checkGameEnd()) {
                 endGame();
