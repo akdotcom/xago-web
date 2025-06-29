@@ -1078,18 +1078,39 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
     function endGame() {
         calculateScores();
-        let winnerMessage = "";
-        if (player1Score > player2Score) {
-            winnerMessage = `Player 1 wins with ${player1Score} points! (Player 2: ${player2Score})`;
-        } else if (player2Score > player1Score) {
-            winnerMessage = `Player 2 wins with ${player2Score} points! (Player 1: ${player1Score})`;
-        } else {
-            winnerMessage = `It's a tie! Both players have ${player1Score} points.`;
+        let celebratoryMessage = "";
+
+        if (player1Score > player2Score) { // Player 1 wins
+            if (opponentType === "human") {
+                celebratoryMessage = "Player 1 Wins!";
+            } else { // Player 2 is AI
+                celebratoryMessage = "You Win!";
+            }
+        } else if (player2Score > player1Score) { // Player 2 wins
+            if (opponentType === "human") {
+                celebratoryMessage = "Player 2 Wins!";
+            } else { // Player 2 is AI
+                celebratoryMessage = "Player 2 wins"; // Muted message
+            }
+        } else { // Tie
+            celebratoryMessage = "It's a tie!";
         }
-        // gameMessageDisplay.textContent = `Game Over! ${winnerMessage}`; // Removed
-        // currentPlayerDisplay.textContent = "Game Finished"; // Removed
-        console.log(`Game Over! ${winnerMessage}`);
-        console.log("Game ended. ", winnerMessage);
+
+        // Log the original detailed message to the console for debugging/info
+        let detailedMessage = "";
+        if (player1Score > player2Score) {
+            detailedMessage = `Player 1 wins with ${player1Score} points! (Player 2: ${player2Score})`;
+        } else if (player2Score > player1Score) {
+            detailedMessage = `Player 2 wins with ${player2Score} points! (Player 1: ${player1Score})`;
+        } else {
+            detailedMessage = `It's a tie! Both players have ${player1Score} points.`;
+        }
+        console.log(`Game Over! ${detailedMessage}`);
+        console.log("Game ended. ", detailedMessage);
+
+        // Display the celebratory message to the user
+        alert(celebratoryMessage);
+
         // Disable further moves, or handle via selectedTile being null / hands empty
     }
 
