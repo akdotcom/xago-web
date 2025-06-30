@@ -9,12 +9,15 @@ body {
     align-items: center;
 }
 
-header {
-    background-color: #4CAF50;
-    color: white;
-    padding: 1em 0;
-    text-align: center;
-    width: 100%;
+/* Styles for the fixed "Xago" text */
+.fixed-header-text {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000; /* Ensure it's above other elements */
+    font-size: 2em; /* Make it prominent */
+    font-weight: bold;
+    color: #333; /* Or a color that fits the theme */
 }
 
 main {
