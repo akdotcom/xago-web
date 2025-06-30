@@ -599,19 +599,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // tile: the HexTile object (not used for drawing, but for context if needed)
     // borderColor: CSS color string for the border (e.g., 'green' or 'yellow')
     function drawPlacementPreview(q, r, tile, borderColor) {
-        // Requirement 1.1: Remove PREVIEW_SCALE_FACTOR, use 100% size
-        const effectiveZoom = currentZoomLevel; // No PREVIEW_SCALE_FACTOR
-        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom;
+        const effectiveZoom = currentZoomLevel;
+        const originalScaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom;
+        const borderWidth = 2.5 * effectiveZoom; // Defined upfront for clarity
 
         // Convert logical grid (q,r) to screen coordinates for drawing
         const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
         const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
 
+        // --- Draw Fill (if applicable) ---
+        // Uses the original full size of the hexagon
+        if (mouseHoverQ !== q || mouseHoverR !== r) {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = Math.PI / 180 * (60 * i);
+                const xPos = screenX + originalScaledHexSideLength * Math.cos(angle);
+                const yPos = screenY + originalScaledHexSideLength * Math.sin(angle);
+                if (i === 0) {
+                    ctx.moveTo(xPos, yPos);
+                } else {
+                    ctx.lineTo(xPos, yPos);
+                }
+            }
+            ctx.closePath();
+
+            if (borderColor === 'green') {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            } else if (borderColor === 'yellow') {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+            } else {
+                ctx.fillStyle = 'rgba(128, 128, 128, 0.1)';
+            }
+            ctx.fill();
+        }
+
+        // --- Draw Border (inset) ---
+        // Adjust side length for the border to be drawn on the interior
+        // The amount to reduce by should account for the line width itself,
+        // effectively pulling the center of the line inwards.
+        // A common way is to reduce radius by half the line width.
+        // For a hexagon, the relationship between side length and "radius" (center to vertex) is direct.
+        const borderHexSideLength = originalScaledHexSideLength - (borderWidth / 2);
+
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
-            const xPos = screenX + scaledHexSideLength * Math.cos(angle);
-            const yPos = screenY + scaledHexSideLength * Math.sin(angle);
+            // Use borderHexSideLength for the border path
+            const xPos = screenX + borderHexSideLength * Math.cos(angle);
+            const yPos = screenY + borderHexSideLength * Math.sin(angle);
             if (i === 0) {
                 ctx.moveTo(xPos, yPos);
             } else {
@@ -620,22 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        // Requirement 1.3: Conditional Fill
-        // If the mouse is not currently over this specific preview spot, fill with a lighter/translucent version.
-        if (mouseHoverQ !== q || mouseHoverR !== r) {
-            if (borderColor === 'green') {
-                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Lighter/translucent green
-            } else if (borderColor === 'yellow') {
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.2)'; // Lighter/translucent yellow
-            } else {
-                ctx.fillStyle = 'rgba(128, 128, 128, 0.1)'; // Default light fill if unknown color
-            }
-            ctx.fill();
-        }
-
-        // Requirement 1.2: Draw only the border of the hexagon using borderColor
         ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 2.5 * effectiveZoom; // Noticeable border, scaled by zoom
+        ctx.lineWidth = borderWidth; // Use the predefined border width
         ctx.stroke();
     }
 
