@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // though we'll primarily use ctx for drawing.
     const gameBoard = gameCanvas; // Keep existing references if they are used for width/height etc.
 
-    const player1HandDisplay = document.querySelector('#player1-hand .tiles-container');
-    const player2HandDisplay = document.querySelector('#player2-hand .tiles-container');
+let player1HandDisplay = document.querySelector('#player1-hand .tiles-container'); // Will be updated in renderPlayerHands
+let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'); // Will be updated in renderPlayerHands
     // const currentPlayerDisplay = document.getElementById('current-player'); // Removed
     // const gameMessageDisplay = document.getElementById('game-message'); // Removed
     // const player1ScoreDisplay = document.getElementById('player1-score'); // Removed
@@ -583,8 +583,8 @@ document.addEventListener('DOMContentLoaded', () => {
             playerScoresContainer.appendChild(p2ScoreDisplayFloater);
         }
 
-        displayPlayerHand(1, player1Hand, player1HandDisplay);
-        displayPlayerHand(2, player2Hand, player2HandDisplay);
+        // displayPlayerHand(1, player1Hand, player1HandDisplay); // Removed: Called by renderPlayerHands
+        // displayPlayerHand(2, player2Hand, player2HandDisplay); // Removed: Called by renderPlayerHands
 
         updateGameInfo(); // This will now also call updateHandHighlights
         // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
@@ -1472,7 +1472,8 @@ function animateView() {
         hand1Div.id = 'player1-hand';
         hand1Div.classList.add('player-hand');
         hand1Div.innerHTML = `<h2>Player 1 Hand</h2><div class="tiles-container"></div>`;
-        const hand1TilesContainer = hand1Div.querySelector('.tiles-container');
+        // Assign to global variable player1HandDisplay
+        player1HandDisplay = hand1Div.querySelector('.tiles-container');
 
         const hand2Div = document.createElement('div');
         hand2Div.id = 'player2-hand';
@@ -1491,7 +1492,8 @@ function animateView() {
                 </div>
             </div>
             <div class="tiles-container"></div>`;
-        const hand2TilesContainer = hand2Div.querySelector('.tiles-container');
+        // Assign to global variable player2HandDisplay
+        player2HandDisplay = hand2Div.querySelector('.tiles-container');
 
         if (currentPlayer === 1) {
             playerHandsDisplay.appendChild(hand1Div);
@@ -1519,14 +1521,13 @@ function animateView() {
 
         // Re-display tiles in the new containers
         // Ensure the correct display elements are targeted (the .tiles-container within the new divs)
-        // Note: hand1TilesContainer and hand2TilesContainer are now declared earlier,
-        // right after hand1Div and hand2Div innerHTML is set.
+        // Use the now-updated global player1HandDisplay and player2HandDisplay
 
-        if (hand1TilesContainer) displayPlayerHand(1, player1Hand, hand1TilesContainer);
-        else console.error("Could not find .tiles-container for player 1 hand immediately after creation.");
+        if (player1HandDisplay) displayPlayerHand(1, player1Hand, player1HandDisplay);
+        else console.error("Could not find .tiles-container for player 1 hand (player1HandDisplay is null after renderPlayerHands).");
 
-        if (hand2TilesContainer) displayPlayerHand(2, player2Hand, hand2TilesContainer);
-        else console.error("Could not find .tiles-container for player 2 hand immediately after creation.");
+        if (player2HandDisplay) displayPlayerHand(2, player2Hand, player2HandDisplay);
+        else console.error("Could not find .tiles-container for player 2 hand (player2HandDisplay is null after renderPlayerHands).");
 
         updateHandHighlights(); // Apply active/inactive styles
     }
