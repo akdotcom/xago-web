@@ -323,7 +323,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // cx, cy: center coordinates of the hexagon on the canvas (screen coordinates)
     // tile: the HexTile object to draw
     // zoom: current zoom level to scale the tile
-    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0) { // Added zoom parameter, defaults to 1 for hand tiles
+    // transparentBackground: if true, skips drawing the white background fill of the hexagon body
+    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false) {
         const orientedEdges = tile.getOrientedEdges();
         const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
 
@@ -345,9 +346,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.fillStyle = 'white';
-        ctx.fill();
-        ctx.strokeStyle = '#333';
+        // Requirement 3.2: Conditionally skip background fill
+        if (!transparentBackground) {
+            ctx.fillStyle = 'white';
+            ctx.fill();
+        }
+        // Stroke is always drawn for the hexagon outline itself
+        ctx.strokeStyle = '#333'; // This is the tile's own border, not the preview border
         ctx.lineWidth = 1 * zoom; // Scale line width
         ctx.stroke();
 
@@ -591,18 +596,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to draw a preview of the tile at a given board location
     // q, r: logical grid coordinates for the preview
-    // tile: the HexTile object to preview (used to determine if a spot is green/yellow, but not drawn directly)
-    // borderColor: CSS color string for the filled hexagon (e.g., 'green' or 'yellow')
+    // tile: the HexTile object (not used for drawing, but for context if needed)
+    // borderColor: CSS color string for the border (e.g., 'green' or 'yellow')
     function drawPlacementPreview(q, r, tile, borderColor) {
-        const PREVIEW_SCALE_FACTOR = 0.9; // Keep this for consistent sizing with potential mouseover
-        const effectiveZoom = currentZoomLevel * PREVIEW_SCALE_FACTOR;
+        // Requirement 1.1: Remove PREVIEW_SCALE_FACTOR, use 100% size
+        const effectiveZoom = currentZoomLevel; // No PREVIEW_SCALE_FACTOR
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * effectiveZoom;
 
         // Convert logical grid (q,r) to screen coordinates for drawing
         const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
         const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
 
-        // --- Draw a filled hexagon with the borderColor ---
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
@@ -616,19 +620,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.closePath();
 
-        ctx.fillStyle = borderColor; // Use borderColor to fill
-        ctx.fill();
+        // Requirement 1.3: Conditional Fill
+        // If the mouse is not currently over this specific preview spot, fill with a lighter/translucent version.
+        if (mouseHoverQ !== q || mouseHoverR !== r) {
+            if (borderColor === 'green') {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.2)'; // Lighter/translucent green
+            } else if (borderColor === 'yellow') {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.2)'; // Lighter/translucent yellow
+            } else {
+                ctx.fillStyle = 'rgba(128, 128, 128, 0.1)'; // Default light fill if unknown color
+            }
+            ctx.fill();
+        }
 
-        // Optionally, add a subtle border to the filled hexagon itself if desired
-        // ctx.strokeStyle = 'darkgrey'; // Or a darker shade of the borderColor
-        // ctx.lineWidth = 1 * effectiveZoom;
-        // ctx.stroke();
+        // Requirement 1.2: Draw only the border of the hexagon using borderColor
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2.5 * effectiveZoom; // Noticeable border, scaled by zoom
+        ctx.stroke();
     }
 
     // Function to draw the full translucent tile preview on mouseover
     function drawFullTileMouseoverPreview(q, r, tile) {
-        const PREVIEW_SCALE_FACTOR = 0.9; // Same as drawPlacementPreview for consistent sizing
-        const effectiveZoom = currentZoomLevel * PREVIEW_SCALE_FACTOR;
+        // Requirement 2.1: Ensure 100% scale factor.
+        // The effectiveZoom for drawHexTile should be currentZoomLevel.
+        const effectiveZoom = currentZoomLevel;
 
         // Convert logical grid (q,r) to screen coordinates for drawing
         const screenX = currentOffsetX + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (3/2 * q);
@@ -636,7 +651,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.save();
         ctx.globalAlpha = 0.6; // Translucency for the preview
-        drawHexTile(ctx, screenX, screenY, tile, effectiveZoom); // Draw the actual tile, scaled
+        // Requirement 2.3 (handled in drawHexTile modification): Pass transparentBackground = true
+        drawHexTile(ctx, screenX, screenY, tile, effectiveZoom, true); // Draw the actual tile, scaled, with transparent background
         ctx.restore();
     }
 
@@ -1471,40 +1487,41 @@ function animateView() {
         updatePlacementHighlights();
 
         // Now, check if the hovered spot is valid for the selected tile and draw full preview if so.
-        const tileToPreview = selectedTile.tile;
-        const currentOrientation = tileToPreview.orientation;
-        let isValidForCurrentOrientation = false;
-        let isValidForAlternativeOrientation = false;
-        let alternativeOrientation = -1;
+        const tileToPlace = selectedTile.tile; // This is the actual tile in hand with its current orientation
 
+        // We need to determine if the spot q,r is one of the highlighted spots (green or yellow)
+        // updatePlacementHighlights() already determined this and drew the border.
+        // We just need to know if we *should* draw the full tile preview.
+        // A spot is highlighted if it's empty AND (valid for current orientation OR valid for any other orientation)
+
+        let isSpotHighlightedGreenOrYellow = false;
         if (!boardState[`${q},${r}`]) { // Check if cell is empty
-            // Check with current selected orientation
-            tileToPreview.orientation = currentOrientation;
-            if (isPlacementValid(tileToPreview, q, r, true)) {
-                isValidForCurrentOrientation = true;
+            const originalOrientation = tileToPlace.orientation; // Preserve original
+            if (isPlacementValid(tileToPlace, q, r, true)) {
+                isSpotHighlightedGreenOrYellow = true;
             } else {
-                // Check if any other orientation is valid
                 for (let i = 0; i < 6; i++) {
-                    if (i === currentOrientation) continue;
-                    tileToPreview.orientation = i;
-                    if (isPlacementValid(tileToPreview, q, r, true)) {
-                        isValidForAlternativeOrientation = true;
-                        alternativeOrientation = i;
+                    if (i === originalOrientation) continue;
+                    tileToPlace.orientation = i;
+                    if (isPlacementValid(tileToPlace, q, r, true)) {
+                        isSpotHighlightedGreenOrYellow = true;
                         break;
                     }
                 }
             }
-            tileToPreview.orientation = currentOrientation; // Restore original orientation
+            tileToPlace.orientation = originalOrientation; // Restore original orientation
         }
 
-        if (isValidForCurrentOrientation) {
-            drawFullTileMouseoverPreview(q, r, tileToPreview);
-        } else if (isValidForAlternativeOrientation) {
-            // If valid with an alternative orientation (yellow spot), preview with that orientation
-            const tempTileForPreview = new HexTile(tileToPreview.id, tileToPreview.playerId, [...tileToPreview.edges]);
-            tempTileForPreview.orientation = alternativeOrientation;
-            drawFullTileMouseoverPreview(q, r, tempTileForPreview);
+        // Requirement 4: If the player is mousing over a highlighted spot (green or yellow),
+        // show what the current tile + rotation would look like.
+        if (isSpotHighlightedGreenOrYellow) {
+            // Always draw the selectedTile.tile with its CURRENT orientation.
+            // The border color (green/yellow) is already handled by drawPlacementPreview
+            // called from updatePlacementHighlights().
+            // The removal of the faint fill when hovered is also handled by drawPlacementPreview.
+            drawFullTileMouseoverPreview(q, r, tileToPlace);
         }
+        // No 'else if' needed here. If the spot wasn't green or yellow, no full preview is drawn.
     });
 
     gameCanvas.addEventListener('mouseout', () => {
