@@ -2085,7 +2085,7 @@ function animateView() {
             }
             tile.orientation = originalOrientation; // Restore
         }
-        console.log(`${logPrefix}Exit. Found ${possibleMoves.length} total possible moves for P${playerId}.`);
+        // console.log(`${logPrefix}Exit. Found ${possibleMoves.length} total possible moves for P${playerId}.`);
         // if (possibleMoves.length > 0) console.log(`${logPrefix}Returning moves (first few):`, JSON.parse(JSON.stringify(possibleMoves.slice(0,3))));
         // else console.log(`${logPrefix}Returning empty list of moves.`);
         return possibleMoves;
