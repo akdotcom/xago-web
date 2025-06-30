@@ -1092,11 +1092,11 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         }
 
         // Check if AI needs to make a move or remove a tile
-        if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
+        if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
             console.log("Player 2 (AI) is thinking...");
             setTimeout(performAiMove, 1000);
-        } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy')) {
+        } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove...");
             setTimeout(performAiTileRemoval, 1000);
@@ -1408,7 +1408,7 @@ function animateView() {
 
         // If it's Player 2's turn and a CPU opponent is selected, and not in removal phase,
         // let the AI make a move.
-        if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && !isRemovingTiles) {
+        if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2') && !isRemovingTiles) {
             // Add a small delay to allow any UI updates to settle and prevent rapid consecutive moves
             // if the change happens very quickly after a human P2 move might have been expected.
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately // Removed
@@ -1416,7 +1416,7 @@ function animateView() {
             setTimeout(performAiMove, 500);
         }
         // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
-        else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy') && isRemovingTiles) {
+        else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2') && isRemovingTiles) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove... (opponent type changed)");
             setTimeout(performAiTileRemoval, 500);
