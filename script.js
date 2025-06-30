@@ -586,12 +586,14 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // displayPlayerHand(1, player1Hand, player1HandDisplay); // Removed: Called by renderPlayerHands
         // displayPlayerHand(2, player2Hand, player2HandDisplay); // Removed: Called by renderPlayerHands
 
+        // renderPlayerHands will set opponentTypeSelector.value and opponentType
+        // It also creates and assigns player1HandContainer and player2HandContainer.
+        renderPlayerHands();
+
+        // updateGameInfo must be called AFTER renderPlayerHands so that hand containers are defined.
         updateGameInfo(); // This will now also call updateHandHighlights
         // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
         console.log("Player 1's turn. Select a tile and place it on the board.");
-
-        // renderPlayerHands will set opponentTypeSelector.value and opponentType
-        renderPlayerHands();
 
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
