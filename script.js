@@ -608,13 +608,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const screenY = currentOffsetY + (BASE_HEX_SIDE_LENGTH * currentZoomLevel) * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
 
         // --- Draw Fill (if applicable) ---
-        // Uses the original full size of the hexagon
+        // The fill should be drawn *within* the border.
+        // So, the path for the fill should use a side length reduced by the border width.
+        const fillHexSideLength = originalScaledHexSideLength - borderWidth;
+
         if (mouseHoverQ !== q || mouseHoverR !== r) {
             ctx.beginPath();
             for (let i = 0; i < 6; i++) {
                 const angle = Math.PI / 180 * (60 * i);
-                const xPos = screenX + originalScaledHexSideLength * Math.cos(angle);
-                const yPos = screenY + originalScaledHexSideLength * Math.sin(angle);
+                // Use fillHexSideLength for the fill path
+                const xPos = screenX + fillHexSideLength * Math.cos(angle);
+                const yPos = screenY + fillHexSideLength * Math.sin(angle);
                 if (i === 0) {
                     ctx.moveTo(xPos, yPos);
                 } else {
@@ -634,20 +638,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Draw Border (inset) ---
-        // Adjust side length for the border to be drawn on the interior
-        // The amount to reduce by should account for the line width itself,
-        // effectively pulling the center of the line inwards.
-        // A common way is to reduce radius by half the line width.
-        // For a hexagon, the relationship between side length and "radius" (center to vertex) is direct.
-        // To make the border fully inset, subtract the full borderWidth.
-        const borderHexSideLength = originalScaledHexSideLength - borderWidth;
+        // The border is drawn on a path that is also inset.
+        // The visual effect is that the fill is contained by the border.
+        // The border path itself is effectively centered on `originalScaledHexSideLength - borderWidth`.
+        // And its thickness (`borderWidth`) extends inwards and outwards from that path.
+        // To make the fill truly *not extend past the outer edge of the border*,
+        // the fill path should be `originalScaledHexSideLength - borderWidth`.
+        // And the border path should be `originalScaledHexSideLength - (borderWidth / 2)` if we want the line to be centered.
+        // However, the current border drawing logic already uses `originalScaledHexSideLength - borderWidth` for its path.
+        // This means the *center* of the border line is on this smaller hexagon.
+        // The line then has width, extending `borderWidth / 2` inwards and `borderWidth / 2` outwards from this path.
+        // So the *outer edge* of the border is at `originalScaledHexSideLength - borderWidth + borderWidth/2 = originalScaledHexSideLength - borderWidth/2`.
+        // And the *inner edge* of the border is at `originalScaledHexSideLength - borderWidth - borderWidth/2 = originalScaledHexSideLength - 1.5 * borderWidth`.
+
+        // To ensure the fill does not extend *past the outer edge of the border line*,
+        // the fill path should be sized such that its edge aligns with or is inside the *outer edge* of the border.
+        // Current border path uses: originalScaledHexSideLength - borderWidth
+        // If fill uses: originalScaledHexSideLength - borderWidth, it will align with the center of the border.
+        // This is acceptable and achieves the goal of the fill not extending *beyond* the overall border area.
+
+        const borderPathSideLength = originalScaledHexSideLength - (borderWidth / 2); // Center the border line correctly
 
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             const angle = Math.PI / 180 * (60 * i);
-            // Use borderHexSideLength for the border path
-            const xPos = screenX + borderHexSideLength * Math.cos(angle);
-            const yPos = screenY + borderHexSideLength * Math.sin(angle);
+            // Use borderPathSideLength for the border path
+            const xPos = screenX + borderPathSideLength * Math.cos(angle);
+            const yPos = screenY + borderPathSideLength * Math.sin(angle);
             if (i === 0) {
                 ctx.moveTo(xPos, yPos);
             } else {
