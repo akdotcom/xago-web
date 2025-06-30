@@ -1790,32 +1790,32 @@ function animateView() {
             }
         } else if (opponentType === 'greedy2') {
             console.log("AI: Playing Greedily with Lookahead (Greedy 2)");
-            // Placeholder for Greedy 2 logic. This will call findBestMoveMinimax.
-            // The actual implementation of findBestMoveMinimax will be complex.
-            // For now, let's ensure the structure is in place.
-            bestMove = findBestMoveMinimax(boardState, player2Hand, player1Hand, 2, 1, 1); // board, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth
-            if(bestMove && bestMove.tile) {
-                console.log(`AI (Greedy 2): Best move found by minimax - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y}), Score ${bestMove.score}`);
-            } else if (bestMove) {
-                // bestMove object exists, but it doesn't have a .tile (e.g. returned from minimax base case as {score: ..., tile: null})
-                console.log(`AI (Greedy 2): Minimax evaluation completed but no specific tile move selected (e.g. depth 0 or no moves). Score: ${bestMove.score}`);
+            const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, 2, 1, 1); // depth 1 for now
+
+            if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
+                bestMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)]; // Randomly select from best moves
+                console.log(`AI (Greedy 2): Minimax found ${minimaxResult.moves.length} best move(s) with score ${minimaxResult.score}.`);
+                console.log(`AI (Greedy 2): Randomly selected move - Tile ${bestMove.tile.id}, Orient ${bestMove.orientation}, Pos (${bestMove.x},${bestMove.y})`);
             } else {
-                // bestMove itself is null or undefined (should not happen if findBestMoveMinimax always returns an object)
-                console.log(`AI (Greedy 2): Minimax did not return a best move object.`);
+                bestMove = null; // No moves found or returned
+                console.log(`AI (Greedy 2): Minimax did not find any valid moves. Score: ${minimaxResult ? minimaxResult.score : 'N/A'}`);
             }
         }
 
 
         if (bestMove && bestMove.tile) { // Check if a valid tile is part of the best move
+            // For Greedy 2, bestMove.tile is the original tile object from the hand (due to { ...aiMove } in minimax).
+            // We need to find the actual tile in player2Hand to modify its orientation and remove it.
             const tileToPlace = player2Hand.find(t => t.id === bestMove.tile.id);
-            if (!tileToPlace) { // This case should be rare if bestMove.tile.id is valid and from player2Hand
-                console.error("AI Error: Best move tile (ID: " + (bestMove.tile ? bestMove.tile.id : 'N/A') + ") not found in player 2 hand! This indicates a desync or logic error in minimax hand simulation.");
+
+            if (!tileToPlace) {
+                console.error(`AI Error: Best move tile (ID: ${bestMove.tile ? bestMove.tile.id : 'N/A'}) not found in player 2 hand! This could be a desync if minimax simulation used a different hand state.`);
                 switchTurn(); // Pass turn
                 return;
             }
-            tileToPlace.orientation = bestMove.orientation; // Set the chosen orientation
+            tileToPlace.orientation = bestMove.orientation; // Set the chosen orientation on the actual hand tile
 
-            console.log(`AI (${opponentType}): Attempting to place tile ${tileToPlace.id} at (${bestMove.x}, ${bestMove.y}) with orientation ${bestMove.orientation}`);
+            console.log(`AI (${opponentType}): Attempting to place tile ${tileToPlace.id} (actual hand tile ID) at (${bestMove.x}, ${bestMove.y}) with orientation ${tileToPlace.orientation}`);
             if (placeTileOnBoard(tileToPlace, bestMove.x, bestMove.y)) {
                 player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
@@ -2137,11 +2137,12 @@ function animateView() {
         if (depth === 0) { // Base case: maximum depth reached
             const evalScore = evaluateBoard(currentBoardState, aiPlayerId);
             console.log(`${logPrefix}Base Case (depth 0). Eval score: ${evalScore}`);
-            console.log(`${logPrefix}Exit (Base Case - depth 0). Returning:`, { score: evalScore, tile: null, x: null, y: null, orientation: null });
-            return { score: evalScore, tile: null, x: null, y: null, orientation: null };
+            // Return structure: { score: evalScore, moves: [] } - no specific moves at base evaluation
+            console.log(`${logPrefix}Exit (Base Case - depth 0). Returning:`, { score: evalScore, moves: [] });
+            return { score: evalScore, moves: [] };
         }
 
-        let bestMoveForAi = null;
+        let bestMovesForAi = []; // Stores all moves that achieve maxScoreForAi
         let maxScoreForAi = -Infinity;
 
         const aiHand = aiHandOriginal.map(t => new HexTile(t.id, t.playerId, [...t.edges]));
@@ -2156,8 +2157,9 @@ function animateView() {
             const evalScore = evaluateBoard(currentBoardState, aiPlayerId);
             // Consider if this state (no moves) has a special penalty/bonus
             console.log(`${logPrefix}Base Case (no AI moves available at D${depth}). Eval score: ${evalScore}`);
-            console.log(`${logPrefix}Exit (Base Case - no AI moves). Returning:`, { score: evalScore, tile: null, x: null, y: null, orientation: null });
-            return { score: evalScore, tile: null, x: null, y: null, orientation: null };
+            // Return structure: { score: evalScore, moves: [] }
+            console.log(`${logPrefix}Exit (Base Case - no AI moves). Returning:`, { score: evalScore, moves: [] });
+            return { score: evalScore, moves: [] };
         }
 
         for (const aiMove of possibleAiMoves) {
@@ -2195,7 +2197,9 @@ function animateView() {
                 console.log(`${logPrefix}[${moveIterationId}] AI (P${aiPlayerId}) runs out of tiles (wins). Score: ${score}`);
                 if (score > maxScoreForAi) {
                     maxScoreForAi = score;
-                    bestMoveForAi = { ...aiMove, score: maxScoreForAi };
+                    bestMovesForAi = [{ ...aiMove, score: maxScoreForAi }]; // New best score, reset list
+                } else if (score === maxScoreForAi) {
+                    bestMovesForAi.push({ ...aiMove, score: maxScoreForAi }); // Same as best, add to list
                 }
                 continue; // Next AI move, this is a terminal state for this branch
             }
@@ -2261,40 +2265,42 @@ function animateView() {
 
             if (minScoreAfterOpponentResponse > maxScoreForAi) {
                 maxScoreForAi = minScoreAfterOpponentResponse;
-                bestMoveForAi = { ...aiMove, score: maxScoreForAi };
-                console.log(`${logPrefix}[${moveIterationId}] NEW BEST MOVE FOUND for P${aiPlayerId}: Tile ${bestMoveForAi.tile.id}, Pos (${bestMoveForAi.x},${bestMoveForAi.y}), Orient ${bestMoveForAi.orientation}, Score: ${maxScoreForAi}`);
+                bestMovesForAi = [{ ...aiMove, score: maxScoreForAi }]; // New best score, reset list
+                console.log(`${logPrefix}[${moveIterationId}] NEW BEST MOVE(S) FOUND for P${aiPlayerId}. Score: ${maxScoreForAi}. Current best move list has 1 move.`);
+                console.log(`${logPrefix}[${moveIterationId}]   Move: Tile ${aiMove.tile.id}, Pos (${aiMove.x},${aiMove.y}), Orient ${aiMove.orientation}`);
+            } else if (minScoreAfterOpponentResponse === maxScoreForAi) {
+                bestMovesForAi.push({ ...aiMove, score: maxScoreForAi }); // Add to list of best moves
+                console.log(`${logPrefix}[${moveIterationId}] ADDED TO BEST MOVES for P${aiPlayerId}. Score: ${maxScoreForAi}. Current best move list has ${bestMovesForAi.length} moves.`);
+                console.log(`${logPrefix}[${moveIterationId}]   Move: Tile ${aiMove.tile.id}, Pos (${aiMove.x},${aiMove.y}), Orient ${aiMove.orientation}`);
             }
         }
 
-        if (bestMoveForAi) {
-            console.log(`${logPrefix}Exit. Best overall move for AI (P${aiPlayerId}) is Tile ${bestMoveForAi.tile.id}, Orient ${bestMoveForAi.orientation}, Pos (${bestMoveForAi.x},${bestMoveForAi.y}), resulting score ${bestMoveForAi.score}`);
+        if (bestMovesForAi.length > 0) {
+            console.log(`${logPrefix}Exit. Found ${bestMovesForAi.length} best move(s) for AI (P${aiPlayerId}), resulting score ${maxScoreForAi}`);
+            if(bestMovesForAi.length === 1) {
+                const bestSingleMove = bestMovesForAi[0];
+                console.log(`${logPrefix}  Single Best Move: Tile ${bestSingleMove.tile.id}, Orient ${bestSingleMove.orientation}, Pos (${bestSingleMove.x},${bestSingleMove.y})`);
+            }
         } else if (possibleAiMoves.length > 0) {
-            console.warn(`${logPrefix}P${aiPlayerId} - No move improved score from initial -Infinity. This might indicate an issue or all moves are equally bad. Fallback to first possible move.`);
-            // Fallback logic: Recalculate score for the first move to ensure it's properly evaluated through the opponent's turn.
-            // This scenario should be less common with the refined logic, but kept as a safeguard.
-            const firstMove = possibleAiMoves[0];
-            // Simplified re-evaluation for fallback:
-            let boardAfterAiMove_fb = deepCopyBoardState(currentBoardState);
-            const aiTileForFb = new HexTile(firstMove.tile.id, aiPlayerId, [...firstMove.tile.edges]);
-            aiTileForFb.orientation = firstMove.orientation;
-            aiTileForFb.x = firstMove.x;
-            aiTileForFb.y = firstMove.y;
-            boardAfterAiMove_fb[`${firstMove.x},${firstMove.y}`] = aiTileForFb;
-            // Note: This fallback doesn't fully simulate opponent's response, it's a basic score.
-            // A more robust fallback would re-run the opponent simulation part for this single move.
-            // However, if all moves led to -Infinity for minScoreAfterOpponentResponse, this direct eval might be better.
-            const removalResultAi_fb = simulateRemovalCycle(boardAfterAiMove_fb, aiPlayerId);
-            boardAfterAiMove_fb = removalResultAi_fb.boardState;
-            let fallbackScore = evaluateBoard(boardAfterAiMove_fb, aiPlayerId);
-
-            bestMoveForAi = { ...firstMove, score: fallbackScore }; // Assign a score, even if it's just immediate eval
-            console.log(`${logPrefix}Exit (Fallback). Fallback selected: Tile ${bestMoveForAi.tile.id}, Pos (${bestMoveForAi.x},${bestMoveForAi.y}), Orient ${bestMoveForAi.orientation}, Score (immediate eval): ${bestMoveForAi.score}`);
+            // This case should ideally not be hit if maxScoreForAi is initialized to -Infinity
+            // and any valid move sequence would yield a score.
+            // However, if all paths lead to scores that don't update maxScoreForAi (e.g. all are -Infinity due to immediate loss),
+            // bestMovesForAi could remain empty.
+            console.warn(`${logPrefix}P${aiPlayerId} - No move improved score from initial -Infinity, or all moves led to equally bad scores not meeting threshold. Best moves list is empty.`);
+            // Fallback: If possibleAiMoves exist but bestMovesForAi is empty, it implies all evaluated paths were worse than -Infinity or some logic error.
+            // To prevent crashing, we might return the first possible move with its direct evaluation, or simply an empty list with a very bad score.
+            // For now, we'll return an empty list, signaling no "good" move was found.
+            // The calling function will need to handle an empty bestMovesForAi list.
+             console.log(`${logPrefix}Exit (No good moves). AI (P${aiPlayerId}) found possible moves, but none were deemed 'best' (e.g. all paths led to very low scores). Returning empty moves list with score -Infinity.`);
         } else {
-            console.log(`${logPrefix}Exit (No Moves). AI (P${aiPlayerId}) could not find any move (no possible moves). Returning score -Infinity.`);
-            return { score: -Infinity, tile: null, x:null, y:null, orientation:null }; // No moves possible, very bad
+            // This means possibleAiMoves itself was empty.
+            console.log(`${logPrefix}Exit (No Possible Moves). AI (P${aiPlayerId}) could not find any move (no possible moves). Returning empty moves list with score -Infinity.`);
         }
-        console.log(`${logPrefix}Exit (Returning Best Move).`, JSON.parse(JSON.stringify(bestMoveForAi)));
-        return bestMoveForAi;
+
+        // Return structure: { score: maxScoreForAi, moves: bestMovesForAi }
+        // If bestMovesForAi is empty (e.g., no possible moves or no "good" moves), score will be -Infinity.
+        console.log(`${logPrefix}Exit (Returning Best Moves List). Score: ${maxScoreForAi}, Moves count: ${bestMovesForAi.length}`);
+        return { score: maxScoreForAi, moves: bestMovesForAi };
     }
 
 });
