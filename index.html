@@ -21,7 +21,29 @@
         </div>
 
         <div id="player-hands">
-            <!-- Player hand divs will be dynamically added here by script.js -->
+            <div id="player1-hand" class="player-hand">
+                <h2>Player 1 Hand</h2>
+                <div class="tiles-container">
+                    <!-- Player 1 tiles -->
+                </div>
+            </div>
+            <div id="player2-hand" class="player-hand">
+                <div class="player2-hand-header">
+                    <h2>Player 2 Hand</h2>
+                    <div id="opponent-selector-container">
+                        <label for="opponent-type">Opponent (Player 2):</label>
+                        <select id="opponent-type">
+                            <option value="human">Human</option>
+                            <option value="random">Random (CPU)</option>
+                            <option value="greedy">Greedy 1 (CPU)</option>
+                            <option value="greedy2">Greedy 2 (CPU)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="tiles-container">
+                    <!-- Player 2 tiles -->
+                </div>
+            </div>
         </div>
     </main>
 

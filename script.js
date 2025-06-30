@@ -19,12 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let p1ScoreDisplayFloater, p2ScoreDisplayFloater; // Will be created dynamically
 
     const resetGameButton = document.getElementById('reset-game');
-    // player1HandContainer and player2HandContainer will be created dynamically
-    let player1HandContainer, player2HandContainer;
-    let opponentTypeSelector; // Will be assigned when player 2 hand is created
-
-    const playerHandsDisplay = document.getElementById('player-hands');
-
+    const player1HandContainer = document.getElementById('player1-hand');
+    const player2HandContainer = document.getElementById('player2-hand');
+    const opponentTypeSelector = document.getElementById('opponent-type');
 
     // View management variables
     let currentOffsetX = 0;
@@ -590,8 +587,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
         console.log("Player 1's turn. Select a tile and place it on the board.");
 
-        // renderPlayerHands will set opponentTypeSelector.value and opponentType
-        renderPlayerHands();
+        // Default Player 2 to Greedy 1
+        opponentTypeSelector.value = "greedy";
+        opponentType = "greedy"; // Ensure internal variable matches
 
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
@@ -1149,16 +1147,15 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
             console.log("Player 2 (AI) is thinking...");
             console.log("[switchTurn] ADDING ai-thinking-pulse for AI move");
-        if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
+            player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
             setTimeout(performAiMove, 1500); // Increased for testing visibility
         } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove...");
             console.log("[switchTurn] ADDING ai-thinking-pulse for AI removal");
-        if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
+            player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
             setTimeout(performAiTileRemoval, 1500); // Increased for testing visibility
         }
-    renderPlayerHands(); // Re-render hands to reflect new turn order
     }
 
     function checkGameEnd() {
@@ -1452,104 +1449,45 @@ function animateView() {
 
     resetGameButton.addEventListener('click', () => {
         console.log("Reset game button clicked.");
-        const preservedOpponentType = opponentTypeSelector ? opponentTypeSelector.value : "greedy"; // Store current opponent type
+        const preservedOpponentType = opponentTypeSelector.value; // Store current opponent type
         // initializeGame() already handles clearing the canvas and resetting state.
         initializeGame();
-        // opponentTypeSelector will be re-created by renderPlayerHands called in initializeGame
-        // We need to set its value *after* it's created.
-        if (opponentTypeSelector) {
-            opponentTypeSelector.value = preservedOpponentType;
-        }
+        opponentTypeSelector.value = preservedOpponentType; // Restore opponent type
         opponentType = preservedOpponentType; // Update internal variable
         console.log(`Opponent type preserved as: ${opponentType}`);
     });
 
-    // --- Player Hand Rendering ---
-    function renderPlayerHands() {
-        playerHandsDisplay.innerHTML = ''; // Clear existing hands
+    // --- Start the game ---
+    initializeGame();
 
-        const hand1Div = document.createElement('div');
-        hand1Div.id = 'player1-hand';
-        hand1Div.classList.add('player-hand');
-        hand1Div.innerHTML = `<h2>Player 1 Hand</h2><div class="tiles-container"></div>`;
-
-        const hand2Div = document.createElement('div');
-        hand2Div.id = 'player2-hand';
-        hand2Div.classList.add('player-hand');
-        hand2Div.innerHTML = `
-            <div class="player2-hand-header">
-                <h2>Player 2 Hand</h2>
-                <div id="opponent-selector-container">
-                    <label for="opponent-type">Opponent (Player 2):</label>
-                    <select id="opponent-type">
-                        <option value="human">Human</option>
-                        <option value="random">Random (CPU)</option>
-                        <option value="greedy">Greedy 1 (CPU)</option>
-                        <option value="greedy2">Greedy 2 (CPU)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="tiles-container"></div>`;
-
-        if (currentPlayer === 1) {
-            playerHandsDisplay.appendChild(hand1Div);
-            playerHandsDisplay.appendChild(hand2Div);
-        } else {
-            playerHandsDisplay.appendChild(hand2Div);
-            playerHandsDisplay.appendChild(hand1Div);
-        }
-
-        // Re-assign global container vars and opponent selector
-        player1HandContainer = document.getElementById('player1-hand');
-        player2HandContainer = document.getElementById('player2-hand');
-        opponentTypeSelector = document.getElementById('opponent-type');
-
-        // Restore opponent type if selector exists and type is known
-        if (opponentTypeSelector) {
-            opponentTypeSelector.value = opponentType || "greedy"; // Default to greedy if not set
-            opponentType = opponentTypeSelector.value; // Ensure internal var matches
-
-            // Re-attach event listener for opponent type selector
-            opponentTypeSelector.removeEventListener('change', handleOpponentTypeChange); // Remove old if any
-            opponentTypeSelector.addEventListener('change', handleOpponentTypeChange);
-        }
-
-
-        // Re-display tiles in the new containers
-        // Ensure the correct display elements are targeted (the .tiles-container within the new divs)
-        if (player1HandContainer) displayPlayerHand(1, player1Hand, player1HandContainer.querySelector('.tiles-container'));
-        if (player2HandContainer) displayPlayerHand(2, player2Hand, player2HandContainer.querySelector('.tiles-container'));
-
-        updateHandHighlights(); // Apply active/inactive styles
-    }
-
-    function handleOpponentTypeChange(event) {
+    // --- Opponent Type Selector Event Listener ---
+    opponentTypeSelector.addEventListener('change', (event) => {
         opponentType = event.target.value;
         console.log(`Opponent type changed to: ${opponentType}`);
 
         // If it's Player 2's turn and a CPU opponent is selected, and not in removal phase,
         // let the AI make a move.
         if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2') && !isRemovingTiles) {
+            // Add a small delay to allow any UI updates to settle and prevent rapid consecutive moves
+            // if the change happens very quickly after a human P2 move might have been expected.
+            // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately // Removed
             console.log("Player 2 (AI) is thinking... (opponent type changed)");
             console.log("[opponentTypeSelector] ADDING ai-thinking-pulse for AI move");
-            if(player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
-            setTimeout(performAiMove, 1500);
+            player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
+            setTimeout(performAiMove, 1500); // Increased for testing visibility
         }
         // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
         else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2') && isRemovingTiles) {
+            // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove... (opponent type changed)");
             console.log("[opponentTypeSelector] ADDING ai-thinking-pulse for AI removal");
-            if(player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
-            setTimeout(performAiTileRemoval, 1500);
+            player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
+            setTimeout(performAiTileRemoval, 1500); // Increased for testing visibility
         } else if (opponentType === 'human' || currentPlayer === 1) {
             console.log("[opponentTypeSelector] REMOVING ai-thinking-pulse (human or not P2 turn)");
-            if(player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse');
+            player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing if switched to human or not P2's turn
         }
-    }
-
-    // --- Start the game ---
-    initializeGame();
-
+    });
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
@@ -1936,7 +1874,7 @@ function animateView() {
                 const surroundedTilesCheck = getSurroundedTiles(boardState); // Check before calling the full procedure
                 if (surroundedTilesCheck.length === 0) {
                     console.log("[performAiMove] REMOVING ai-thinking-pulse (no tiles surrounded after move)");
-                    if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing if no removal phase follows
+                    player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing if no removal phase follows
                 } else {
                     console.log("[performAiMove] ai-thinking-pulse will be handled by removal logic");
                 }
@@ -1970,7 +1908,7 @@ function animateView() {
         if (currentPlayer !== 2 || !isRemovingTiles || currentSurroundedTilesForRemoval.length === 0) {
             console.log("AI: Not my turn for removal, not in removal phase, or no tiles to remove.");
             console.log("[performAiTileRemoval] REMOVING ai-thinking-pulse (conditions not met)");
-            if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse'); // Ensure pulsing stops if conditions not met
+            player2HandContainer.classList.remove('ai-thinking-pulse'); // Ensure pulsing stops if conditions not met
             return;
         }
         if (opponentType === 'human') { // Make sure AI doesn't act if opponent switched to human mid-removal
@@ -2062,7 +2000,7 @@ function animateView() {
             console.error("AI: Error in tile removal logic - no tile selected for removal. currentSurroundedTilesForRemoval:", currentSurroundedTilesForRemoval);
             // As a fallback, to prevent getting stuck, exit removal mode and proceed with game flow.
             console.log("[performAiTileRemoval] REMOVING ai-thinking-pulse (AI error in tile removal)");
-            if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
+            player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
             // gameMessageDisplay.textContent = "AI encountered an issue during tile removal. Proceeding..."; // Removed
