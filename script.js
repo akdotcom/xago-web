@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameInitialized = false;
     let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
-    let opponentType = "human"; // Default to human opponent
+    let opponentType = "greedy"; // Default to Greedy 1 opponent
     let mouseHoverQ = null;
     let mouseHoverR = null;
 
@@ -579,6 +579,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGameInfo(); // This will now also call updateHandHighlights
         // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
         console.log("Player 1's turn. Select a tile and place it on the board.");
+
+        // Default Player 2 to Greedy 1
+        opponentTypeSelector.value = "greedy";
+        opponentType = "greedy"; // Ensure internal variable matches
+
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
 
@@ -1433,8 +1438,12 @@ function animateView() {
 
     resetGameButton.addEventListener('click', () => {
         console.log("Reset game button clicked.");
+        const preservedOpponentType = opponentTypeSelector.value; // Store current opponent type
         // initializeGame() already handles clearing the canvas and resetting state.
         initializeGame();
+        opponentTypeSelector.value = preservedOpponentType; // Restore opponent type
+        opponentType = preservedOpponentType; // Update internal variable
+        console.log(`Opponent type preserved as: ${opponentType}`);
     });
 
     // --- Start the game ---
