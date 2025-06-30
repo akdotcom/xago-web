@@ -639,7 +639,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // effectively pulling the center of the line inwards.
         // A common way is to reduce radius by half the line width.
         // For a hexagon, the relationship between side length and "radius" (center to vertex) is direct.
-        const borderHexSideLength = originalScaledHexSideLength - (borderWidth / 2);
+        // To make the border fully inset, subtract the full borderWidth.
+        const borderHexSideLength = originalScaledHexSideLength - borderWidth;
 
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
