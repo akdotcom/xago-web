@@ -856,11 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 isRemovingTiles = false; // Ensure it's reset if no tiles were surrounded
                 calculateScores(); // Update scores after each turn
-                if (checkGameEnd()) {
-                    endGame();
-                } else {
-                    switchTurn();
-                }
+                switchTurn(); // Always switch turn, game end is checked at the start of the next turn
             }
         }
 
