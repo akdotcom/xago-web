@@ -121,6 +121,22 @@ main {
     border: 1px solid #4CAF50; /* Optional: border to make it more prominent */
 }
 
+@keyframes pulse-shadow {
+    0% {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2), 0 0 10px #4CAF50;
+    }
+    50% {
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3), 0 0 20px #66BB6A; /* Slightly larger and brighter */
+    }
+    100% {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2), 0 0 10px #4CAF50;
+    }
+}
+
+.player-hand.ai-thinking-pulse {
+    animation: pulse-shadow 1.5s infinite ease-in-out;
+}
+
 .player-hand.inactive-hand {
     opacity: 0.6; /* Slightly faded */
     box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Standard shadow for inactive */
