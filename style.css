@@ -90,6 +90,8 @@ main {
     display: block; /* To enable margin auto for centering */
     margin: 20px auto;
     /* border: 1px solid black; */ /* Example border, JS draws one now */
+    max-width: 100%; /* Allow canvas to shrink on smaller screens */
+    height: auto; /* Maintain aspect ratio when width changes */
 }
 
 /* .board-cell is obsolete */
