@@ -2184,7 +2184,7 @@ function animateView() {
                 break;
             }
         }
-        console.log(`${logPrefix}Exit. Final board tiles: ${Object.keys(currentSimBoardState).length}. Tiles returned to hands:`, JSON.parse(JSON.stringify(tilesReturnedToHands)));
+        // console.log(`${logPrefix}Exit. Final board tiles: ${Object.keys(currentSimBoardState).length}. Tiles returned to hands:`, JSON.parse(JSON.stringify(tilesReturnedToHands)));
         return { boardState: currentSimBoardState, handGains: tilesReturnedToHands };
     }
 
