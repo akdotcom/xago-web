@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
                 console.log("AI continues tile removal process. New list:", newSurroundedList.map(t => t.id));
                 // Pulse should continue if AI is still thinking about next removal
+                console.log("[removeTileFromBoardAndReturnToHand] ADDING ai-thinking-pulse for continued AI removal");
                 player2HandContainer.classList.add('ai-thinking-pulse');
                 redrawBoardOnCanvas(); // Update highlights for the AI's next choice (visual feedback)
                 // Using setTimeout to allow canvas to redraw before AI logic runs,
@@ -130,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Human player's turn, or AI is human - prompt for click
                 // gameMessageDisplay.textContent = `Player ${currentPlayer}, click on a highlighted tile to remove it.`; // Removed
+                console.log("[removeTileFromBoardAndReturnToHand] REMOVING ai-thinking-pulse (human's turn for removal)");
                 player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulse if human's turn for removal
                 console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
                 redrawBoardOnCanvas(); // Redraw to update highlights for human player
@@ -137,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // No more tiles are surrounded, end the removal phase
             console.log("No more surrounded tiles. Ending removal phase.");
+            console.log("[removeTileFromBoardAndReturnToHand] REMOVING ai-thinking-pulse (no more tiles to remove)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
@@ -1143,13 +1146,15 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
             console.log("Player 2 (AI) is thinking...");
+            console.log("[switchTurn] ADDING ai-thinking-pulse for AI move");
             player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
-            setTimeout(performAiMove, 1000);
+            setTimeout(performAiMove, 1500); // Increased for testing visibility
         } else if (currentPlayer === 2 && isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove...");
+            console.log("[switchTurn] ADDING ai-thinking-pulse for AI removal");
             player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
-            setTimeout(performAiTileRemoval, 1000);
+            setTimeout(performAiTileRemoval, 1500); // Increased for testing visibility
         }
     }
 
@@ -1467,16 +1472,19 @@ function animateView() {
             // if the change happens very quickly after a human P2 move might have been expected.
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Update message immediately // Removed
             console.log("Player 2 (AI) is thinking... (opponent type changed)");
+            console.log("[opponentTypeSelector] ADDING ai-thinking-pulse for AI move");
             player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
-            setTimeout(performAiMove, 500);
+            setTimeout(performAiMove, 1500); // Increased for testing visibility
         }
         // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
         else if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2') && isRemovingTiles) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is choosing a tile to remove..."; // Removed
             console.log("Player 2 (AI) is choosing a tile to remove... (opponent type changed)");
+            console.log("[opponentTypeSelector] ADDING ai-thinking-pulse for AI removal");
             player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
-            setTimeout(performAiTileRemoval, 500);
+            setTimeout(performAiTileRemoval, 1500); // Increased for testing visibility
         } else if (opponentType === 'human' || currentPlayer === 1) {
+            console.log("[opponentTypeSelector] REMOVING ai-thinking-pulse (human or not P2 turn)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing if switched to human or not P2's turn
         }
     });
@@ -1863,9 +1871,12 @@ function animateView() {
                 // If checkForSurroundedTilesAndProceed leads to switchTurn, pulse should stop.
                 // If it leads to AI removal, pulse continues (handled in removeTileFromBoardAndReturnToHand/performAiTileRemoval).
                 // It's safest to remove it here, and let subsequent AI removal logic re-add it if needed.
-                const surroundedTiles = getSurroundedTiles(boardState); // Check before calling the full procedure
-                if (surroundedTiles.length === 0) {
+                const surroundedTilesCheck = getSurroundedTiles(boardState); // Check before calling the full procedure
+                if (surroundedTilesCheck.length === 0) {
+                    console.log("[performAiMove] REMOVING ai-thinking-pulse (no tiles surrounded after move)");
                     player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing if no removal phase follows
+                } else {
+                    console.log("[performAiMove] ai-thinking-pulse will be handled by removal logic");
                 }
 
                 checkForSurroundedTilesAndProceed();
@@ -1877,6 +1888,7 @@ function animateView() {
                 console.error(`AI (${opponentType}): Failed to place tile ${tileToPlace.id} despite it being considered a valid move.`);
                 // gameMessageDisplay.textContent = `Player 2 (AI) failed to make a move.`; // Removed
                 console.log(`Player 2 (AI) failed to make a move.`);
+                console.log("[performAiMove] REMOVING ai-thinking-pulse (AI failed to place tile)");
                 player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
                 switchTurn(); // Pass turn
             }
@@ -1884,6 +1896,7 @@ function animateView() {
             console.log(`AI (${opponentType}): Could not find any valid move. Passing turn.`);
             // gameMessageDisplay.textContent = "Player 2 (AI) passes."; // Removed
             console.log("Player 2 (AI) passes.");
+            console.log("[performAiMove] REMOVING ai-thinking-pulse (AI no valid move)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
             calculateScores(); // Calculate scores in case it's relevant for display, though game end is deferred
             // The game end condition is now checked only at the beginning of a turn in switchTurn()
@@ -1894,11 +1907,13 @@ function animateView() {
     function performAiTileRemoval() {
         if (currentPlayer !== 2 || !isRemovingTiles || currentSurroundedTilesForRemoval.length === 0) {
             console.log("AI: Not my turn for removal, not in removal phase, or no tiles to remove.");
+            console.log("[performAiTileRemoval] REMOVING ai-thinking-pulse (conditions not met)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Ensure pulsing stops if conditions not met
             return;
         }
         if (opponentType === 'human') { // Make sure AI doesn't act if opponent switched to human mid-removal
             console.log("AI: Opponent is human, AI will not remove tile.");
+            // Pulse removal for human opponent is handled by opponentTypeSelector or switchTurn
             return;
         }
 
@@ -1984,6 +1999,7 @@ function animateView() {
             // The initial check in the function should prevent currentSurroundedTilesForRemoval being empty.
             console.error("AI: Error in tile removal logic - no tile selected for removal. currentSurroundedTilesForRemoval:", currentSurroundedTilesForRemoval);
             // As a fallback, to prevent getting stuck, exit removal mode and proceed with game flow.
+            console.log("[performAiTileRemoval] REMOVING ai-thinking-pulse (AI error in tile removal)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];

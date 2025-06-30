@@ -123,18 +123,22 @@ main {
 
 @keyframes pulse-shadow {
     0% {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2), 0 0 10px #4CAF50;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15), 0 0 8px #5cb85c; /* Slightly smaller/dimmer */
     }
     50% {
-        box-shadow: 0 6px 12px rgba(0,0,0,0.3), 0 0 20px #66BB6A; /* Slightly larger and brighter */
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3), 0 0 20px #66BB6A; /* Larger and brighter */
     }
     100% {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2), 0 0 10px #4CAF50;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15), 0 0 8px #5cb85c; /* Slightly smaller/dimmer */
     }
 }
 
 .player-hand.ai-thinking-pulse {
+    /* Base shadow for the start of the animation, matching 0% and 100% keyframes */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15), 0 0 8px #5cb85c;
     animation: pulse-shadow 1.5s infinite ease-in-out;
+    /* Ensure this border matches active-hand or is appropriately distinct if needed */
+    border: 1px solid #4CAF50;
 }
 
 .player-hand.inactive-hand {
