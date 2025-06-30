@@ -1146,6 +1146,9 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             updatePlacementHighlights(); // This will clear the highlights by redrawing the board
         }
 
+        // Moved renderPlayerHands earlier so player2HandContainer is correctly defined before pulse class is added.
+        renderPlayerHands();
+
         // Check if AI needs to make a move or remove a tile
         if (currentPlayer === 2 && !isRemovingTiles && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
             // gameMessageDisplay.textContent = "Player 2 (AI) is thinking..."; // Removed
@@ -1160,7 +1163,6 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse'); // Start pulsing
             setTimeout(performAiTileRemoval, 1500); // Increased for testing visibility
         }
-    renderPlayerHands(); // Re-render hands to reflect new turn order
     }
 
     function checkGameEnd() {
