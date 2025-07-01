@@ -508,7 +508,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 // For now, let's assume not appending it is fine as per MDN docs (it can be any canvas).
 
                 // Optionally, set data for drag event if needed elsewhere, though selectedTile might be sufficient.
-                // event.dataTransfer.setData('text/plain', tile.id);
+                event.dataTransfer.setData('text/plain', tile.id); // Crucial for Safari and can affect Chrome's drag icon
                 // event.target.style.opacity = '0.4'; // Example of making original more transparent
             });
 
