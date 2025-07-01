@@ -461,18 +461,37 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             // Draw hand tile without board zoom, passing zoom explicilty as 1.0 or not passing it if default is 1.0
             drawHexTile(tileCtx, cx, cy, tile, 1.0);
+            tileCanvas.dataset.tileId = tile.id; // Store tile ID on the canvas element
 
             tileCanvas.addEventListener('click', () => {
                 // Pass the tile object and the canvas element itself for potential highlighting
-                selectTileFromHand(tile, tileCanvas, player);
+                // Find the tile from hand again, to ensure freshness, though closure 'tile' should be fine here.
+                const clickedTileId = tileCanvas.dataset.tileId;
+                const currentHand = (player === 1) ? player1Hand : player2Hand;
+                const freshTile = currentHand.find(t => t.id === clickedTileId);
+                if (freshTile) {
+                    selectTileFromHand(freshTile, tileCanvas, player);
+                } else {
+                    console.error("Clicked tile not found in hand for click event:", clickedTileId);
+                }
             });
 
             // Make the canvas tile draggable
             tileCanvas.draggable = true;
             tileCanvas.addEventListener('dragstart', (event) => {
+                const draggedTileId = event.target.dataset.tileId;
+                const currentHand = (player === 1) ? player1Hand : player2Hand;
+                const tileToDrag = currentHand.find(t => t.id === draggedTileId);
+
+                if (!tileToDrag) {
+                    console.error("Could not find tile to drag by ID for dragstart:", draggedTileId);
+                    event.preventDefault(); // Prevent drag if tile not found
+                    return;
+                }
+
                 // Call selectTileFromHand to set the selectedTile.
                 // The visual feedback of selection (border) will be applied by selectTileFromHand.
-                selectTileFromHand(tile, tileCanvas, player, true); // Pass true for isDragStart
+                selectTileFromHand(tileToDrag, event.target, player, true); // Pass true for isDragStart, use event.target
 
                 // Create a temporary canvas for the drag image
                 const tempDragCanvas = document.createElement('canvas');
@@ -483,17 +502,17 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 tempDragCanvas.width = hexTrueWidth;
                 tempDragCanvas.height = hexTrueHeight;
 
-                // Style it to be off-screen
-                // tempDragCanvas.style.position = 'absolute';
-                // tempDragCanvas.style.left = '-9999px';
-                // document.body.appendChild(tempDragCanvas); // Append to body to make it a valid image source
+                // Style it to be off-screen and append to body
+                tempDragCanvas.style.position = 'absolute';
+                tempDragCanvas.style.left = '-9999px';
+                document.body.appendChild(tempDragCanvas); // Append to body to make it a valid image source
 
                 const tempCtx = tempDragCanvas.getContext('2d');
 
                 // Draw the hexagon centered on this new canvas
                 // The drawHexTile function expects center coordinates.
                 // For the temporary canvas, the center is its width/2 and height/2.
-                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tile, 1.0, true); // zoom = 1.0, transparentBackground = true
+                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tileToDrag, 1.0, true); // zoom = 1.0, transparentBackground = true
 
                 // Set the custom drag image
                 // The offset should be where the cursor is relative to the top-left of the drag image.
@@ -502,9 +521,13 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 const offsetY = tempDragCanvas.height / 2;
                 event.dataTransfer.setDragImage(tempDragCanvas, offsetX, offsetY);
 
-                // It's good practice to clean up the temporary canvas, though setDragImage might clone it.
-                // However, if not appended to DOM, it might not be necessary or might be garbage collected.
-                // If appended: setTimeout(() => document.body.removeChild(tempDragCanvas), 0);
+                // It's good practice to clean up the temporary canvas.
+                // Using setTimeout to ensure the browser has processed the drag image.
+                setTimeout(() => {
+                    if (document.body.contains(tempDragCanvas)) {
+                        document.body.removeChild(tempDragCanvas);
+                    }
+                }, 0);
                 // For now, let's assume not appending it is fine as per MDN docs (it can be any canvas).
 
                 // Optionally, set data for drag event if needed elsewhere, though selectedTile might be sufficient.
