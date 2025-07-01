@@ -467,10 +467,30 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 selectTileFromHand(tile, tileCanvas, player);
             });
 
+            // Make the canvas tile draggable
+            tileCanvas.draggable = true;
+            tileCanvas.addEventListener('dragstart', (event) => {
+                // Call selectTileFromHand to set the selectedTile.
+                // The visual feedback of selection (border) will be applied by selectTileFromHand.
+                selectTileFromHand(tile, tileCanvas, player);
+                // Optionally, set data for drag event if needed elsewhere, though selectedTile might be sufficient.
+                // event.dataTransfer.setData('text/plain', tile.id);
+                // Hide the original canvas tile while dragging, browser default is often a ghost image.
+                // If we want a custom drag image, this might need more complex handling.
+                // For now, let's rely on the browser's default ghost image.
+                // event.target.style.opacity = '0.4'; // Example of making original more transparent
+            });
+
+            // event.addEventListener('dragend', (event) => { // Optional: reset opacity if changed in dragstart
+            //     event.target.style.opacity = '1';
+            // });
+
             handDisplayElement.appendChild(tileCanvas);
         });
     }
 
+    // The createTileElement function is now obsolete as hand tiles are rendered on canvas elements.
+    // And board tiles are also rendered directly on the main game canvas.
     /*
     function createTileElement(tile, isBoardTile = false) {
         const tileElement = document.createElement('div');
@@ -1748,6 +1768,91 @@ function animateView() {
             handleCellClick(q, r);
         }
     });
+
+    // --- Canvas Drag and Drop Handling ---
+    gameCanvas.addEventListener('dragover', (event) => {
+        event.preventDefault(); // Necessary to allow dropping
+        // Optionally, update highlights based on mouse position during dragover
+        // This is similar to mousemove, but only if a tile is being dragged.
+        if (selectedTile && !isRemovingTiles) {
+            const rect = gameCanvas.getBoundingClientRect();
+            const scaleX = gameCanvas.width / rect.width;
+            const scaleY = gameCanvas.height / rect.height;
+            const pixelX = (event.clientX - rect.left) * scaleX;
+            const pixelY = (event.clientY - rect.top) * scaleY;
+            const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+            if (q !== mouseHoverQ || r !== mouseHoverR) {
+                mouseHoverQ = q;
+                mouseHoverR = r;
+                updatePlacementHighlights(); // Show green/yellow previews
+
+                // Draw full tile preview if hovering over a valid spot
+                const tileToPlace = selectedTile.tile;
+                let isSpotHighlightedGreenOrYellow = false;
+                if (!boardState[`${q},${r}`]) {
+                    const originalOrientation = tileToPlace.orientation;
+                    if (isPlacementValid(tileToPlace, q, r, true)) {
+                        isSpotHighlightedGreenOrYellow = true;
+                    } else {
+                        for (let i = 0; i < 6; i++) {
+                            if (i === originalOrientation) continue;
+                            tileToPlace.orientation = i;
+                            if (isPlacementValid(tileToPlace, q, r, true)) {
+                                isSpotHighlightedGreenOrYellow = true;
+                                break;
+                            }
+                        }
+                    }
+                    tileToPlace.orientation = originalOrientation;
+                }
+                if (isSpotHighlightedGreenOrYellow) {
+                    drawFullTileMouseoverPreview(q, r, tileToPlace);
+                }
+            }
+        }
+    });
+
+    gameCanvas.addEventListener('drop', (event) => {
+        event.preventDefault();
+        if (isRemovingTiles) {
+            console.log("Cannot drop tiles while in removal mode.");
+            return;
+        }
+        if (!selectedTile) {
+            console.log("No tile selected to drop.");
+            return;
+        }
+        if (selectedTile.originalPlayerId !== currentPlayer) {
+            console.log("Cannot drop tile: not current player's turn or tile mismatch.");
+            return;
+        }
+
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const pixelX = (event.clientX - rect.left) * scaleX;
+        const pixelY = (event.clientY - rect.top) * scaleY;
+        const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+        console.log(`Tile dropped at canvas (${pixelX.toFixed(2)}, ${pixelY.toFixed(2)}), grid (q=${q}, r=${r})`);
+
+        // Use handleCellClick logic for placement, as it contains all necessary checks and actions
+        handleCellClick(q, r);
+
+        // Clear hover state after drop
+        mouseHoverQ = null;
+        mouseHoverR = null;
+        // updatePlacementHighlights will be called by handleCellClick if successful,
+        // or if not, we might want to call it to clear previews.
+        // If placement in handleCellClick was unsuccessful, selectedTile is still set.
+        if (selectedTile) {
+            updatePlacementHighlights(); // Refresh highlights if tile wasn't placed
+        } else {
+            redrawBoardOnCanvas(); // If tile was placed, selectedTile is null, just redraw board.
+        }
+    });
+
 
     // --- Canvas MouseMove Handling for Tile Preview ---
     gameCanvas.addEventListener('mousemove', (event) => {
