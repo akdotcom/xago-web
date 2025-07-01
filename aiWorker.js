@@ -224,11 +224,22 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
     let bestMove = null;
 
     if (isGreedy3) {
-        // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 3)");
+        console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 3) - Testing Pruning");
         // Depth 2 for P2 -> P1 -> P2
-        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true);
-        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+
+        // Call with alpha-beta pruning (standard behavior)
+        console.log("[Worker] Greedy 3: Calculating move WITH alpha-beta pruning...");
+        const minimaxResultPruned = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, true);
+        console.log("[Worker] Greedy 3: Result WITH pruning:", JSON.parse(JSON.stringify(minimaxResultPruned))); // Deep copy for logging
+
+        // Call without alpha-beta pruning (for comparison)
+        console.log("[Worker] Greedy 3: Calculating move WITHOUT alpha-beta pruning...");
+        const minimaxResultNoPrune = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, false);
+        console.log("[Worker] Greedy 3: Result WITHOUT pruning:", JSON.parse(JSON.stringify(minimaxResultNoPrune))); // Deep copy for logging
+
+        // Use the result from the pruned version for actual move selection
+        if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
+            const chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
             bestMove = {
                 tileId: chosenMinimaxMove.tile.id,
                 orientation: chosenMinimaxMove.tile.orientation,
@@ -589,8 +600,8 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId) {
 
 // Minimax with Alpha-Beta Pruning
 // maximizingPlayer is true if it's AI's turn to maximize its score, false if it's opponent's turn (AI minimizes opponent's score from AI's perspective)
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer) {
-    // console.log(`[Worker Minimax P${maximizingPlayer ? aiPlayerId : opponentPlayerId} D${depth} Alpha: ${alpha} Beta: ${beta}] Entry. AI Hand: ${aiHandOriginal.length}, Opp Hand: ${opponentHandOriginal.length}`);
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning = true) { // Added useAlphaBetaPruning
+    // console.log(`[Worker Minimax P${maximizingPlayer ? aiPlayerId : opponentPlayerId} D${depth} Alpha: ${alpha} Beta: ${beta} Pruning: ${useAlphaBetaPruning}] Entry. AI Hand: ${aiHandOriginal.length}, Opp Hand: ${opponentHandOriginal.length}`);
 
     if (depth === 0) {
         const evalScore = evaluateBoard(currentBoardState, aiPlayerId); // Evaluate from AI's perspective
@@ -639,7 +650,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Big bonus
             } else {
                  // Pass aiHandOriginal as the first hand (AI's perspective), opponentHandOriginal as second
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false); // Next turn is minimizing
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning); // Pass pruning flag
                 currentTurnEval = evalResult.score;
             }
 
@@ -655,7 +666,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                  bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
             }
             alpha = Math.max(alpha, currentTurnEval);
-            if (beta <= alpha) {
+            if (useAlphaBetaPruning && beta <= alpha) { // Conditional pruning
                 break; // Beta cut-off
             }
         }
@@ -688,7 +699,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             } else {
                 // Order of hands for next call: AI's hand first, then opponent's hand.
                 // So, nextMaximizingHand_sim (AI's hand) then handAfterMove_sim (Opponent's hand)
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true); // Next turn is maximizing
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning); // Pass pruning flag
                 currentTurnEval = evalResult.score;
             }
 
@@ -697,7 +708,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 // No need to store moves for minimizing player, only its best score.
             }
             beta = Math.min(beta, currentTurnEval);
-            if (beta <= alpha) {
+            if (useAlphaBetaPruning && beta <= alpha) { // Conditional pruning
                 break; // Alpha cut-off
             }
         }
