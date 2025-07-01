@@ -472,7 +472,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             tileCanvas.addEventListener('dragstart', (event) => {
                 // Call selectTileFromHand to set the selectedTile.
                 // The visual feedback of selection (border) will be applied by selectTileFromHand.
-                selectTileFromHand(tile, tileCanvas, player);
+                selectTileFromHand(tile, tileCanvas, player, true); // Pass true for isDragStart
                 // Optionally, set data for drag event if needed elsewhere, though selectedTile might be sufficient.
                 // event.dataTransfer.setData('text/plain', tile.id);
                 // Hide the original canvas tile while dragging, browser default is often a ghost image.
@@ -820,16 +820,16 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         tileToPlace.orientation = currentSelectedOrientation; // Ensure original orientation is set
     }
 
-    function selectTileFromHand(tile, tileCanvasElement, playerId) {
+    function selectTileFromHand(tile, tileCanvasElement, playerId, isDragStart = false) {
         if (playerId !== currentPlayer) {
             // gameMessageDisplay.textContent = "It's not your turn!"; // Removed
             console.log("It's not your turn!");
             return;
         }
 
-        // Check if the clicked tile is already selected
-        if (selectedTile && selectedTile.tile.id === tile.id) {
-            // Tile is already selected, so rotate it
+        // Check if the clicked tile is already selected AND not a drag start
+        if (selectedTile && selectedTile.tile.id === tile.id && !isDragStart) {
+            // Tile is already selected, and this is not a drag initiation, so rotate it
             selectedTile.tile.rotate();
             console.log(`Tile ${selectedTile.tile.id} rotated by clicking. New orientation: ${selectedTile.tile.orientation}`);
 
@@ -846,26 +846,32 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             console.log(`Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`);
             updatePlacementHighlights(); // Update highlights after rotation
         } else {
-            // This is a new selection or a switch from another tile
+            // This is a new selection, a switch from another tile, or a drag start for an already selected tile.
+            // In all these cases, we select the tile without rotating.
 
-            // Remove highlight from previously selected tile canvas
-            if (currentlySelectedTileCanvas) {
+            // Remove highlight from previously selected tile canvas if it's a different tile
+            // or if it's the same tile but we are ensuring it's the one being interacted with.
+            if (currentlySelectedTileCanvas && currentlySelectedTileCanvas !== tileCanvasElement) {
                 currentlySelectedTileCanvas.style.border = 'none'; // Or revert to its original border
                 currentlySelectedTileCanvas.style.boxShadow = 'none';
             }
 
-            // Highlight the new selected tile canvas
+            // Highlight the new selected tile canvas (or re-highlight if it's a drag start of already selected)
             tileCanvasElement.style.border = '3px solid gold';
             tileCanvasElement.style.boxShadow = '0 0 10px gold';
             currentlySelectedTileCanvas = tileCanvasElement;
 
             // Update selectedTile global variable
+            // If it's a drag start and the tile is already selected, this just re-affirms the selection.
             selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
 
-            // gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`; // Removed
-            console.log(`Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`);
-            console.log("Selected tile:", selectedTile);
-            updatePlacementHighlights(); // Update highlights on new selection
+            // If this was a new selection (not drag start of already selected)
+            if (!(selectedTile && selectedTile.tile.id === tile.id && isDragStart)) {
+                 // gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`; // Removed
+                console.log(`Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`);
+            }
+            console.log("Selected tile for interaction (click or drag):", selectedTile);
+            updatePlacementHighlights(); // Update highlights
         }
     }
 
