@@ -1,5 +1,4 @@
 // aiWorker.js
-console.log('[Worker] AI Worker script loading NOW...');
 
 // --- Tile Representation ---
 // Edge types: 0 for blank, 1 for triangle
@@ -225,22 +224,22 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
     let bestMove = null;
 
     if (isGreedy3) {
-        console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 3) - Testing Pruning");
+        console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 3) - Testing STRICT Pruning");
         // Depth 2 for P2 -> P1 -> P2
 
-        // Call with alpha-beta pruning (standard behavior)
-        console.log("[Worker] Greedy 3: Calculating move WITH alpha-beta pruning...");
-        const minimaxResultPruned = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, true);
-        console.log("[Worker] Greedy 3: Result WITH pruning:", JSON.parse(JSON.stringify(minimaxResultPruned))); // Deep copy for logging
+        // Call with STICT alpha-beta pruning
+        console.log("[Worker] Greedy 3: Calculating move WITH STRICT alpha-beta pruning...");
+        const minimaxResultStrictPruned = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, true); // true for useAlphaBetaPruning
+        console.log("[Worker] Greedy 3: Result WITH STRICT pruning:", JSON.parse(JSON.stringify(minimaxResultStrictPruned)));
 
         // Call without alpha-beta pruning (for comparison)
-        console.log("[Worker] Greedy 3: Calculating move WITHOUT alpha-beta pruning...");
-        const minimaxResultNoPrune = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, false);
-        console.log("[Worker] Greedy 3: Result WITHOUT pruning:", JSON.parse(JSON.stringify(minimaxResultNoPrune))); // Deep copy for logging
+        console.log("[Worker] Greedy 3: Calculating move WITHOUT alpha-beta pruning (pure minimax)...");
+        const minimaxResultNoPrune = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true, false); // false for useAlphaBetaPruning
+        console.log("[Worker] Greedy 3: Result WITHOUT pruning (pure minimax):", JSON.parse(JSON.stringify(minimaxResultNoPrune)));
 
-        // Use the result from the pruned version for actual move selection
-        if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
+        // Use the result from the strict pruned version for actual move selection
+        if (minimaxResultStrictPruned && minimaxResultStrictPruned.moves && minimaxResultStrictPruned.moves.length > 0) {
+            const chosenMinimaxMove = minimaxResultStrictPruned.moves[Math.floor(Math.random() * minimaxResultStrictPruned.moves.length)];
             bestMove = {
                 tileId: chosenMinimaxMove.tile.id,
                 orientation: chosenMinimaxMove.tile.orientation,
@@ -667,7 +666,8 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                  bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
             }
             alpha = Math.max(alpha, currentTurnEval);
-            if (useAlphaBetaPruning && beta <= alpha) { // Conditional pruning
+            // Maximizing player: Prune if alpha > beta (explore if alpha == beta)
+            if (useAlphaBetaPruning && alpha > beta) {
                 break; // Beta cut-off
             }
         }
@@ -709,7 +709,8 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 // No need to store moves for minimizing player, only its best score.
             }
             beta = Math.min(beta, currentTurnEval);
-            if (useAlphaBetaPruning && beta <= alpha) { // Conditional pruning
+            // Minimizing player: Prune if beta < alpha (explore if beta == alpha)
+            if (useAlphaBetaPruning && beta < alpha) {
                 break; // Alpha cut-off
             }
         }
@@ -720,7 +721,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
 // --- Worker Message Handler ---
 self.onmessage = async function(e) { // Made async
-    console.log('[Worker] Message received from main script:', JSON.parse(JSON.stringify(e.data))); // Added deep copy log
+    // console.log('[Worker] Message received from main script:', e.data);
     const { task, boardState, player2Hand, player1Hand, opponentType, currentPlayerId, currentSurroundedTiles } = e.data;
 
     // Reconstruct HexTile instances for boardState from simple data objects

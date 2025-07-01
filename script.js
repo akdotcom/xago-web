@@ -661,7 +661,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     if (window.Worker) {
         aiWorker = new Worker('aiWorker.js');
         aiWorker.onmessage = function(e) {
-            console.log('[Main] Message received from worker:', e.data);
+            // console.log('[Main] Message received from worker:', e.data);
             const { task, move, tileToRemove } = e.data;
 
             if (task === 'aiMoveResult') {
