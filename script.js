@@ -1249,13 +1249,13 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         // console.log("[Main] Received AI move result from worker:", move);
         if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse');
 
-        if (move && move.tile) {
-            const tileToPlace = player2Hand.find(t => t.id === move.tile.id);
+        if (move && typeof move.tileId !== 'undefined' && typeof move.orientation !== 'undefined') {
+            const tileToPlace = player2Hand.find(t => t.id === move.tileId);
             if (!tileToPlace) {
-                console.error(`[Main] AI Error: Best move tile (ID: ${move.tile.id}) not found in player 2 hand.`);
+                console.error(`[Main] AI Error: Best move tile (ID: ${move.tileId}) not found in player 2 hand.`);
                 switchTurn(); return;
             }
-            tileToPlace.orientation = move.orientation;
+            tileToPlace.orientation = move.orientation; // Use the standardized top-level orientation
 
             console.log(`[Main] AI (${opponentType}) attempting to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y})`);
             if (placeTileOnBoard(tileToPlace, move.x, move.y)) {
@@ -1271,11 +1271,12 @@ function isSpaceEnclosed(q, r, currentBoardState) {
                 updateViewParameters();
                 animateView();
             } else {
+                // The error message now correctly reflects the orientation being used.
                 console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). This should ideally be caught by worker's validation.`);
                 switchTurn();
             }
         } else {
-            console.log(`[Main] AI (${opponentType}) could not find any valid move or passed. Passing turn.`);
+            console.log(`[Main] AI (${opponentType}) could not find any valid move, passed, or move object was malformed. Passing turn. Move received:`, move);
             calculateScores();
             switchTurn();
         }
