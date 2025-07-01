@@ -290,7 +290,8 @@ function workerPerformAiMove(boardState, player2HandOriginal, player1HandOrigina
                         const scanRadius = 3;
                         for (let q = -scanRadius; q <= scanRadius; q++) {
                             for (let r = -scanRadius; r <= scanRadius; r++) {
-                                 if (Math.abs(q + r) > scanRadius) continue;
+                                 // Corrected condition for axial hex radius
+                                 if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 > scanRadius) continue;
                                  const spotKey = `${q},${r}`;
                                  if(!boardState[spotKey] && !checkedSpots.has(spotKey)){
                                      placementSpots.push({ x: q, y: r });
@@ -446,7 +447,8 @@ function getAllPossibleMoves(currentBoardState, hand, playerId) {
                         const scanRadius = 3;
                         for (let q = -scanRadius; q <= scanRadius; q++) {
                             for (let r = -scanRadius; r <= scanRadius; r++) {
-                                if (Math.abs(q + r) > scanRadius) continue;
+                                // Corrected condition for axial hex radius
+                                if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 > scanRadius) continue;
                                 const spotKey = `${q},${r}`;
                                 if (!currentBoardState[spotKey]) {
                                     placementSpots.add(spotKey);
