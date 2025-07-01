@@ -1712,11 +1712,17 @@ function animateView() {
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
         const rect = gameCanvas.getBoundingClientRect();
-        const pixelX = event.clientX - rect.left;
-        const pixelY = event.clientY - rect.top;
+        // Calculate scaling factors
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+
+        // Adjust click coordinates for scaling
+        const pixelX = (event.clientX - rect.left) * scaleX;
+        const pixelY = (event.clientY - rect.top) * scaleY;
+
         const { q, r } = pixelToHexGrid(pixelX, pixelY);
 
-        console.log(`Canvas clicked at pixel (${pixelX}, ${pixelY}), converted to hex grid (q=${q}, r=${r})`);
+        console.log(`Canvas raw click at (${event.clientX - rect.left}, ${event.clientY - rect.top}), scaled to (${pixelX.toFixed(2)}, ${pixelY.toFixed(2)}), converted to hex grid (q=${q}, r=${r})`);
 
         if (isRemovingTiles) {
             // --- Handle Tile Removal Click ---
@@ -1758,8 +1764,13 @@ function animateView() {
         }
 
         const rect = gameCanvas.getBoundingClientRect();
-        const pixelX = event.clientX - rect.left;
-        const pixelY = event.clientY - rect.top;
+        // Calculate scaling factors
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+
+        // Adjust mouse coordinates for scaling
+        const pixelX = (event.clientX - rect.left) * scaleX;
+        const pixelY = (event.clientY - rect.top) * scaleY;
         const { q, r } = pixelToHexGrid(pixelX, pixelY);
 
         // Update hover coordinates only if they change, to avoid excessive redraws if mouse is still but event fires
