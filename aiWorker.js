@@ -1,4 +1,5 @@
 // aiWorker.js
+console.log('[Worker] AI Worker script loading NOW...');
 
 // --- Tile Representation ---
 // Edge types: 0 for blank, 1 for triangle
@@ -719,7 +720,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
 // --- Worker Message Handler ---
 self.onmessage = async function(e) { // Made async
-    // console.log('[Worker] Message received from main script:', e.data);
+    console.log('[Worker] Message received from main script:', JSON.parse(JSON.stringify(e.data))); // Added deep copy log
     const { task, boardState, player2Hand, player1Hand, opponentType, currentPlayerId, currentSurroundedTiles } = e.data;
 
     // Reconstruct HexTile instances for boardState from simple data objects
