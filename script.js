@@ -1257,7 +1257,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             }
             tileToPlace.orientation = move.orientation;
 
-            console.log(`[Main] AI (${opponentType}) attempting to place tile ${tileToPlace.id} at (${move.x}, ${move.y})`);
+            console.log(`[Main] AI (${opponentType}) attempting to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y})`);
             if (placeTileOnBoard(tileToPlace, move.x, move.y)) {
                 player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
@@ -1271,7 +1271,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
                 updateViewParameters();
                 animateView();
             } else {
-                console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id}. This should ideally be caught by worker's validation.`);
+                console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). This should ideally be caught by worker's validation.`);
                 switchTurn();
             }
         } else {
