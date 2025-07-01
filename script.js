@@ -119,7 +119,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
             // currentSurroundedTilesForRemoval is already updated globally before this block
 
-            if (currentPlayer === 2 && (opponentType === 'random' || opponentType === 'greedy' || opponentType === 'greedy2')) {
+            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
                 // AI's turn and more tiles to remove, let AI continue removing
                 // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is removing more tiles...`; // Removed
                 console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
@@ -1139,7 +1139,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             isRemovingTiles = true;
             console.log("Tile removal phase. Surrounded tiles:", currentSurroundedTilesForRemoval.map(t => t.id));
 
-            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2'].includes(opponentType)) {
+            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
                 // AI's turn and tiles are surrounded by its move, start AI removal process
                 console.log(`Player 2 (AI - ${opponentType}) is starting tile removal...`);
                 redrawBoardOnCanvas(); // Show highlights
@@ -1198,11 +1198,12 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         renderPlayerHands();
 
         // Check if AI needs to make a move or remove a tile
-        if (currentPlayer === 2 && !isRemovingTiles && ['random', 'greedy', 'greedy2'].includes(opponentType)) {
+        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy3'];
+        if (currentPlayer === 2 && !isRemovingTiles && aiOpponentTypes.includes(opponentType)) {
             console.log("Player 2 (AI) is thinking... (via switchTurn)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
             initiateAiMove();
-        } else if (currentPlayer === 2 && isRemovingTiles && ['random', 'greedy', 'greedy2'].includes(opponentType)) {
+        } else if (currentPlayer === 2 && isRemovingTiles && aiOpponentTypes.includes(opponentType)) {
             console.log("Player 2 (AI) is choosing a tile to remove... (via switchTurn)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
             initiateAiTileRemoval();
@@ -1666,6 +1667,7 @@ function animateView() {
                         <option value="random">Random (CPU)</option>
                         <option value="greedy">Greedy 1 (CPU)</option>
                         <option value="greedy2">Greedy 2 (CPU)</option>
+                        <option value="greedy3">Greedy 3 (CPU)</option>
                     </select>
                 </div>
             </div>
@@ -1716,13 +1718,14 @@ function animateView() {
 
         // If it's Player 2's turn and a CPU opponent is selected, and not in removal phase,
         // let the AI make a move.
-        if (currentPlayer === 2 && ['random', 'greedy', 'greedy2'].includes(opponentType) && !isRemovingTiles) {
+        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy3'];
+        if (currentPlayer === 2 && aiOpponentTypes.includes(opponentType) && !isRemovingTiles) {
             console.log("Player 2 (AI) is thinking... (opponent type changed)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
             initiateAiMove();
         }
         // If it's Player 2's turn, in removal phase, and a CPU opponent is selected
-        else if (currentPlayer === 2 && ['random', 'greedy', 'greedy2'].includes(opponentType) && isRemovingTiles) {
+        else if (currentPlayer === 2 && aiOpponentTypes.includes(opponentType) && isRemovingTiles) {
             console.log("Player 2 (AI) is choosing a tile to remove... (opponent type changed)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
             initiateAiTileRemoval();
