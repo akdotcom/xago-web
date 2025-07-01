@@ -217,57 +217,27 @@ function hydrateHand(handData) {
 
 // --- AI Player Logic (to be moved from script.js) ---
 
-function workerPerformAiMove(boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId) {
-    // console.log(`[Worker] performAiMove called. OpponentType: ${opponentType}, P2Hand: ${player2HandOriginal.length}`);
+async function calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, isGreedy2) {
+    // Common logic for greedy and greedy2
+    await new Promise(resolve => setTimeout(resolve, 1500)); // 1500ms delay
+
     let bestMove = null;
-    const player2Hand = hydrateHand(player2HandOriginal);
-    const player1Hand = hydrateHand(player1HandOriginal);
 
-    if (opponentType === 'random') {
-        // console.log("[Worker] AI: Playing Randomly");
-        const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
-        const originalOrientation = tileToPlay.orientation;
-
-        const rotations = Math.floor(Math.random() * 6);
-        for (let i = 0; i < rotations; i++) {
-            tileToPlay.rotate();
-        }
-
-        const possiblePlacements = [];
-        if (Object.keys(boardState).length === 0) {
-            if (isPlacementValid(tileToPlay, 0, 0, boardState, true)) {
-                 possiblePlacements.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
-            }
-        } else {
-            for (const key in boardState) {
-                const existingTile = boardState[key];
-                const neighbors = getNeighbors(existingTile.x, existingTile.y);
-                for (const neighborInfo of neighbors) {
-                    const potentialPos = { x: neighborInfo.nx, y: neighborInfo.ny };
-                    if (!boardState[`${potentialPos.x},${potentialPos.y}`]) {
-                        if (isPlacementValid(tileToPlay, potentialPos.x, potentialPos.y, boardState, true)) {
-                            possiblePlacements.push({ x: potentialPos.x, y: potentialPos.y, tile: tileToPlay, orientation: tileToPlay.orientation });
-                        }
-                    }
-                }
-            }
-        }
-        const uniquePlacements = possiblePlacements.filter((pos, index, self) =>
-            index === self.findIndex((p) => p.x === pos.x && p.y === pos.y)
-        );
-        if (uniquePlacements.length > 0) {
-            const chosenPlacement = uniquePlacements[Math.floor(Math.random() * uniquePlacements.length)];
+    if (isGreedy2) {
+        // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 2)");
+        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, (currentPlayerId % 2) + 1, 1); // depth 1
+        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
+            const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
             bestMove = {
-                tileId: chosenPlacement.tile.id,
-                orientation: chosenPlacement.orientation, // This was tileToPlay.orientation from the placement
-                x: chosenPlacement.x,
-                y: chosenPlacement.y
+                tileId: chosenMinimaxMove.tile.id,
+                orientation: chosenMinimaxMove.tile.orientation,
+                x: chosenMinimaxMove.x,
+                y: chosenMinimaxMove.y,
+                score: chosenMinimaxMove.score
             };
         }
-        tileToPlay.orientation = originalOrientation; // Restore
-
-    } else if (opponentType === 'greedy') {
-        // console.log("[Worker] AI: Playing Greedily");
+    } else {
+        // console.log("[Worker] AI: Playing Greedily (Greedy 1)");
         let bestScoreDiff = -Infinity;
         let bestMoves = [];
 
@@ -291,17 +261,16 @@ function workerPerformAiMove(boardState, player2HandOriginal, player1HandOrigina
                             }
                         }
                     }
-                     if (placementSpots.length === 0 && Object.keys(boardState).length < 5) {
+                    if (placementSpots.length === 0 && Object.keys(boardState).length < 5) {
                         const scanRadius = 3;
                         for (let q = -scanRadius; q <= scanRadius; q++) {
                             for (let r = -scanRadius; r <= scanRadius; r++) {
-                                 // Corrected condition for axial hex radius
-                                 if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 > scanRadius) continue;
-                                 const spotKey = `${q},${r}`;
-                                 if(!boardState[spotKey] && !checkedSpots.has(spotKey)){
-                                     placementSpots.push({ x: q, y: r });
-                                     checkedSpots.add(spotKey);
-                                 }
+                                if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 > scanRadius) continue;
+                                const spotKey = `${q},${r}`;
+                                if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
+                                    placementSpots.push({ x: q, y: r });
+                                    checkedSpots.add(spotKey);
+                                }
                             }
                         }
                     }
@@ -349,28 +318,69 @@ function workerPerformAiMove(boardState, player2HandOriginal, player1HandOrigina
             tile.orientation = originalOrientation;
         }
         if (bestMoves.length > 0) {
-            // bestMove is already in the desired format {tileId, orientation, x, y, score}
             bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
+    }
+    return bestMove;
+}
 
 
-    } else if (opponentType === 'greedy2') {
-        // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 2)");
-        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, (currentPlayerId % 2) + 1, 1); // depth 1
-        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
-            // Transform the structure from findBestMoveMinimax
+async function workerPerformAiMove(boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId) {
+    // console.log(`[Worker] performAiMove called. OpponentType: ${opponentType}, P2Hand: ${player2HandOriginal.length}`);
+    let bestMove = null;
+    const player2Hand = hydrateHand(player2HandOriginal); // hydrated for all types
+    const player1Hand = hydrateHand(player1HandOriginal); // hydrated for all types
+
+    if (opponentType === 'random') {
+        // console.log("[Worker] AI: Playing Randomly");
+        const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
+        const originalOrientation = tileToPlay.orientation;
+
+        const rotations = Math.floor(Math.random() * 6);
+        for (let i = 0; i < rotations; i++) {
+            tileToPlay.rotate();
+        }
+
+        const possiblePlacements = [];
+        if (Object.keys(boardState).length === 0) {
+            if (isPlacementValid(tileToPlay, 0, 0, boardState, true)) {
+                 possiblePlacements.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
+            }
+        } else {
+            for (const key in boardState) {
+                const existingTile = boardState[key];
+                const neighbors = getNeighbors(existingTile.x, existingTile.y);
+                for (const neighborInfo of neighbors) {
+                    const potentialPos = { x: neighborInfo.nx, y: neighborInfo.ny };
+                    if (!boardState[`${potentialPos.x},${potentialPos.y}`]) {
+                        if (isPlacementValid(tileToPlay, potentialPos.x, potentialPos.y, boardState, true)) {
+                            possiblePlacements.push({ x: potentialPos.x, y: potentialPos.y, tile: tileToPlay, orientation: tileToPlay.orientation });
+                        }
+                    }
+                }
+            }
+        }
+        const uniquePlacements = possiblePlacements.filter((pos, index, self) =>
+            index === self.findIndex((p) => p.x === pos.x && p.y === pos.y)
+        );
+        if (uniquePlacements.length > 0) {
+            const chosenPlacement = uniquePlacements[Math.floor(Math.random() * uniquePlacements.length)];
             bestMove = {
-                tileId: chosenMinimaxMove.tile.id,
-                orientation: chosenMinimaxMove.tile.orientation,
-                x: chosenMinimaxMove.x,
-                y: chosenMinimaxMove.y,
-                score: chosenMinimaxMove.score // Keep score if needed for debugging or future use
+                tileId: chosenPlacement.tile.id,
+                orientation: chosenPlacement.orientation, // This was tileToPlay.orientation from the placement
+                x: chosenPlacement.x,
+                y: chosenPlacement.y
             };
         }
+        tileToPlay.orientation = originalOrientation; // Restore
+
+    } else if (opponentType === 'greedy') {
+        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, false);
+    } else if (opponentType === 'greedy2') {
+        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, true);
     }
 
-    // console.log("[Worker] performAiMove result:", bestMove);
+    // console.log("[Worker] performAiMove result:", bestMove); // This log might appear before the move is fully processed if not awaited properly in handler
     return bestMove;
 }
 
@@ -672,7 +682,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
 
 // --- Worker Message Handler ---
-self.onmessage = function(e) {
+self.onmessage = async function(e) { // Made async
     // console.log('[Worker] Message received from main script:', e.data);
     const { task, boardState, player2Hand, player1Hand, opponentType, currentPlayerId, currentSurroundedTiles } = e.data;
 
@@ -691,10 +701,12 @@ self.onmessage = function(e) {
     // currentSurroundedTiles are also simple data objects.
 
     if (task === 'aiMove') {
-        const bestMove = workerPerformAiMove(liveBoardState, player2Hand, player1Hand, opponentType, currentPlayerId);
+        const bestMove = await workerPerformAiMove(liveBoardState, player2Hand, player1Hand, opponentType, currentPlayerId); // Added await
         self.postMessage({ task: 'aiMoveResult', move: bestMove });
     } else if (task === 'aiTileRemoval') {
         // currentSurroundedTiles are already plain objects, suitable for workerPerformAiTileRemoval
+        // No async operation in workerPerformAiTileRemoval currently, so no await needed here.
+        // If it were made async in the future for delays, this would need 'await'.
         const tileToRemove = workerPerformAiTileRemoval(liveBoardState, currentSurroundedTiles, opponentType, currentPlayerId);
         self.postMessage({ task: 'aiTileRemovalResult', tileToRemove: tileToRemove });
     }
