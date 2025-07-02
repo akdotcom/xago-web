@@ -1873,7 +1873,7 @@ function animateView() {
             <div class="player2-hand-header">
                 <h2>Player 2 Hand</h2>
                 <div id="opponent-selector-container">
-                    <label for="opponent-type">Opponent (Player 2):</label>
+                    <label for="opponent-type">Mode:</label>
                     <select id="opponent-type">
                         <option value="human">Human</option>
                         <option value="random">Random (CPU)</option>
