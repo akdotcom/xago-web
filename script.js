@@ -539,7 +539,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // Save current context state if further fine-tuning of shadow reset is needed
         // ctx.save();
 
-        ctx.shadowColor = 'gold';
+        ctx.shadowColor = 'gray';
         ctx.shadowBlur = 6 * zoom; // Adjusted blur for a "thicker" feel, scales with zoom
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
@@ -548,7 +548,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // Its line width contributes to the perceived thickness of the highlight.
         // A thinner line with a larger blur gives a softer glow.
         // A thicker line with less blur gives a more solid highlight.
-        ctx.strokeStyle = 'gold'; // Color of the line that will cast the shadow
+        ctx.strokeStyle = 'black'; // Color of the line that will cast the shadow
         ctx.lineWidth = 1 * zoom;   // A thin line, relying on shadow for thickness
 
         // Redraw the hexagon path for the highlight shadow
