@@ -85,82 +85,137 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         }
     }
 
-    function removeTileFromBoardAndReturnToHand(tileToRemove) {
-        console.log(`Removing tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
+    function animateTileReturn(tile, startX, startY, targetHandElement, callback) {
+        const tempTileCanvas = document.createElement('canvas');
+        const sideLength = BASE_HEX_SIDE_LENGTH; // Use base size for animation
+        tempTileCanvas.width = 2 * sideLength + 10;
+        tempTileCanvas.height = Math.sqrt(3) * sideLength + 10;
+        tempTileCanvas.style.position = 'absolute';
+        tempTileCanvas.style.left = `${startX - tempTileCanvas.width / 2}px`;
+        tempTileCanvas.style.top = `${startY - tempTileCanvas.height / 2}px`;
+        tempTileCanvas.style.zIndex = '1001'; // Ensure it's above other elements
+        document.body.appendChild(tempTileCanvas);
 
-        // 1. Remove from boardState
-        const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
-        delete boardState[tileKey];
+        const tileCtx = tempTileCanvas.getContext('2d');
+        drawHexTile(tileCtx, tempTileCanvas.width / 2, tempTileCanvas.height / 2, tile, 1.0); // Draw at zoom 1.0
 
-        // 2. Return to Owner's Hand
-        if (tileToRemove.playerId === 1) {
-            player1Hand.push(tileToRemove);
-        } else {
-            player2Hand.push(tileToRemove);
-        }
+        const targetRect = targetHandElement.getBoundingClientRect();
+        // Target the center of the hand display area
+        const endX = targetRect.left + targetRect.width / 2 - tempTileCanvas.width / 2 + window.scrollX;
+        const endY = targetRect.top + targetRect.height / 2 - tempTileCanvas.height / 2 + window.scrollY;
 
-        // 3. Reset Tile Properties
-        tileToRemove.x = null;
-        tileToRemove.y = null;
-        tileToRemove.orientation = 0; // Reset orientation
+        const duration = 500; // Animation duration in ms
+        let startTime = null;
 
-        // 4. Update Owner's Hand Display
-        if (tileToRemove.playerId === 1) {
-            displayPlayerHand(1, player1Hand, player1HandDisplay);
-        } else {
-            displayPlayerHand(2, player2Hand, player2HandDisplay);
-        }
+        function animationStep(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / duration, 1);
 
-        // 5. Redraw Board
-        redrawBoardOnCanvas(); // This will also clear old highlights if isRemovingTiles becomes false
+            const currentX = parseFloat(tempTileCanvas.style.left) + (endX - parseFloat(tempTileCanvas.style.left)) * progress;
+            const currentY = parseFloat(tempTileCanvas.style.top) + (endY - parseFloat(tempTileCanvas.style.top)) * progress;
+            // const currentScale = 1 - 0.5 * progress; // Example: shrink to half size
 
-        // 6. Check for More Surrounded Tiles
-        const newSurroundedList = getSurroundedTiles(boardState);
-        currentSurroundedTilesForRemoval = newSurroundedList; // Update the global list
+            tempTileCanvas.style.left = `${currentX}px`;
+            tempTileCanvas.style.top = `${currentY}px`;
+            // tempTileCanvas.style.transform = `scale(${currentScale})`;
 
-        updateViewParameters(); // Update view after a tile is removed
 
-        if (newSurroundedList.length > 0) {
-            console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-            // currentSurroundedTilesForRemoval is already updated globally before this block
-
-            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
-                // AI's turn and more tiles to remove, let AI continue removing
-                // gameMessageDisplay.textContent = `Player 2 (AI - ${opponentType}) is removing more tiles...`; // Removed
-                console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
-                console.log("AI continues tile removal process. New list:", newSurroundedList.map(t => t.id));
-                // Pulse should continue if AI is still thinking about next removal
-                console.log("[removeTileFromBoardAndReturnToHand] AI continues tile removal process via worker.");
-                // Pulse is already active or will be re-activated by initiateAiTileRemoval if needed by worker response
-                player2HandContainer.classList.add('ai-thinking-pulse'); // Ensure it's on
-                redrawBoardOnCanvas(); // Update highlights for the AI's next choice
-                initiateAiTileRemoval(); // Re-trigger AI removal for the next tile
+            if (progress < 1) {
+                requestAnimationFrame(animationStep);
             } else {
-                // Human player's turn, or AI is human - prompt for click
-                console.log("[removeTileFromBoardAndReturnToHand] REMOVING ai-thinking-pulse (human's turn for removal)");
-                player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulse if human's turn for removal
-                console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
-                redrawBoardOnCanvas(); // Redraw to update highlights for human player
+                document.body.removeChild(tempTileCanvas);
+                if (callback) callback();
             }
-        } else {
-            // No more tiles are surrounded, end the removal phase
-            console.log("No more surrounded tiles. Ending removal phase.");
-            console.log("[removeTileFromBoardAndReturnToHand] REMOVING ai-thinking-pulse (no more tiles to remove)");
-            player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
-            isRemovingTiles = false;
-            isPulsingGlobal = false; // Stop global pulsing
-            currentSurroundedTilesForRemoval = [];
-            // gameMessageDisplay.textContent = "Tile removal complete. Finishing turn."; // Removed
-            console.log("Tile removal complete. Finishing turn.");
-
-            redrawBoardOnCanvas(); // Clear highlights from removed tiles before proceeding
-
-            calculateScores();
-            // The game end condition is now checked only at the beginning of a turn in switchTurn()
-            switchTurn();
         }
-        // animateView(); // Call animation loop after parameters are updated - animateView is now self-managed or triggered by state changes like isPulsingGlobal
-        if (isPulsingGlobal || needsViewAnimation()) animateView(); // Continue animation if pulsing or view is changing
+        requestAnimationFrame(animationStep);
+    }
+
+
+    function removeTileFromBoardAndReturnToHand(tileToRemove) {
+        console.log(`Animating removal of tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
+
+        // Calculate start position (center of the tile on canvas)
+        const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+        const startScreenX = currentOffsetX + scaledHexSideLength * (3/2 * tileToRemove.x) + gameCanvas.getBoundingClientRect().left;
+        const startScreenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tileToRemove.x + Math.sqrt(3) * tileToRemove.y) + gameCanvas.getBoundingClientRect().top;
+
+        // Determine target hand element
+        const targetHandElement = tileToRemove.playerId === 1 ? player1HandDisplay : player2HandDisplay;
+
+        // Temporarily hide the tile on the board by redrawing the board without it.
+        // This will be done more cleanly by removing it from boardState *before* animation,
+        // but redrawing the board without it for now.
+        const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
+        const originalTileData = boardState[tileKey]; // Save it
+        delete boardState[tileKey]; // Temporarily remove for redraw
+        redrawBoardOnCanvas(); // Redraw board without the tile that will be animated
+
+        animateTileReturn(tileToRemove, startScreenX, startScreenY, targetHandElement, () => {
+            // This is the callback function, executed after animation completes.
+            console.log(`Animation complete for tile ${tileToRemove.id}. Finalizing removal.`);
+
+            // Restore tile to boardState if it was only temporarily removed for redrawing.
+            // Actually, the plan is to remove it from boardState *after* animation.
+            // The delete operation above was temporary. So, if it's still in originalTileData,
+            // it means it was present. Now we permanently remove it.
+            // boardState[tileKey] = originalTileData; // Put it back before "official" removal if needed
+            // delete boardState[tileKey]; // This is the "official" removal from boardState logic.
+            // The line `delete boardState[tileKey]` was already done before animation.
+            // So, at this point, the tile is already logically removed from the board.
+
+            // 2. Return to Owner's Hand
+            if (tileToRemove.playerId === 1) {
+                player1Hand.push(tileToRemove);
+            } else {
+                player2Hand.push(tileToRemove);
+            }
+
+            // 3. Reset Tile Properties
+            tileToRemove.x = null;
+            tileToRemove.y = null;
+            tileToRemove.orientation = 0; // Reset orientation
+
+            // 4. Update Owner's Hand Display
+            if (tileToRemove.playerId === 1) {
+                displayPlayerHand(1, player1Hand, player1HandDisplay);
+            } else {
+                displayPlayerHand(2, player2Hand, player2HandDisplay);
+            }
+
+            // 5. Redraw Board (already done without the tile, but a final ensure)
+            redrawBoardOnCanvas();
+
+            // 6. Check for More Surrounded Tiles
+            const newSurroundedList = getSurroundedTiles(boardState); // boardState is now correctly updated
+            currentSurroundedTilesForRemoval = newSurroundedList;
+
+            updateViewParameters(); // Update view after a tile is removed
+
+            if (newSurroundedList.length > 0) {
+                console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
+                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
+                    console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
+                    player2HandContainer.classList.add('ai-thinking-pulse');
+                    redrawBoardOnCanvas(); // Update highlights for AI
+                    initiateAiTileRemoval();
+                } else {
+                    player2HandContainer.classList.remove('ai-thinking-pulse');
+                    console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
+                    redrawBoardOnCanvas(); // Update highlights for human
+                }
+            } else {
+                console.log("No more surrounded tiles. Ending removal phase.");
+                player2HandContainer.classList.remove('ai-thinking-pulse');
+                isRemovingTiles = false;
+                isPulsingGlobal = false;
+                currentSurroundedTilesForRemoval = [];
+                console.log("Tile removal complete. Finishing turn.");
+                redrawBoardOnCanvas(); // Clear highlights
+                calculateScores();
+                switchTurn();
+            }
+            if (isPulsingGlobal || needsViewAnimation()) animateView();
+        });
     }
 
     // Helper function to check if view animation (pan/zoom) is needed
