@@ -647,7 +647,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 // Draw the hexagon centered on this new canvas
                 // The drawHexTile function expects center coordinates.
                 // For the temporary canvas, the center is its width/2 and height/2.
-                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tileToDrag, 1.0, true); // zoom = 1.0, transparentBackground = true
+                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tileToDrag, 1.0, false); // zoom = 1.0, transparentBackground = false
 
                 // Set the custom drag image
                 // The offset should be where the cursor is relative to the top-left of the drag image.
