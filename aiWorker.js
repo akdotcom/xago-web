@@ -224,23 +224,61 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
     let bestMove = null;
 
     if (isGreedy3) {
-        // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 3)");
-        // Depth 2 for P2 -> P1 -> P2
-        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 2, -Infinity, Infinity, true);
-        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+        console.log(`[Worker] AI: Greedy 3 calculating move for Player ${currentPlayerId}.`);
+        const depth = 2;
+
+        // Stats for the pruned run (this determines the move)
+        const statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
+        const minimaxResultPruned = findBestMoveMinimax(
+            boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
+            depth, -Infinity, Infinity, true, true, statsPruned // useAlphaBetaPruning = true
+        );
+
+        let percentageSkipped = 0;
+        let totalLeavesWithoutPruning = 0;
+
+        if (statsPruned.nodesAtHorizon > 0) { // Only calculate efficiency if there was something to evaluate
+            // Stats for getting total nodes without pruning (for comparison metric)
+            const statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 }; // cutoffs will remain 0
+            findBestMoveMinimax(
+                boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
+                depth, -Infinity, Infinity, true, false, statsNoPruning // useAlphaBetaPruning = false
+            );
+            totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
+
+            if (totalLeavesWithoutPruning > 0) {
+                const evaluatedLeavesWithPruning = statsPruned.nodesAtHorizon;
+                // Percentage of leaves *not* evaluated thanks to pruning
+                percentageSkipped = ((totalLeavesWithoutPruning - evaluatedLeavesWithPruning) / totalLeavesWithoutPruning) * 100;
+            }
+        }
+
+        if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
+            const chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
             bestMove = {
                 tileId: chosenMinimaxMove.tile.id,
                 orientation: chosenMinimaxMove.tile.orientation,
                 x: chosenMinimaxMove.x,
                 y: chosenMinimaxMove.y,
-                score: chosenMinimaxMove.score
+                score: chosenMinimaxMove.score // This is the score from minimaxResultPruned.score
             };
+            console.log(`[Worker] Greedy 3 AI Summary: Chose move for tile ${bestMove.tileId} at (${bestMove.x},${bestMove.y}), orientation ${bestMove.orientation}.`);
+            console.log(`    Score: ${bestMove.score}`);
+            console.log(`    Strict Pruning Stats: Nodes at horizon: ${statsPruned.nodesAtHorizon}, Cutoffs: ${statsPruned.cutoffs}`);
+            console.log(`    Baseline (No Pruning): Total nodes at horizon: ${totalLeavesWithoutPruning}`);
+            if (totalLeavesWithoutPruning > 0) {
+                console.log(`    Pruning Efficiency: Skipped approx. ${percentageSkipped.toFixed(1)}% of horizon nodes.`);
+            } else {
+                console.log(`    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).`);
+            }
+        } else {
+            console.log("[Worker] Greedy 3 AI: No valid moves found.");
         }
     } else if (isGreedy2) {
         // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 2)");
         // Depth 1 for P2 -> P1
-        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true);
+        // TODO: Greedy2 could also benefit from stats if desired, but not requested for now.
+        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true); // Standard strict pruning
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
             const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
             bestMove = {
@@ -416,15 +454,30 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
         } else if (currentSurroundedTilesData.length > 0) {
             tileToRemove = currentSurroundedTilesData[Math.floor(Math.random() * currentSurroundedTilesData.length)];
         }
-    } else if (opponentType === 'greedy' || opponentType === 'greedy2') { // Greedy2 can use same simple logic for now
+    } else if (opponentType === 'greedy' || opponentType === 'greedy2' || opponentType === 'greedy3') {
         const opponentTiles = currentSurroundedTilesData.filter(t => t.playerId !== currentPlayerId);
-        if (opponentTiles.length > 0) {
-            tileToRemove = opponentTiles[0]; // Simple: remove the first opponent tile
-             if (opponentType === 'greedy2') { // More sophisticated for greedy2
+        const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
+
+        if (opponentType === 'greedy3') {
+            // Greedy 3: Prioritize opponent's tiles. If multiple, pick the first one.
+            // If no opponent tiles, but own tiles are surrounded, remove the first own tile.
+            if (opponentTiles.length > 0) {
+                tileToRemove = opponentTiles[0];
+                // console.log(`[Worker] Greedy3 removing opponent tile: ${tileToRemove.id}`);
+            } else if (ownTiles.length > 0) {
+                tileToRemove = ownTiles[0];
+                // console.log(`[Worker] Greedy3 removing own tile: ${tileToRemove.id}`);
+            } else {
+                // This case should not be reached if currentSurroundedTilesData is not empty
+                // console.log(`[Worker] Greedy3: No tiles to remove from list:`, currentSurroundedTilesData);
+            }
+        } else if (opponentType === 'greedy2') {
+            // Greedy 2: More sophisticated choice
+            if (opponentTiles.length > 0) {
                 let bestChoice = null;
                 let bestScore = -Infinity;
                 for (const oppTile of opponentTiles) {
-                    const tempBoard = deepCopyBoardState(boardState); // Ensure boardState is a proper HexTile map
+                    const tempBoard = deepCopyBoardState(boardState);
                     delete tempBoard[`${oppTile.x},${oppTile.y}`];
                     const score = evaluateBoard(tempBoard, currentPlayerId);
                     if (score > bestScore) {
@@ -433,13 +486,10 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
                     }
                 }
                 tileToRemove = bestChoice;
-            }
-        } else if (currentSurroundedTilesData.length > 0) {
-            tileToRemove = currentSurroundedTilesData[0]; // Simple: remove the first of our own tiles
-            if (opponentType === 'greedy2' && currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId).length > 0) {
-                 let bestChoice = null;
-                let bestScore = -Infinity; // AI wants to maximize its score even when removing its own tile
-                const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
+                // if (tileToRemove) console.log(`[Worker] Greedy2 removing opponent tile: ${tileToRemove.id} for score ${bestScore}`);
+            } else if (ownTiles.length > 0) {
+                let bestChoice = null;
+                let bestScore = -Infinity;
                 for (const ownTile of ownTiles) {
                     const tempBoard = deepCopyBoardState(boardState);
                     delete tempBoard[`${ownTile.x},${ownTile.y}`];
@@ -450,6 +500,20 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
                     }
                 }
                 tileToRemove = bestChoice;
+                // if (tileToRemove) console.log(`[Worker] Greedy2 removing own tile: ${tileToRemove.id} for score ${bestScore}`);
+            } else {
+                // console.log(`[Worker] Greedy2: No tiles to remove from list:`, currentSurroundedTilesData);
+            }
+        } else { // opponentType === 'greedy'
+            // Greedy 1: Simple choice
+            if (opponentTiles.length > 0) {
+                tileToRemove = opponentTiles[0];
+                // console.log(`[Worker] Greedy1 removing opponent tile: ${tileToRemove.id}`);
+            } else if (ownTiles.length > 0) {
+                tileToRemove = ownTiles[0];
+                // console.log(`[Worker] Greedy1 removing own tile: ${tileToRemove.id}`);
+            } else {
+                // console.log(`[Worker] Greedy1: No tiles to remove from list:`, currentSurroundedTilesData);
             }
         }
     }
@@ -589,10 +653,11 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId) {
 
 // Minimax with Alpha-Beta Pruning
 // maximizingPlayer is true if it's AI's turn to maximize its score, false if it's opponent's turn (AI minimizes opponent's score from AI's perspective)
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer) {
-    // console.log(`[Worker Minimax P${maximizingPlayer ? aiPlayerId : opponentPlayerId} D${depth} Alpha: ${alpha} Beta: ${beta}] Entry. AI Hand: ${aiHandOriginal.length}, Opp Hand: ${opponentHandOriginal.length}`);
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning = true, stats = {nodesAtHorizon: 0, cutoffs: 0}) {
+    // console.log(`[Worker Minimax P${maximizingPlayer ? aiPlayerId : opponentPlayerId} D${depth} Alpha: ${alpha} Beta: ${beta} Pruning: ${useAlphaBetaPruning}] Entry. AI Hand: ${aiHandOriginal.length}, Opp Hand: ${opponentHandOriginal.length}`);
 
     if (depth === 0) {
+        stats.nodesAtHorizon++;
         const evalScore = evaluateBoard(currentBoardState, aiPlayerId); // Evaluate from AI's perspective
         return { score: evalScore, moves: [] };
     }
@@ -639,7 +704,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Big bonus
             } else {
                  // Pass aiHandOriginal as the first hand (AI's perspective), opponentHandOriginal as second
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false); // Next turn is minimizing
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats); // Pass stats
                 currentTurnEval = evalResult.score;
             }
 
@@ -655,7 +720,9 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                  bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
             }
             alpha = Math.max(alpha, currentTurnEval);
-            if (beta <= alpha) {
+            // Maximizing player: Prune if alpha > beta (explore if alpha == beta)
+            if (useAlphaBetaPruning && alpha > beta) {
+                stats.cutoffs++;
                 break; // Beta cut-off
             }
         }
@@ -688,7 +755,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             } else {
                 // Order of hands for next call: AI's hand first, then opponent's hand.
                 // So, nextMaximizingHand_sim (AI's hand) then handAfterMove_sim (Opponent's hand)
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true); // Next turn is maximizing
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats); // Pass stats
                 currentTurnEval = evalResult.score;
             }
 
@@ -697,7 +764,9 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 // No need to store moves for minimizing player, only its best score.
             }
             beta = Math.min(beta, currentTurnEval);
-            if (beta <= alpha) {
+            // Minimizing player: Prune if beta < alpha (explore if beta == alpha)
+            if (useAlphaBetaPruning && beta < alpha) {
+                stats.cutoffs++;
                 break; // Alpha cut-off
             }
         }
