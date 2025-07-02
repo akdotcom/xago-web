@@ -629,7 +629,23 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId) {
             }
             tileToRemove = bestRemovalChoice;
         } else if (ownTilesSurrounded.length > 0) {
-            tileToRemove = ownTilesSurrounded[0]; // Simplified: pick first own tile
+            // If AI must remove one of its own tiles, choose the one that is least damaging.
+            let bestOwnRemovalChoice = null;
+            // Initialize with a very low score, as we want to maximize the score (i.e., minimize the damage).
+            // Scores can be negative, so -Infinity is appropriate.
+            let scoreAfterOwnRemoval = -Infinity;
+
+            for (const ownTile of ownTilesSurrounded) {
+                const tempBoard = deepCopyBoardState(currentSimBoardState);
+                delete tempBoard[`${ownTile.x},${ownTile.y}`];
+                const currentScore = evaluateBoard(tempBoard, actingPlayerId);
+
+                if (currentScore > scoreAfterOwnRemoval) {
+                    scoreAfterOwnRemoval = currentScore;
+                    bestOwnRemovalChoice = ownTile;
+                }
+            }
+            tileToRemove = bestOwnRemovalChoice;
         }
 
         if (tileToRemove) {
