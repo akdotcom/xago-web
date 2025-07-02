@@ -374,7 +374,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // tile: the HexTile object to draw
     // zoom: current zoom level to scale the tile
     // transparentBackground: if true, skips drawing the white background fill of the hexagon body
-    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false) {
+    // isSelected: if true, draws a selection highlight
+    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false, isSelected = false) {
         const orientedEdges = tile.getOrientedEdges();
         const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
 
@@ -476,6 +477,20 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 ctx.lineWidth = 2 * zoom; // Scale line width
                 ctx.stroke();
             }
+        }
+
+        // Draw selection highlight if isSelected is true
+        if (isSelected) {
+            ctx.strokeStyle = 'gold';
+            ctx.lineWidth = 3 * zoom; // Make highlight thicker
+            // Redraw the hexagon path for the highlight
+            ctx.beginPath();
+            ctx.moveTo(vertices[0].x, vertices[0].y);
+            for (let i = 1; i < 6; i++) {
+                ctx.lineTo(vertices[i].x, vertices[i].y);
+            }
+            ctx.closePath();
+            ctx.stroke();
         }
     }
 
@@ -936,7 +951,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             // Clear the specific tile canvas before redrawing
             tileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
-            drawHexTile(tileCtx, cx, cy, selectedTile.tile);
+            // Draw with highlight since it's still selected
+            drawHexTile(tileCtx, cx, cy, selectedTile.tile, 1.0, false, true);
 
             // gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`; // Removed
             console.log(`Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`);
@@ -946,28 +962,31 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             // In all these cases, we select the tile without rotating.
 
             // Remove highlight from previously selected tile canvas if it's a different tile
-            // or if it's the same tile but we are ensuring it's the one being interacted with.
             if (currentlySelectedTileCanvas && currentlySelectedTileCanvas !== tileCanvasElement) {
-                currentlySelectedTileCanvas.style.border = 'none'; // Or revert to its original border
-                currentlySelectedTileCanvas.style.boxShadow = 'none';
+                // Redraw the previously selected tile without highlight
+                if (selectedTile && selectedTile.tile) { // Ensure selectedTile and its tile object exist
+                    const prevTileCtx = currentlySelectedTileCanvas.getContext('2d');
+                    prevTileCtx.clearRect(0, 0, currentlySelectedTileCanvas.width, currentlySelectedTileCanvas.height);
+                    // Use the tile object directly from the selectedTile structure for redraw
+                    drawHexTile(prevTileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, 1.0, false, false);
+                }
             }
 
-            // Highlight the new selected tile canvas (or re-highlight if it's a drag start of already selected)
-            tileCanvasElement.style.border = '3px solid gold';
-            tileCanvasElement.style.boxShadow = '0 0 10px gold';
+            // Redraw the newly selected tile with highlight
+            const currentTileCtx = tileCanvasElement.getContext('2d');
+            currentTileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
+            drawHexTile(currentTileCtx, tileCanvasElement.width / 2, tileCanvasElement.height / 2, tile, 1.0, false, true);
+
             currentlySelectedTileCanvas = tileCanvasElement;
 
             // Update selectedTile global variable
-            // If it's a drag start and the tile is already selected, this just re-affirms the selection.
             selectedTile = { tile: tile, handElement: tileCanvasElement, originalPlayerId: playerId };
 
-            // If this was a new selection (not drag start of already selected)
-            if (!(selectedTile && selectedTile.tile.id === tile.id && isDragStart)) {
-                 // gameMessageDisplay.textContent = `Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`; // Removed
+            if (!isDragStart || (selectedTile && selectedTile.tile.id !== tile.id)) {
                 console.log(`Player ${currentPlayer} selected tile ${tile.id}. Press 'r' or click tile to rotate. Click on the board to place it.`);
             }
             console.log("Selected tile for interaction (click or drag):", selectedTile);
-            updatePlacementHighlights(); // Update highlights
+            updatePlacementHighlights(); // Update highlights for board placement
         }
     }
 
@@ -1019,18 +1038,21 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 // displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            selectedTile.handElement.remove(); // Remove the canvas from DOM
+            // No need to redraw the placed tile in hand as it's being removed.
+            // The handElement will be removed from the DOM.
+            selectedTile.handElement.remove();
             selectedTile = null;
-            currentlySelectedTileCanvas = null; // Clear the reference to the selected canvas
+            currentlySelectedTileCanvas = null;
 
-            // Refresh the current player's hand display after a tile is placed
+            // Refresh the current player's hand display. This is important as it re-renders all tiles
+            // in that hand, ensuring no selection state persists incorrectly on other tiles.
             if (currentPlayer === 1) {
                 displayPlayerHand(1, player1Hand, player1HandDisplay);
             } else {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            updatePlacementHighlights(); // Clear highlights as the tile is now placed and no longer "selected" for placement
+            updatePlacementHighlights(); // Clear highlights on the board
 
             // Instead of directly calculating scores and switching turns,
             // call the new function to check for surrounded tiles.
@@ -1283,15 +1305,21 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         console.log(`Switched turn to Player ${currentPlayer}`);
 
         // Clear any existing tile selection and its highlights when turns switch
-        if (selectedTile) {
-            // Deselect tile visually if it's from a hand
-            if (currentlySelectedTileCanvas) {
-                currentlySelectedTileCanvas.style.border = 'none';
-                currentlySelectedTileCanvas.style.boxShadow = 'none';
-                currentlySelectedTileCanvas = null;
-            }
+        if (selectedTile && currentlySelectedTileCanvas) {
+            // Redraw the previously selected tile without highlight before clearing selection
+            const tileCtx = currentlySelectedTileCanvas.getContext('2d');
+            tileCtx.clearRect(0, 0, currentlySelectedTileCanvas.width, currentlySelectedTileCanvas.height);
+            // We need the tile object itself. selectedTile.tile should be correct.
+            drawHexTile(tileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, 1.0, false, false);
+
+            currentlySelectedTileCanvas = null;
             selectedTile = null;
-            updatePlacementHighlights(); // This will clear the highlights by redrawing the board
+            updatePlacementHighlights(); // Clear board highlights
+        } else if (selectedTile) {
+            // If selectedTile exists but currentlySelectedTileCanvas doesn't (should be rare),
+            // still nullify selectedTile and update highlights.
+            selectedTile = null;
+            updatePlacementHighlights();
         }
 
         // Moved renderPlayerHands earlier so player2HandContainer is correctly defined before pulse class is added.
