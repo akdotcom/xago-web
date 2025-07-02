@@ -48,6 +48,11 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let mouseHoverQ = null;
     let mouseHoverR = null;
 
+    // Pulsing animation variables for removal highlight
+    let pulseStartTime = 0;
+    const PULSE_DURATION = 1000; // milliseconds for one full pulse cycle
+    let isPulsingGlobal = false; // To keep animateView running for pulsing
+
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
     // Edges are ordered clockwise starting from the top edge.
@@ -143,6 +148,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             console.log("[removeTileFromBoardAndReturnToHand] REMOVING ai-thinking-pulse (no more tiles to remove)");
             player2HandContainer.classList.remove('ai-thinking-pulse'); // Stop pulsing
             isRemovingTiles = false;
+            isPulsingGlobal = false; // Stop global pulsing
             currentSurroundedTilesForRemoval = [];
             // gameMessageDisplay.textContent = "Tile removal complete. Finishing turn."; // Removed
             console.log("Tile removal complete. Finishing turn.");
@@ -153,7 +159,15 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             // The game end condition is now checked only at the beginning of a turn in switchTurn()
             switchTurn();
         }
-        animateView(); // Call animation loop after parameters are updated
+        // animateView(); // Call animation loop after parameters are updated - animateView is now self-managed or triggered by state changes like isPulsingGlobal
+        if (isPulsingGlobal || needsViewAnimation()) animateView(); // Continue animation if pulsing or view is changing
+    }
+
+    // Helper function to check if view animation (pan/zoom) is needed
+    function needsViewAnimation() {
+        return Math.abs(targetOffsetX - currentOffsetX) > 0.1 ||
+               Math.abs(targetOffsetY - currentOffsetY) > 0.1 ||
+               Math.abs(targetZoomLevel - currentZoomLevel) > 0.001;
     }
 
     // Function to redraw the entire board state onto the canvas
@@ -186,8 +200,36 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             // Highlight if in removal mode and tile is one of the surrounded ones
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
-                ctx.strokeStyle = 'red'; // Highlight color
-                ctx.lineWidth = 3 * currentZoomLevel; // Scale line width
+                ctx.strokeStyle = 'yellow'; // Highlight color - Changed from 'red'
+                // lineWidth will be set dynamically for pulsing later
+                // ctx.lineWidth = 3 * currentZoomLevel; // Placeholder, will be replaced by pulsing logic
+
+                // Pulsing logic for highlight
+                const currentTime = Date.now();
+                const elapsedTime = (currentTime - pulseStartTime) % PULSE_DURATION;
+                const pulseProgress = elapsedTime / PULSE_DURATION; // 0 to 1
+
+                // Use a sine wave for smooth oscillation: sin(progress * PI) goes 0 -> 1 -> 0
+                // We want lineWidth to oscillate, e.g., between 2 and 5
+                const minPulseWidth = 2;
+                const maxPulseWidth = 5;
+                const pulseAmplitude = (maxPulseWidth - minPulseWidth) / 2;
+                const currentPulseWidth = minPulseWidth + pulseAmplitude + Math.sin(pulseProgress * Math.PI * 2) * pulseAmplitude;
+                // The above Math.sin(progress * PI * 2) goes from 0 -> 1 -> 0 -> -1 -> 0.
+                // A simpler way for 0 -> 1 -> 0 is Math.sin(pulseProgress * Math.PI)
+                // Let's adjust for a width that starts at min, goes to max, and back to min.
+                // sin wave from 0 to PI goes 0 -> 1 -> 0.
+                // So, minLineWidth + (maxLineWidth - minLineWidth) * sin(progress * PI)
+                // No, that's not quite right for amplitude.
+                // Let's use: base + amplitude * sin(phase).
+                // Phase = progress * 2 * PI for a full cycle.
+                // Width = (min + max)/2 + ((max - min)/2) * sin(elapsedTime / DURATION * 2 * PI)
+                const baseLineWidth = (minPulseWidth + maxPulseWidth) / 2;
+                const amplitude = (maxPulseWidth - minPulseWidth) / 2;
+                const animatedWidth = baseLineWidth + amplitude * Math.sin((elapsedTime / PULSE_DURATION) * 2 * Math.PI);
+
+                ctx.lineWidth = animatedWidth * currentZoomLevel;
+
                 ctx.beginPath();
                 const vertices = [];
                 for (let i = 0; i < 6; i++) {
@@ -1026,10 +1068,11 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         function checkForSurroundedTilesAndProceed() {
             const surroundedTiles = getSurroundedTiles(boardState);
             if (surroundedTiles.length > 0) {
-                isRemovingTiles = true; // This will be set true inside processTileRemoval as well
+            // isRemovingTiles = true; // This will be set true inside processTileRemoval
                 processTileRemoval(surroundedTiles);
             } else {
-                isRemovingTiles = false; // Ensure it's reset if no tiles were surrounded
+            isRemovingTiles = false;
+            isPulsingGlobal = false; // Ensure pulsing stops if no tiles were surrounded initially
                 calculateScores(); // Update scores after each turn
                 switchTurn(); // Always switch turn, game end is checked at the start of the next turn
             }
@@ -1191,6 +1234,9 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
         if (currentSurroundedTilesForRemoval.length > 0) {
             isRemovingTiles = true;
+            pulseStartTime = Date.now(); // Start pulsing
+            isPulsingGlobal = true;
+            animateView(); // Ensure animation loop is running for pulsing
             console.log("Tile removal phase. Surrounded tiles:", currentSurroundedTilesForRemoval.map(t => t.id));
 
             if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
@@ -1666,19 +1712,25 @@ function animateView() {
         currentZoomLevel = targetZoomLevel;
     }
 
-    if (needsRedraw) {
-        redrawBoardOnCanvas(); // Redraw with new current values
-        if (selectedTile) { // If a tile is selected, highlights also need to be updated during animation
+    // If isPulsingGlobal is true, we always need to redraw for the pulsing effect,
+    // even if the view itself (pan/zoom) is stable.
+    if (needsRedraw || isPulsingGlobal) {
+        redrawBoardOnCanvas(); // Redraw with new current values (this now includes pulsing logic if active)
+        if (selectedTile && !isRemovingTiles) { // If a tile is selected (and not removing), placement highlights also need to be updated
             updatePlacementHighlights();
         }
+        // If isRemovingTiles is true, redrawBoardOnCanvas already handles the pulsing highlight.
+        // No need for updatePlacementHighlights() in that specific case for the removal pulsing itself.
         animationFrameId = requestAnimationFrame(animateView); // Continue animation
     } else {
-        animationFrameId = null; // Animation finished
+        animationFrameId = null; // Animation finished (no view change, no pulsing)
         // Final redraw to ensure exact target values are rendered if needed,
-        // though redrawBoardOnCanvas() already uses current values which should be target now.
-        // Consider if a final highlight update is needed here too.
-        if (selectedTile) updatePlacementHighlights(); // Refresh highlights at final position
-        else redrawBoardOnCanvas(); // Ensure final state is drawn clean
+        // and that any highlights (placement or removal) are correctly shown or cleared.
+        redrawBoardOnCanvas(); // This will draw current board state.
+        if (selectedTile && !isRemovingTiles) {
+            updatePlacementHighlights(); // Refresh placement highlights if a tile is still selected.
+        }
+        // If isRemovingTiles was true and just became false, redrawBoardOnCanvas will draw without pulse.
     }
 }
 
