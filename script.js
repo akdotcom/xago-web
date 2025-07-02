@@ -255,7 +255,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             // Highlight if in removal mode and tile is one of the surrounded ones
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
-                ctx.strokeStyle = 'yellow'; // Highlight color - Changed from 'red'
+                ctx.strokeStyle = 'red'; // Highlight color - Changed from 'red'
                 // lineWidth will be set dynamically for pulsing later
                 // ctx.lineWidth = 3 * currentZoomLevel; // Placeholder, will be replaced by pulsing logic
 
