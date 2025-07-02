@@ -422,8 +422,13 @@ footer {
 }
 
 .hexagon-tile.selected {
-    border: 3px solid gold;
-    box-shadow: 0 0 10px gold;
+    /* border: 3px solid gold; */ /* Removed to prevent layout shift and rely on box-shadow */
+    box-shadow: 0 0 0 4px gold; /* Creates a 4px gold "border" effect outside the element */
+    /* Consider a more diffuse shadow for a "glow" effect if preferred, e.g., box-shadow: 0 0 10px 4px gold; */
+    /* The existing box-shadow: 0 0 10px gold; could be combined or replaced.
+       For a thicker border appearance, '0 0 0 Xpx color' is good.
+       For a softer glow, '0 0 Ypx Xpx color' (Y for blur, X for spread) is good.
+       Let's start with a distinct border-like shadow. */
 }
 
 .drop-target {
