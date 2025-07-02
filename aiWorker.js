@@ -678,7 +678,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                 currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Big bonus
             } else {
                  // Pass aiHandOriginal as the first hand (AI's perspective), opponentHandOriginal as second
-                const evalResult = findBestMoveMinimax(boardState, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats); // Pass stats
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats); // Pass stats
                 currentTurnEval = evalResult.score;
             }
 
@@ -729,7 +729,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             } else {
                 // Order of hands for next call: AI's hand first, then opponent's hand.
                 // So, nextMaximizingHand_sim (AI's hand) then handAfterMove_sim (Opponent's hand)
-                const evalResult = findBestMoveMinimax(boardState, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats); // Pass stats
+                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats); // Pass stats
                 currentTurnEval = evalResult.score;
             }
 
