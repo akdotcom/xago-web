@@ -454,15 +454,30 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
         } else if (currentSurroundedTilesData.length > 0) {
             tileToRemove = currentSurroundedTilesData[Math.floor(Math.random() * currentSurroundedTilesData.length)];
         }
-    } else if (opponentType === 'greedy' || opponentType === 'greedy2') { // Greedy2 can use same simple logic for now
+    } else if (opponentType === 'greedy' || opponentType === 'greedy2' || opponentType === 'greedy3') {
         const opponentTiles = currentSurroundedTilesData.filter(t => t.playerId !== currentPlayerId);
-        if (opponentTiles.length > 0) {
-            tileToRemove = opponentTiles[0]; // Simple: remove the first opponent tile
-             if (opponentType === 'greedy2') { // More sophisticated for greedy2
+        const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
+
+        if (opponentType === 'greedy3') {
+            // Greedy 3: Prioritize opponent's tiles. If multiple, pick the first one.
+            // If no opponent tiles, but own tiles are surrounded, remove the first own tile.
+            if (opponentTiles.length > 0) {
+                tileToRemove = opponentTiles[0];
+                // console.log(`[Worker] Greedy3 removing opponent tile: ${tileToRemove.id}`);
+            } else if (ownTiles.length > 0) {
+                tileToRemove = ownTiles[0];
+                // console.log(`[Worker] Greedy3 removing own tile: ${tileToRemove.id}`);
+            } else {
+                // This case should not be reached if currentSurroundedTilesData is not empty
+                // console.log(`[Worker] Greedy3: No tiles to remove from list:`, currentSurroundedTilesData);
+            }
+        } else if (opponentType === 'greedy2') {
+            // Greedy 2: More sophisticated choice
+            if (opponentTiles.length > 0) {
                 let bestChoice = null;
                 let bestScore = -Infinity;
                 for (const oppTile of opponentTiles) {
-                    const tempBoard = deepCopyBoardState(boardState); // Ensure boardState is a proper HexTile map
+                    const tempBoard = deepCopyBoardState(boardState);
                     delete tempBoard[`${oppTile.x},${oppTile.y}`];
                     const score = evaluateBoard(tempBoard, currentPlayerId);
                     if (score > bestScore) {
@@ -471,13 +486,10 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
                     }
                 }
                 tileToRemove = bestChoice;
-            }
-        } else if (currentSurroundedTilesData.length > 0) {
-            tileToRemove = currentSurroundedTilesData[0]; // Simple: remove the first of our own tiles
-            if (opponentType === 'greedy2' && currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId).length > 0) {
-                 let bestChoice = null;
-                let bestScore = -Infinity; // AI wants to maximize its score even when removing its own tile
-                const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
+                // if (tileToRemove) console.log(`[Worker] Greedy2 removing opponent tile: ${tileToRemove.id} for score ${bestScore}`);
+            } else if (ownTiles.length > 0) {
+                let bestChoice = null;
+                let bestScore = -Infinity;
                 for (const ownTile of ownTiles) {
                     const tempBoard = deepCopyBoardState(boardState);
                     delete tempBoard[`${ownTile.x},${ownTile.y}`];
@@ -488,6 +500,20 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
                     }
                 }
                 tileToRemove = bestChoice;
+                // if (tileToRemove) console.log(`[Worker] Greedy2 removing own tile: ${tileToRemove.id} for score ${bestScore}`);
+            } else {
+                // console.log(`[Worker] Greedy2: No tiles to remove from list:`, currentSurroundedTilesData);
+            }
+        } else { // opponentType === 'greedy'
+            // Greedy 1: Simple choice
+            if (opponentTiles.length > 0) {
+                tileToRemove = opponentTiles[0];
+                // console.log(`[Worker] Greedy1 removing opponent tile: ${tileToRemove.id}`);
+            } else if (ownTiles.length > 0) {
+                tileToRemove = ownTiles[0];
+                // console.log(`[Worker] Greedy1 removing own tile: ${tileToRemove.id}`);
+            } else {
+                // console.log(`[Worker] Greedy1: No tiles to remove from list:`, currentSurroundedTilesData);
             }
         }
     }
