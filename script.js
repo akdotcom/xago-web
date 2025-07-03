@@ -155,6 +155,12 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             // This is the callback function, executed after animation completes.
             console.log(`Animation complete for tile ${tileToRemove.id}. Finalizing removal.`);
 
+            // Vibrate on mobile if API is available
+            if (navigator.maxTouchPoints > 0 && typeof navigator.vibrate === 'function') {
+                navigator.vibrate(100); // Vibrate for 100ms
+                console.log("Device vibrated on tile removal.");
+            }
+
             // Restore tile to boardState if it was only temporarily removed for redrawing.
             // Actually, the plan is to remove it from boardState *after* animation.
             // The delete operation above was temporary. So, if it's still in originalTileData,
