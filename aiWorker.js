@@ -17,7 +17,45 @@ class HexTile {
         this.orientation = (this.orientation + 1) % 6;
     }
 
-    getOrientedEdges() {
+    getOrientedEdges(specificOrientation = -1) {
+        const orientationToUse = specificOrientation !== -1 ? specificOrientation : this.orientation;
+        const rotatedEdges = [...this.edges];
+        for (let i = 0; i < orientationToUse; i++) {
+            rotatedEdges.unshift(rotatedEdges.pop());
+        }
+        return rotatedEdges;
+    }
+
+    // Not used in worker directly but part of class definition
+    get getPlayerColor() {
+        return this.playerId === 1 ? 'lightblue' : 'lightcoral';
+    }
+}
+
+// Helper function to count triangles on a tile
+function countTriangles(tile) {
+    if (!tile || !tile.edges) return 0;
+    return tile.edges.reduce((sum, edge) => sum + edge, 0);
+}
+
+// Helper function to get unique orientations considering rotational symmetry
+function getUniqueOrientations(tile) {
+    const uniqueEdgePatterns = new Set();
+    const uniqueOrientations = [];
+    const tempTile = new HexTile(tile.id, tile.playerId, [...tile.edges]); // Use a temporary tile
+
+    for (let o = 0; o < 6; o++) {
+        tempTile.orientation = o;
+        const currentEdges = tempTile.getOrientedEdges().join(',');
+        if (!uniqueEdgePatterns.has(currentEdges)) {
+            uniqueEdgePatterns.add(currentEdges);
+            uniqueOrientations.push(o);
+        }
+    }
+    return uniqueOrientations;
+}
+
+const UNIQUE_TILE_PATTERNS = [
         const rotatedEdges = [...this.edges];
         for (let i = 0; i < this.orientation; i++) {
             rotatedEdges.unshift(rotatedEdges.pop());
@@ -294,9 +332,12 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
         let bestScoreDiff = -Infinity;
         let bestMoves = [];
 
-        for (const tile of player2Hand) {
+        const sortedHand = [...player2Hand].sort((a, b) => countTriangles(b) - countTriangles(a));
+
+        for (const tile of sortedHand) {
             const originalOrientation = tile.orientation;
-            for (let o = 0; o < 6; o++) {
+            const uniqueOrientations = getUniqueOrientations(tile);
+            for (const o of uniqueOrientations) {
                 tile.orientation = o;
                 const placementSpots = [];
                 if (Object.keys(boardState).length === 0) {
@@ -529,9 +570,12 @@ function getAllPossibleMoves(currentBoardState, hand, playerId) {
     const possibleMoves = [];
     const initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
 
-    for (const tile of hand) { // hand is already hydrated HexTile objects
+    const sortedHand = [...hand].sort((a, b) => countTriangles(b) - countTriangles(a));
+
+    for (const tile of sortedHand) { // hand is already hydrated HexTile objects
         const originalOrientation = tile.orientation;
-        for (let o = 0; o < 6; o++) {
+        const uniqueOrientations = getUniqueOrientations(tile);
+        for (const o of uniqueOrientations) {
             tile.orientation = o;
             if (initialBoardIsEmpty) {
                 if (isPlacementValid(tile, 0, 0, currentBoardState, true)) {
