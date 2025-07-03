@@ -427,7 +427,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Canvas Drawing Functions ---
     const BASE_HEX_SIDE_LENGTH = 40; // pixels - This is the reference size at zoom 1.0
-    const HAND_TILE_BASE_SIDE_LENGTH = 25; // pixels - Smaller size for hand tiles
+    const HAND_TILE_BASE_SIDE_LENGTH = 28; // pixels - Smaller size for hand tiles
     // const HEX_HEIGHT = Math.sqrt(3) * BASE_HEX_SIDE_LENGTH; // Dynamic
     // const HEX_WIDTH = 2 * BASE_HEX_SIDE_LENGTH; // Dynamic
     // const HEX_APOTHEM = HEX_HEIGHT / 2; // Dynamic
