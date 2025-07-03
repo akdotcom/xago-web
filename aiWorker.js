@@ -255,64 +255,13 @@ function hydrateHand(handData) {
 
 // --- AI Player Logic (to be moved from script.js) ---
 
-async function calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3 = false, isGreedy4 = false) {
-    // Common logic for greedy, greedy2, greedy3, and greedy4
+async function calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3 = false) {
+    // Common logic for greedy, greedy2, and greedy3
     await new Promise(resolve => setTimeout(resolve, 500)); // Adjusted delay
 
     let bestMove = null;
 
-    if (isGreedy4) {
-        console.log(`[Worker] AI: Greedy 4 calculating move for Player ${currentPlayerId}.`);
-        const depth = 3; // P2 -> P1 -> P2 -> P1
-
-        // Stats for the pruned run (this determines the move)
-        const statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
-        const minimaxResultPruned = findBestMoveMinimax(
-            boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned // useAlphaBetaPruning = true
-        );
-
-        let percentageSkipped = 0;
-        let totalLeavesWithoutPruning = 0;
-
-        if (statsPruned.nodesAtHorizon > 0) { // Only calculate efficiency if there was something to evaluate
-            // Stats for getting total nodes without pruning (for comparison metric)
-            const statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 }; // cutoffs will remain 0
-            findBestMoveMinimax(
-                boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning // useAlphaBetaPruning = false
-            );
-            totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
-
-            if (totalLeavesWithoutPruning > 0) {
-                const evaluatedLeavesWithPruning = statsPruned.nodesAtHorizon;
-                // Percentage of leaves *not* evaluated thanks to pruning
-                percentageSkipped = ((totalLeavesWithoutPruning - evaluatedLeavesWithPruning) / totalLeavesWithoutPruning) * 100;
-            }
-        }
-
-        if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
-            bestMove = {
-                tileId: chosenMinimaxMove.tile.id,
-                orientation: chosenMinimaxMove.tile.orientation,
-                x: chosenMinimaxMove.x,
-                y: chosenMinimaxMove.y,
-                score: chosenMinimaxMove.score // This is the score from minimaxResultPruned.score
-            };
-            console.log(`[Worker] Greedy 4 AI Summary: Chose move for tile ${bestMove.tileId} at (${bestMove.x},${bestMove.y}), orientation ${bestMove.orientation}.`);
-            console.log(`    Score: ${bestMove.score}`);
-            console.log(`    Strict Pruning Stats: Nodes at horizon: ${statsPruned.nodesAtHorizon}, Cutoffs: ${statsPruned.cutoffs}`);
-            console.log(`    Baseline (No Pruning): Total nodes at horizon: ${totalLeavesWithoutPruning}`);
-            if (totalLeavesWithoutPruning > 0) {
-                console.log(`    Pruning Efficiency: Skipped approx. ${percentageSkipped.toFixed(1)}% of horizon nodes.`);
-            } else {
-                console.log(`    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).`);
-            }
-        } else {
-            console.log("[Worker] Greedy 4 AI: No valid moves found.");
-        }
-    } else if (isGreedy3) {
+    if (isGreedy3) {
         console.log(`[Worker] AI: Greedy 3 calculating move for Player ${currentPlayerId}.`);
         const depth = 2;
 
@@ -522,13 +471,11 @@ async function workerPerformAiMove(boardState, player2HandOriginal, player1HandO
         tileToPlay.orientation = originalOrientation;
 
     } else if (opponentType === 'greedy') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, false);
+        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false);
     } else if (opponentType === 'greedy2') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false, false);
+        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false);
     } else if (opponentType === 'greedy3') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true, false);
-    } else if (opponentType === 'greedy4') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, true);
+        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true);
     }
 
     // console.log("[Worker] performAiMove result:", bestMove);
@@ -552,18 +499,18 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
         const opponentTiles = currentSurroundedTilesData.filter(t => t.playerId !== currentPlayerId);
         const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
 
-        if (opponentType === 'greedy3' || opponentType === 'greedy4') {
-            // Greedy 3 & 4: Prioritize opponent's tiles. If multiple, pick the first one.
+        if (opponentType === 'greedy3') {
+            // Greedy 3: Prioritize opponent's tiles. If multiple, pick the first one.
             // If no opponent tiles, but own tiles are surrounded, remove the first own tile.
             if (opponentTiles.length > 0) {
                 tileToRemove = opponentTiles[0];
-                // console.log(`[Worker] Greedy3/4 removing opponent tile: ${tileToRemove.id}`);
+                // console.log(`[Worker] Greedy3 removing opponent tile: ${tileToRemove.id}`);
             } else if (ownTiles.length > 0) {
                 tileToRemove = ownTiles[0];
-                // console.log(`[Worker] Greedy3/4 removing own tile: ${tileToRemove.id}`);
+                // console.log(`[Worker] Greedy3 removing own tile: ${tileToRemove.id}`);
             } else {
                 // This case should not be reached if currentSurroundedTilesData is not empty
-                // console.log(`[Worker] Greedy3/4: No tiles to remove from list:`, currentSurroundedTilesData);
+                // console.log(`[Worker] Greedy3: No tiles to remove from list:`, currentSurroundedTilesData);
             }
         } else if (opponentType === 'greedy2') {
             // Greedy 2: More sophisticated choice
