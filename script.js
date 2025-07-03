@@ -47,6 +47,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let opponentType = "greedy"; // Default to Greedy 1 opponent
     let mouseHoverQ = null;
     let mouseHoverR = null;
+    let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
 
     // Pulsing animation variables for removal highlight
     let pulseStartTime = 0;
@@ -251,10 +252,16 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             let screenX = currentOffsetX + scaledHexSideLength * (3/2 * tile.x);
             let screenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tile.x + Math.sqrt(3) * tile.y);
 
-            drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel); // Pass currentZoomLevel
+            // For tiles on the board, isSelected is typically false (it's for hand tile glow).
+            // transparentBackground is also false for board tiles.
+            const isLastPlaced = (key === lastPlacedTileKey);
+            drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel, false, false, isLastPlaced);
 
             // Highlight if in removal mode and tile is one of the surrounded ones
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
+                // The raised effect shadow should ideally not conflict with removal highlighting.
+                // Since the raised shadow is now handled *inside* drawHexTile and restored,
+                // this subsequent stroking for removal highlight should be fine.
                 ctx.strokeStyle = 'red'; // Highlight color - Changed from 'red'
                 // lineWidth will be set dynamically for pulsing later
                 // ctx.lineWidth = 3 * currentZoomLevel; // Placeholder, will be replaced by pulsing logic
@@ -430,10 +437,24 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // tile: the HexTile object to draw
     // zoom: current zoom level to scale the tile
     // transparentBackground: if true, skips drawing the white background fill of the hexagon body
-    // isSelected: if true, draws a selection highlight
-    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false, isSelected = false) {
+    // isSelected: if true, draws a selection highlight (typically for hand tiles)
+    // isRaisedEffect: if true, draws an outer shadow to make the tile look raised (for last placed board tile)
+    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false, isSelected = false, isRaisedEffect = false) {
         const orientedEdges = tile.getOrientedEdges();
         const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
+
+        let originalShadowColor, originalShadowBlur, originalShadowOffsetX, originalShadowOffsetY;
+        let raisedEffectApplied = false;
+
+        if (isRaisedEffect && !isSelected) { // Apply raised effect only if not also having selection glow
+            // It's better to save and restore the entire context for robust shadow application
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+            ctx.shadowBlur = 5 * zoom;
+            ctx.shadowOffsetX = 2 * zoom;
+            ctx.shadowOffsetY = 2 * zoom;
+            raisedEffectApplied = true;
+        }
 
         // Calculate hexagon vertices (flat-topped hexagon)
         const vertices = [];
@@ -462,6 +483,10 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         ctx.strokeStyle = '#333'; // This is the tile's own border, not the preview border
         ctx.lineWidth = 1 * zoom; // Scale line width
         ctx.stroke();
+
+        if (raisedEffectApplied) {
+            ctx.restore(); // Restore context to remove raised shadow effect before drawing edges/indicators
+        }
 
         const isAllBlank = orientedEdges.every(edge => edge === 0);
 
@@ -1182,10 +1207,11 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         tile.x = x;
         tile.y = y;
         boardState[`${x},${y}`] = tile;
+        lastPlacedTileKey = `${x},${y}`; // Update the last placed tile key
 
         // Visual update will be handled by a dedicated drawing function that iterates boardState
         // and draws all tiles on the canvas. This function will be called after successful placement.
-        console.log(`Tile ${tile.id} placed at ${x},${y}. Board state updated.`);
+        console.log(`Tile ${tile.id} placed at ${x},${y}. Board state updated. Last placed key: ${lastPlacedTileKey}`);
         redrawBoardOnCanvas(); // Redraw the entire board with the new tile
 
         // const cell = getBoardCell(x,y); // Obsolete
