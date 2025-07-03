@@ -414,6 +414,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Canvas Drawing Functions ---
     const BASE_HEX_SIDE_LENGTH = 40; // pixels - This is the reference size at zoom 1.0
+    const HAND_TILE_BASE_SIDE_LENGTH = 25; // pixels - Smaller size for hand tiles
     // const HEX_HEIGHT = Math.sqrt(3) * BASE_HEX_SIDE_LENGTH; // Dynamic
     // const HEX_WIDTH = 2 * BASE_HEX_SIDE_LENGTH; // Dynamic
     // const HEX_APOTHEM = HEX_HEIGHT / 2; // Dynamic
@@ -578,24 +579,44 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         handDisplayElement.innerHTML = ''; // Clear previous tiles
         hand.forEach(tile => {
             const tileCanvas = document.createElement('canvas');
-            // Use BASE_HEX_SIDE_LENGTH for hand tiles, assuming they don't zoom.
-            // Or, if they should also scale with a global UI scale, that's a different feature.
-            // For now, hand tiles are fixed size.
-            const handTileSideLength = BASE_HEX_SIDE_LENGTH; // Or a smaller fixed size for hand tiles
+            // Use HAND_TILE_BASE_SIDE_LENGTH for hand tiles.
+            const handTileSideLength = HAND_TILE_BASE_SIDE_LENGTH;
             const handHexWidth = 2 * handTileSideLength;
             const handHexHeight = Math.sqrt(3) * handTileSideLength;
 
-            tileCanvas.width = handHexWidth + 10;
-            tileCanvas.height = handHexHeight + 10;
+            // Add some padding to the canvas to ensure tile edges aren't cut off,
+            // especially if drawHexTile draws slightly outside the strict hex dimensions.
+            // A padding of 5px around the hex should be sufficient.
+            const canvasPadding = 5 * 2; // 5px on each side
+            tileCanvas.width = handHexWidth + canvasPadding;
+            tileCanvas.height = handHexHeight + canvasPadding;
             tileCanvas.style.cursor = 'pointer';
-            tileCanvas.style.margin = '5px';
+            tileCanvas.style.margin = '2px'; // Reduced margin
 
             const tileCtx = tileCanvas.getContext('2d');
             const cx = tileCanvas.width / 2;
             const cy = tileCanvas.height / 2;
 
-            // Draw hand tile without board zoom, passing zoom explicilty as 1.0 or not passing it if default is 1.0
-            drawHexTile(tileCtx, cx, cy, tile, 1.0);
+            // Draw hand tile using HAND_TILE_BASE_SIDE_LENGTH.
+            // The drawHexTile function's `zoom` parameter is relative to its
+            // internal BASE_HEX_SIDE_LENGTH. To draw with our new hand tile size,
+            // we effectively pass a "zoom" factor that scales BASE_HEX_SIDE_LENGTH
+            // down to HAND_TILE_BASE_SIDE_LENGTH.
+            // zoomFactor = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH
+            // However, drawHexTile is designed to take an absolute sideLength for its calculations
+            // if we consider its `sideLength` variable: `const sideLength = BASE_HEX_SIDE_LENGTH * zoom;`
+            // So, we should call it with a zoom factor that makes `BASE_HEX_SIDE_LENGTH * zoom = HAND_TILE_BASE_SIDE_LENGTH`.
+            // Thus, zoom = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH.
+            // OR, more simply, modify drawHexTile to accept an optional sideLength override,
+            // or ensure it correctly uses the passed zoom with its BASE_HEX_SIDE_LENGTH.
+
+            // Let's adjust the call to drawHexTile:
+            // The `drawHexTile` function's first parameter for side length calculation is `zoom`.
+            // It calculates `const sideLength = BASE_HEX_SIDE_LENGTH * zoom;`
+            // So, if we want the drawn `sideLength` to be `HAND_TILE_BASE_SIDE_LENGTH`,
+            // we need to pass `zoom = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH`.
+            const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
+            drawHexTile(tileCtx, cx, cy, tile, zoomForHandTile);
             tileCanvas.dataset.tileId = tile.id; // Store tile ID on the canvas element
 
             tileCanvas.addEventListener('click', () => {
@@ -630,10 +651,14 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
                 // Create a temporary canvas for the drag image
                 const tempDragCanvas = document.createElement('canvas');
-                const handTileSideLength = BASE_HEX_SIDE_LENGTH; // Using the same size as hand tiles
-                const hexTrueWidth = 2 * handTileSideLength;
-                const hexTrueHeight = Math.sqrt(3) * handTileSideLength;
 
+                // Use BASE_HEX_SIDE_LENGTH * currentZoomLevel for the drag image side length
+                // This makes the drag image match the current size of tiles on the board.
+                const dragImageSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+                let hexTrueWidth = 2 * dragImageSideLength;
+                let hexTrueHeight = Math.sqrt(3) * dragImageSideLength;
+
+                // Set canvas to exact dimensions of the hexagon.
                 tempDragCanvas.width = hexTrueWidth;
                 tempDragCanvas.height = hexTrueHeight;
 
@@ -644,10 +669,10 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
                 const tempCtx = tempDragCanvas.getContext('2d');
 
-                // Draw the hexagon centered on this new canvas
-                // The drawHexTile function expects center coordinates.
-                // For the temporary canvas, the center is its width/2 and height/2.
-                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tileToDrag, 1.0, false); // zoom = 1.0, transparentBackground = false
+                // Draw the hexagon centered on this new canvas.
+                // The zoom factor passed to drawHexTile should be currentZoomLevel,
+                // as drawHexTile uses BASE_HEX_SIDE_LENGTH as its reference.
+                drawHexTile(tempCtx, tempDragCanvas.width / 2, tempDragCanvas.height / 2, tileToDrag, currentZoomLevel, false);
 
                 // Set the custom drag image
                 // The offset should be where the cursor is relative to the top-left of the drag image.
@@ -1026,11 +1051,12 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             const tileCtx = tileCanvasElement.getContext('2d');
             const cx = tileCanvasElement.width / 2;
             const cy = tileCanvasElement.height / 2;
+            const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
 
             // Clear the specific tile canvas before redrawing
             tileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
-            // Draw with highlight since it's still selected
-            drawHexTile(tileCtx, cx, cy, selectedTile.tile, 1.0, false, true);
+            // Draw with highlight since it's still selected, using the correct zoom factor
+            drawHexTile(tileCtx, cx, cy, selectedTile.tile, zoomForHandTile, false, true);
 
             // gameMessageDisplay.textContent = `Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`; // Removed
             console.log(`Tile rotated. Press 'r' or click tile to rotate again. Click board to place.`);
@@ -1045,15 +1071,17 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 if (selectedTile && selectedTile.tile) { // Ensure selectedTile and its tile object exist
                     const prevTileCtx = currentlySelectedTileCanvas.getContext('2d');
                     prevTileCtx.clearRect(0, 0, currentlySelectedTileCanvas.width, currentlySelectedTileCanvas.height);
+                    const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
                     // Use the tile object directly from the selectedTile structure for redraw
-                    drawHexTile(prevTileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, 1.0, false, false);
+                    drawHexTile(prevTileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, zoomForHandTile, false, false);
                 }
             }
 
             // Redraw the newly selected tile with highlight
             const currentTileCtx = tileCanvasElement.getContext('2d');
             currentTileCtx.clearRect(0, 0, tileCanvasElement.width, tileCanvasElement.height);
-            drawHexTile(currentTileCtx, tileCanvasElement.width / 2, tileCanvasElement.height / 2, tile, 1.0, false, true);
+            const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
+            drawHexTile(currentTileCtx, tileCanvasElement.width / 2, tileCanvasElement.height / 2, tile, zoomForHandTile, false, true);
 
             currentlySelectedTileCanvas = tileCanvasElement;
 
@@ -1080,10 +1108,12 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 const tileCtx = tileCanvas.getContext('2d');
                 const cx = tileCanvas.width / 2;
                 const cy = tileCanvas.height / 2;
+                const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
 
                 // Clear the specific tile canvas before redrawing
                 tileCtx.clearRect(0, 0, tileCanvas.width, tileCanvas.height);
-                drawHexTile(tileCtx, cx, cy, selectedTile.tile);
+                // Draw with highlight since it's selected, using the correct zoom factor
+                drawHexTile(tileCtx, cx, cy, selectedTile.tile, zoomForHandTile, false, true);
 
                 // Update game message if needed, or rely on the selection message
                 // gameMessageDisplay.textContent = `Tile rotated. Press 'r' to rotate again. Click board to place.`; // Removed
@@ -1388,7 +1418,9 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             const tileCtx = currentlySelectedTileCanvas.getContext('2d');
             tileCtx.clearRect(0, 0, currentlySelectedTileCanvas.width, currentlySelectedTileCanvas.height);
             // We need the tile object itself. selectedTile.tile should be correct.
-            drawHexTile(tileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, 1.0, false, false);
+            // Use the correct zoom factor for hand tiles.
+            const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
+            drawHexTile(tileCtx, currentlySelectedTileCanvas.width / 2, currentlySelectedTileCanvas.height / 2, selectedTile.tile, zoomForHandTile, false, false);
 
             currentlySelectedTileCanvas = null;
             selectedTile = null;
