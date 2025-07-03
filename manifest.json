@@ -1,0 +1,21 @@
+{
+  "name": "Xago",
+  "short_name": "Xago",
+  "description": "The timeless tile strategy game",
+  "start_url": "https://akdotcom.github.io/xago-web/",
+  "display": "standalone",
+  "theme_color": "lightgrey",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
