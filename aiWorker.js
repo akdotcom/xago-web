@@ -293,7 +293,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         }
 
         if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
-            var chosenMinimaxMoveG3 = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
+            var chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
             bestMove = {
                 tileId: chosenMinimaxMove.tile.id,
                 orientation: chosenMinimaxMove.tile.orientation,
