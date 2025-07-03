@@ -3,105 +3,92 @@
 // --- Tile Representation ---
 // Edge types: 0 for blank, 1 for triangle
 // Edges are ordered clockwise starting from the top edge.
-class HexTile {
-    constructor(id, playerId, edges = [0, 0, 0, 0, 0, 0]) {
-        this.id = id; // Unique ID for the tile
-        this.playerId = playerId; // 1 or 2
-        this.edges = edges; // Array of 6 values (0 or 1)
-        this.orientation = 0; // 0-5, representing rotation
-        this.x = null; // Board x position
-        this.y = null; // Board y position
-    }
-
-    rotate() {
-        this.orientation = (this.orientation + 1) % 6;
-    }
-
-    getOrientedEdges(specificOrientation = -1) {
-        const orientationToUse = specificOrientation !== -1 ? specificOrientation : this.orientation;
-        const rotatedEdges = [...this.edges];
-        for (let i = 0; i < orientationToUse; i++) {
-            rotatedEdges.unshift(rotatedEdges.pop());
-        }
-        return rotatedEdges;
-    }
-
-    // Not used in worker directly but part of class definition
-    get getPlayerColor() {
-        return this.playerId === 1 ? 'lightblue' : 'lightcoral';
-    }
+function HexTile(id, playerId, edges) {
+    this.id = id; // Unique ID for the tile
+    this.playerId = playerId; // 1 or 2
+    this.edges = edges === undefined ? [0, 0, 0, 0, 0, 0] : edges; // Default value for edges
+    this.orientation = 0; // 0-5, representing rotation
+    this.x = null; // Board x position
+    this.y = null; // Board y position
 }
+
+HexTile.prototype.rotate = function() {
+    this.orientation = (this.orientation + 1) % 6;
+};
+
+HexTile.prototype.getOrientedEdges = function(specificOrientation) {
+    var orientationToUse = (specificOrientation !== undefined && specificOrientation !== -1) ? specificOrientation : this.orientation;
+    var rotatedEdges = [].concat(this.edges); // ES5 way to copy array
+    for (var i = 0; i < orientationToUse; i++) {
+        rotatedEdges.unshift(rotatedEdges.pop());
+    }
+    return rotatedEdges;
+};
+
+Object.defineProperty(HexTile.prototype, "getPlayerColor", {
+    get: function() {
+        return this.playerId === 1 ? 'lightblue' : 'lightcoral';
+    },
+    enumerable: false, // Typically false for getters converted from classes
+    configurable: true
+});
 
 // Helper function to count triangles on a tile
 function countTriangles(tile) {
     if (!tile || !tile.edges) return 0;
-    return tile.edges.reduce((sum, edge) => sum + edge, 0);
+    return tile.edges.reduce(function(sum, edge) { return sum + edge; }, 0);
 }
 
 // Helper function to get unique orientations considering rotational symmetry
 function getUniqueOrientations(tile) {
-    const uniqueEdgePatterns = new Set();
-    const uniqueOrientations = [];
-    const tempTile = new HexTile(tile.id, tile.playerId, [...tile.edges]); // Use a temporary tile
+    var uniqueEdgePatterns = {}; // Using an object to simulate Set
+    var uniqueOrientations = [];
+    var tempTile = new HexTile(tile.id, tile.playerId, [].concat(tile.edges));
 
-    for (let o = 0; o < 6; o++) {
+    for (var o = 0; o < 6; o++) {
         tempTile.orientation = o;
-        const currentEdges = tempTile.getOrientedEdges().join(',');
-        if (!uniqueEdgePatterns.has(currentEdges)) {
-            uniqueEdgePatterns.add(currentEdges);
+        var currentEdges = tempTile.getOrientedEdges().join(',');
+        if (!uniqueEdgePatterns.hasOwnProperty(currentEdges)) {
+            uniqueEdgePatterns[currentEdges] = true;
             uniqueOrientations.push(o);
         }
     }
     return uniqueOrientations;
 }
 
-const UNIQUE_TILE_PATTERNS = [
-        const rotatedEdges = [...this.edges];
-        for (let i = 0; i < this.orientation; i++) {
-            rotatedEdges.unshift(rotatedEdges.pop());
-        }
-        return rotatedEdges;
-    }
-
-    // Not used in worker directly but part of class definition
-    get getPlayerColor() {
-        return this.playerId === 1 ? 'lightblue' : 'lightcoral';
-    }
-}
-
-const UNIQUE_TILE_PATTERNS = [
-    [0,0,0,0,0,0], // 0 triangles
-    [1,0,0,0,0,0], // 1 triangle
-    [1,1,0,0,0,0], // 2 triangles, adjacent
-    [1,0,1,0,0,0], // 2 triangles, separated by 1
-    [1,0,0,1,0,0], // 2 triangles, separated by 2 (opposite)
-    [1,1,1,0,0,0], // 3 triangles, block of 3
-    [1,1,0,1,0,0], // 3 triangles, pattern 110100
-    [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
-    [1,0,1,0,1,0], // 3 triangles, alternating
-    [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
-    [1,1,1,0,1,0], // 4 triangles (TTTBTB, formerly TTBTTB)
-    [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
-    [1,1,1,1,1,0], // 5 triangles
-    [1,1,1,1,1,1]  // 6 triangles
+var UNIQUE_TILE_PATTERNS_DUPLICATE_REMOVED = [ // Renamed to avoid conflict if original is elsewhere
+    [0,0,0,0,0,0],
+    [1,0,0,0,0,0],
+    [1,1,0,0,0,0],
+    [1,0,1,0,0,0],
+    [1,0,0,1,0,0],
+    [1,1,1,0,0,0],
+    [1,1,0,1,0,0],
+    [1,0,1,1,0,0],
+    [1,0,1,0,1,0],
+    [1,1,1,1,0,0],
+    [1,1,1,0,1,0],
+    [1,0,1,1,0,1],
+    [1,1,1,1,1,0],
+    [1,1,1,1,1,1]
 ];
 
-const NUM_TILES_PER_PLAYER = 14; // Used in evaluateBoard logic, ensure it's consistent
+var NUM_TILES_PER_PLAYER = 14;
 
 // --- Game Logic Helper Functions (needed by AI) ---
 
-// Function to get neighbors for a hex grid (axial coordinates)
 function getNeighbors(q, r) {
-    const axialDirections = [
-        { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }, // Right
-        { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Bottom-Right
-        { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Left
-        { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Left
-        { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Top-Left
-        { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }  // Top-Right
+    var axialDirections = [
+        { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 },
+        { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 },
+        { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 },
+        { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 },
+        { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 },
+        { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }
     ];
-    const neighbors = [];
-    for (const dir of axialDirections) {
+    var neighbors = [];
+    for (var i = 0; i < axialDirections.length; i++) {
+        var dir = axialDirections[i];
         neighbors.push({
             nx: q + dir.dq,
             ny: r + dir.dr,
@@ -112,115 +99,105 @@ function getNeighbors(q, r) {
     return neighbors;
 }
 
-// Check if a tile at (q,r) is surrounded
 function isTileSurrounded(q, r, currentBoardState) {
-    const neighbors = getNeighbors(q, r);
+    var neighbors = getNeighbors(q, r);
     if (neighbors.length < 6) return false;
-    for (const neighborInfo of neighbors) {
-        if (!currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
+    for (var i = 0; i < neighbors.length; i++) {
+        var neighborInfo = neighbors[i];
+        if (!currentBoardState["" + neighborInfo.nx + "," + neighborInfo.ny]) {
             return false;
         }
     }
     return true;
 }
 
-// Check if an empty space (q,r) is enclosed by tiles
 function isSpaceEnclosed(q, r, currentBoardState) {
-    const neighbors = getNeighbors(q, r);
-    for (const neighborInfo of neighbors) {
-        if (!currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
+    var neighbors = getNeighbors(q, r);
+    for (var i = 0; i < neighbors.length; i++) {
+        var neighborInfo = neighbors[i];
+        if (!currentBoardState["" + neighborInfo.nx + "," + neighborInfo.ny]) {
             return false;
         }
     }
     return true;
 }
 
-// Get all surrounded tiles on the board
 function getSurroundedTiles(currentBoardState) {
-    const surroundedTiles = [];
-    for (const key in currentBoardState) {
-        const tile = currentBoardState[key];
-        if (tile.x !== null && tile.y !== null) {
-            if (isTileSurrounded(tile.x, tile.y, currentBoardState)) {
-                surroundedTiles.push(tile);
+    var surroundedTiles = [];
+    for (var key in currentBoardState) {
+        if (currentBoardState.hasOwnProperty(key)) {
+            var tile = currentBoardState[key];
+            if (tile.x !== null && tile.y !== null) {
+                if (isTileSurrounded(tile.x, tile.y, currentBoardState)) {
+                    surroundedTiles.push(tile);
+                }
             }
         }
     }
     return surroundedTiles;
 }
 
-// Validate tile placement
-function isPlacementValid(tile, x, y, currentBoardState, isDragOver = false) {
-    const targetKey = `${x},${y}`;
+function isPlacementValid(tile, x, y, currentBoardState, isDragOver) {
+    isDragOver = isDragOver === undefined ? false : isDragOver;
+    var targetKey = "" + x + "," + y;
     if (currentBoardState[targetKey]) {
-        // if (!isDragOver) console.log("[Worker] This cell is already occupied.");
         return false;
     }
 
-    const placedTilesCount = Object.keys(currentBoardState).length;
-    const orientedEdges = tile.getOrientedEdges();
+    var placedTilesCount = Object.keys(currentBoardState).length;
+    var orientedEdges = tile.getOrientedEdges();
 
     if (placedTilesCount === 0) {
-        if (x === 0 && y === 0) {
-            // if (!isDragOver) console.log("[Worker] First tile placed at (0,0).");
-            return true;
-        } else {
-            // if (!isDragOver) console.log("[Worker] The first tile must be placed at the center (0,0).");
-            return false;
-        }
+        return x === 0 && y === 0;
     }
 
-    let touchesExistingTile = false;
-    const neighbors = getNeighbors(x, y);
-    for (const neighborInfo of neighbors) {
-        const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-        const neighborTile = currentBoardState[neighborKey];
+    var touchesExistingTile = false;
+    var neighbors = getNeighbors(x, y);
+    for (var i = 0; i < neighbors.length; i++) {
+        var neighborInfo = neighbors[i];
+        var neighborKey = "" + neighborInfo.nx + "," + neighborInfo.ny;
+        var neighborTile = currentBoardState[neighborKey];
         if (neighborTile) {
             touchesExistingTile = true;
-            const neighborOrientedEdges = neighborTile.getOrientedEdges(); // Ensure neighborTile is a HexTile instance
-            const newTileEdgeType = orientedEdges[neighborInfo.edgeIndexOnNewTile];
-            const neighborEdgeType = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
+            var neighborOrientedEdges = neighborTile.getOrientedEdges();
+            var newTileEdgeType = orientedEdges[neighborInfo.edgeIndexOnNewTile];
+            var neighborEdgeType = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
             if (newTileEdgeType !== neighborEdgeType) {
-                // if (!isDragOver) console.log(`[Worker] Edge mismatch with neighbor at ${nx},${ny}.`);
                 return false;
             }
         }
     }
 
-    if (!touchesExistingTile) {
-        // if (!isDragOver) console.log("[Worker] Tile must touch an existing tile.");
-        return false;
-    }
-    if (isSpaceEnclosed(x, y, currentBoardState)) {
-        // if (!isDragOver) console.log("[Worker] Cannot place tile in an enclosed space.");
-        return false;
-    }
-    // if (!isDragOver) console.log("[Worker] Valid placement.");
+    if (!touchesExistingTile) return false;
+    if (isSpaceEnclosed(x, y, currentBoardState)) return false;
     return true;
 }
 
-// Calculate scores
 function calculateScoresForBoard(currentBoardState) {
-    let p1Score = 0;
-    let p2Score = 0;
-    for (const key in currentBoardState) {
-        const tile = currentBoardState[key];
-        if (!tile || typeof tile.getOrientedEdges !== 'function' || typeof tile.playerId === 'undefined') {
-            continue;
-        }
-        const { x, y } = tile;
-        const orientedEdges = tile.getOrientedEdges();
-        const neighbors = getNeighbors(x, y);
-        for (const neighborInfo of neighbors) {
-            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-            const neighborTile = currentBoardState[neighborKey];
-            if (neighborTile && typeof neighborTile.getOrientedEdges === 'function' && neighborTile.playerId === tile.playerId) {
-                const edgeOnThisTile = orientedEdges[neighborInfo.edgeIndexOnNewTile];
-                const neighborOrientedEdges = neighborTile.getOrientedEdges();
-                const edgeOnNeighborTile = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
-                if (edgeOnThisTile === 1 && edgeOnNeighborTile === 1) {
-                    if (tile.playerId === 1) p1Score++;
-                    else p2Score++;
+    var p1Score = 0;
+    var p2Score = 0;
+    for (var key in currentBoardState) {
+        if (currentBoardState.hasOwnProperty(key)) {
+            var tile = currentBoardState[key];
+            if (!tile || typeof tile.getOrientedEdges !== 'function' || typeof tile.playerId === 'undefined') {
+                continue;
+            }
+            var tileX = tile.x; // Avoid destructuring
+            var tileY = tile.y;
+            var orientedEdges = tile.getOrientedEdges();
+            var neighbors = getNeighbors(tileX, tileY);
+            for (var i = 0; i < neighbors.length; i++) {
+                var neighborInfo = neighbors[i];
+                var neighborKey = "" + neighborInfo.nx + "," + neighborInfo.ny;
+                var neighborTile = currentBoardState[neighborKey];
+                if (neighborTile && typeof neighborTile.getOrientedEdges === 'function' && neighborTile.playerId === tile.playerId) {
+                    var edgeOnThisTile = orientedEdges[neighborInfo.edgeIndexOnNewTile];
+                    var neighborOrientedEdges = neighborTile.getOrientedEdges();
+                    var edgeOnNeighborTile = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
+                    if (edgeOnThisTile === 1 && edgeOnNeighborTile === 1) {
+                        if (tile.playerId === 1) p1Score++;
+                        else p2Score++;
+                    }
                 }
             }
         }
@@ -228,97 +205,92 @@ function calculateScoresForBoard(currentBoardState) {
     return { player1Score: p1Score / 2, player2Score: p2Score / 2 };
 }
 
-// Helper function to deep copy board state and tile objects for worker simulation
 function deepCopyBoardState(originalBoardState) {
-    const newBoardState = {};
-    for (const key in originalBoardState) {
-        const tileData = originalBoardState[key];
-        // Reconstruct HexTile instances for the worker's board state
-        const newTile = new HexTile(tileData.id, tileData.playerId, [...tileData.edges]);
-        newTile.orientation = tileData.orientation;
-        newTile.x = tileData.x;
-        newTile.y = tileData.y;
-        newBoardState[key] = newTile;
+    var newBoardState = {};
+    for (var key in originalBoardState) {
+        if (originalBoardState.hasOwnProperty(key)) {
+            var tileData = originalBoardState[key];
+            var newTile = new HexTile(tileData.id, tileData.playerId, [].concat(tileData.edges));
+            newTile.orientation = tileData.orientation;
+            newTile.x = tileData.x;
+            newTile.y = tileData.y;
+            newBoardState[key] = newTile;
+        }
     }
     return newBoardState;
 }
 
 function hydrateHand(handData) {
-    return handData.map(tileData => {
-        const tile = new HexTile(tileData.id, tileData.playerId, [...tileData.edges]);
+    return handData.map(function(tileData) {
+        var tile = new HexTile(tileData.id, tileData.playerId, [].concat(tileData.edges));
         tile.orientation = tileData.orientation;
-        // x and y are null for hand tiles, so no need to set them from tileData
         return tile;
     });
 }
 
+// --- ES5 async/await helper ---
+function _asyncToGenerator(fn) {
+  return function () {
+    var self = this, args = arguments;
+    var gen = fn.apply(self, args);
+    return new Promise(function (resolve, reject) {
+      function step(key, arg) {
+        try {
+          var info = gen[key](arg);
+          var value = info.value;
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        if (info.done) {
+          resolve(value);
+        } else {
+          return Promise.resolve(value).then(function (value) {
+            step("next", value);
+          }, function (err) {
+            step("throw", err);
+          });
+        }
+      }
+      return step("next");
+    });
+  };
+}
 
-// --- AI Player Logic (to be moved from script.js) ---
+// --- AI Player Logic ---
 
-async function calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3 = false) {
-    // Common logic for greedy, greedy2, and greedy3
-    await new Promise(resolve => setTimeout(resolve, 500)); // Adjusted delay
+var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3) {
+    isGreedy3 = isGreedy3 === undefined ? false : isGreedy3;
+    yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
 
-    let bestMove = null;
+    var bestMove = null;
 
     if (isGreedy3) {
-        console.log(`[Worker] AI: Greedy 3 calculating move for Player ${currentPlayerId}.`);
-        const depth = 2;
-
-        // Stats for the pruned run (this determines the move)
-        const statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
-        const minimaxResultPruned = findBestMoveMinimax(
+        console.log("[Worker] AI: Greedy 3 calculating move for Player " + currentPlayerId + ".");
+        var depth = 2;
+        var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
+        var minimaxResultPruned = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned // useAlphaBetaPruning = true
+            depth, -Infinity, Infinity, true, true, statsPruned
         );
+        var percentageSkipped = 0;
+        var totalLeavesWithoutPruning = 0;
 
-        let percentageSkipped = 0;
-        let totalLeavesWithoutPruning = 0;
-
-        if (statsPruned.nodesAtHorizon > 0) { // Only calculate efficiency if there was something to evaluate
-            // Stats for getting total nodes without pruning (for comparison metric)
-            const statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 }; // cutoffs will remain 0
+        if (statsPruned.nodesAtHorizon > 0) {
+            var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             findBestMoveMinimax(
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning // useAlphaBetaPruning = false
+                depth, -Infinity, Infinity, true, false, statsNoPruning
             );
             totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
-
             if (totalLeavesWithoutPruning > 0) {
-                const evaluatedLeavesWithPruning = statsPruned.nodesAtHorizon;
-                // Percentage of leaves *not* evaluated thanks to pruning
+                var evaluatedLeavesWithPruning = statsPruned.nodesAtHorizon;
                 percentageSkipped = ((totalLeavesWithoutPruning - evaluatedLeavesWithPruning) / totalLeavesWithoutPruning) * 100;
             }
         }
 
         if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
-            bestMove = {
-                tileId: chosenMinimaxMove.tile.id,
-                orientation: chosenMinimaxMove.tile.orientation,
-                x: chosenMinimaxMove.x,
-                y: chosenMinimaxMove.y,
-                score: chosenMinimaxMove.score // This is the score from minimaxResultPruned.score
-            };
-            console.log(`[Worker] Greedy 3 AI Summary: Chose move for tile ${bestMove.tileId} at (${bestMove.x},${bestMove.y}), orientation ${bestMove.orientation}.`);
-            console.log(`    Score: ${bestMove.score}`);
-            console.log(`    Strict Pruning Stats: Nodes at horizon: ${statsPruned.nodesAtHorizon}, Cutoffs: ${statsPruned.cutoffs}`);
-            console.log(`    Baseline (No Pruning): Total nodes at horizon: ${totalLeavesWithoutPruning}`);
-            if (totalLeavesWithoutPruning > 0) {
-                console.log(`    Pruning Efficiency: Skipped approx. ${percentageSkipped.toFixed(1)}% of horizon nodes.`);
-            } else {
-                console.log(`    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).`);
-            }
-        } else {
-            console.log("[Worker] Greedy 3 AI: No valid moves found.");
-        }
-    } else if (isGreedy2) {
-        // console.log("[Worker] AI: Playing Greedily with Lookahead (Greedy 2)");
-        // Depth 1 for P2 -> P1
-        // TODO: Greedy2 could also benefit from stats if desired, but not requested for now.
-        const minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true); // Standard strict pruning
-        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            const chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+            var chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
             bestMove = {
                 tileId: chosenMinimaxMove.tile.id,
                 orientation: chosenMinimaxMove.tile.orientation,
@@ -326,63 +298,90 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
                 y: chosenMinimaxMove.y,
                 score: chosenMinimaxMove.score
             };
+            console.log("[Worker] Greedy 3 AI Summary: Chose move for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + ".");
+            console.log("    Score: " + bestMove.score);
+            console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
+            console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
+            if (totalLeavesWithoutPruning > 0) {
+                console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
+            } else {
+                console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
+            }
+        } else {
+            console.log("[Worker] Greedy 3 AI: No valid moves found.");
+        }
+    } else if (isGreedy2) {
+        var minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true);
+        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
+            var chosenMinimaxMoveG2 = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+            bestMove = {
+                tileId: chosenMinimaxMoveG2.tile.id,
+                orientation: chosenMinimaxMoveG2.tile.orientation,
+                x: chosenMinimaxMoveG2.x,
+                y: chosenMinimaxMoveG2.y,
+                score: chosenMinimaxMoveG2.score
+            };
         }
     } else { // Greedy 1
-        // console.log("[Worker] AI: Playing Greedily (Greedy 1)");
-        let bestScoreDiff = -Infinity;
-        let bestMoves = [];
+        var bestScoreDiff = -Infinity;
+        var bestMoves = [];
+        var sortedHand = [].concat(player2Hand).sort(function(a, b) { return countTriangles(b) - countTriangles(a); });
 
-        const sortedHand = [...player2Hand].sort((a, b) => countTriangles(b) - countTriangles(a));
-
-        for (const tile of sortedHand) {
-            const originalOrientation = tile.orientation;
-            const uniqueOrientations = getUniqueOrientations(tile);
-            for (const o of uniqueOrientations) {
+        for (var i_sh = 0; i_sh < sortedHand.length; i_sh++) {
+            var tile = sortedHand[i_sh];
+            var originalOrientation = tile.orientation;
+            var uniqueOrientations = getUniqueOrientations(tile);
+            for (var i_uo = 0; i_uo < uniqueOrientations.length; i_uo++) {
+                var o = uniqueOrientations[i_uo];
                 tile.orientation = o;
-                const placementSpots = [];
+                var placementSpots = [];
                 if (Object.keys(boardState).length === 0) {
                     placementSpots.push({ x: 0, y: 0 });
                 } else {
-                    const checkedSpots = new Set();
-                    for (const key in boardState) {
-                        const existingTile = boardState[key];
-                        const neighbors = getNeighbors(existingTile.x, existingTile.y);
-                        for (const neighborInfo of neighbors) {
-                            const spotKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                            if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
-                                placementSpots.push({ x: neighborInfo.nx, y: neighborInfo.ny });
-                                checkedSpots.add(spotKey);
+                    var checkedSpots = {}; // Use object to simulate Set
+                    for (var key_bs in boardState) {
+                        if (boardState.hasOwnProperty(key_bs)) {
+                            var existingTile = boardState[key_bs];
+                            var neighbors = getNeighbors(existingTile.x, existingTile.y);
+                            for (var i_n = 0; i_n < neighbors.length; i_n++) {
+                                var neighborInfo = neighbors[i_n];
+                                var spotKey = "" + neighborInfo.nx + "," + neighborInfo.ny;
+                                if (!boardState[spotKey] && !checkedSpots.hasOwnProperty(spotKey)) {
+                                    placementSpots.push({ x: neighborInfo.nx, y: neighborInfo.ny });
+                                    checkedSpots[spotKey] = true;
+                                }
                             }
                         }
                     }
                     if (placementSpots.length === 0 && Object.keys(boardState).length < 5) {
-                        const scanRadius = 3;
-                        for (let q_scan = -scanRadius; q_scan <= scanRadius; q_scan++) {
-                            for (let r_scan = -scanRadius; r_scan <= scanRadius; r_scan++) {
+                        var scanRadius = 3;
+                        for (var q_scan = -scanRadius; q_scan <= scanRadius; q_scan++) {
+                            for (var r_scan = -scanRadius; r_scan <= scanRadius; r_scan++) {
                                 if ((Math.abs(q_scan) + Math.abs(r_scan) + Math.abs(q_scan + r_scan)) / 2 > scanRadius) continue;
-                                const spotKey = `${q_scan},${r_scan}`;
-                                if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
+                                var spotKey_sr = "" + q_scan + "," + r_scan;
+                                if (!boardState[spotKey_sr] && !checkedSpots.hasOwnProperty(spotKey_sr)) {
                                     placementSpots.push({ x: q_scan, y: r_scan });
-                                    checkedSpots.add(spotKey);
+                                    checkedSpots[spotKey_sr] = true;
                                 }
                             }
                         }
                     }
                 }
-                for (const pos of placementSpots) {
+                for (var i_ps = 0; i_ps < placementSpots.length; i_ps++) {
+                    var pos = placementSpots[i_ps];
                     if (isPlacementValid(tile, pos.x, pos.y, boardState, true)) {
-                        const tempBoardState = deepCopyBoardState(boardState);
-                        const simTile = new HexTile(tile.id, tile.playerId, tile.edges);
+                        var tempBoardState = deepCopyBoardState(boardState);
+                        var simTile = new HexTile(tile.id, tile.playerId, tile.edges);
                         simTile.orientation = tile.orientation;
                         simTile.x = pos.x;
                         simTile.y = pos.y;
-                        tempBoardState[`${pos.x},${pos.y}`] = simTile;
+                        tempBoardState["" + pos.x + "," + pos.y] = simTile;
 
-                        const removalResult = simulateRemovalCycle(tempBoardState, currentPlayerId); // Simulate removals after AI's move
-                        const boardAfterSimulatedRemovals = removalResult.boardState;
+                        var removalResult = simulateRemovalCycle(tempBoardState, currentPlayerId);
+                        var boardAfterSimulatedRemovals = removalResult.boardState;
 
-                        const scores = calculateScoresForBoard(boardAfterSimulatedRemovals);
-                        const scoreDiff = (currentPlayerId === 2 ? scores.player2Score - scores.player1Score : scores.player1Score - scores.player2Score);
+                        var scores = calculateScoresForBoard(boardAfterSimulatedRemovals);
+                        var scoreDiff = (currentPlayerId === 2 ? scores.player2Score - scores.player1Score : scores.player1Score - scores.player2Score);
 
                         if (scoreDiff > bestScoreDiff) {
                             bestScoreDiff = scoreDiff;
@@ -400,470 +399,417 @@ async function calculateGreedyMove(boardState, player2Hand, player1Hand, current
         }
     }
     return bestMove;
-}
+});
 
-
-async function workerPerformAiMove(boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId) {
-    // console.log(`[Worker] performAiMove called. OpponentType: ${opponentType}, P2Hand: ${player2HandOriginal.length}`);
-    let bestMove = null;
-    const player2Hand = hydrateHand(player2HandOriginal);
-    const player1Hand = hydrateHand(player1HandOriginal);
-    const opponentPlayerId = (currentPlayerId % 2) + 1;
+var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId) {
+    var bestMove = null;
+    var player2Hand = hydrateHand(player2HandOriginal);
+    var player1Hand = hydrateHand(player1HandOriginal);
+    var opponentPlayerId = (currentPlayerId % 2) + 1;
 
     if (opponentType === 'random') {
-        // console.log("[Worker] AI: Playing Randomly");
-        await new Promise(resolve => setTimeout(resolve, 200)); // Short delay for random
-        if (player2Hand.length === 0) return null; // No tiles to play
-        const tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
-        const originalOrientation = tileToPlay.orientation;
-
-        const rotations = Math.floor(Math.random() * 6);
-        for (let i = 0; i < rotations; i++) {
+        yield new Promise(function(resolve) { return setTimeout(resolve, 200); });
+        if (player2Hand.length === 0) return null;
+        var tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
+        var originalOrientation_rand = tileToPlay.orientation;
+        var rotations = Math.floor(Math.random() * 6);
+        for (var i_rt = 0; i_rt < rotations; i_rt++) {
             tileToPlay.rotate();
         }
 
-        const possiblePlacements = [];
+        var possiblePlacements_rand = [];
         if (Object.keys(boardState).length === 0) {
             if (isPlacementValid(tileToPlay, 0, 0, boardState, true)) {
-                 possiblePlacements.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
+                 possiblePlacements_rand.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
             }
         } else {
-            const checkedSpots = new Set();
-            for (const key in boardState) {
-                const existingTile = boardState[key];
-                const neighbors = getNeighbors(existingTile.x, existingTile.y);
-                for (const neighborInfo of neighbors) {
-                    const spotKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                    if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
-                         if (isPlacementValid(tileToPlay, neighborInfo.nx, neighborInfo.ny, boardState, true)) {
-                            possiblePlacements.push({ x: neighborInfo.nx, y: neighborInfo.ny, tile: tileToPlay, orientation: tileToPlay.orientation });
+            var checkedSpots_rand = {}; // Use object to simulate Set
+            for (var key_bs_rand in boardState) {
+                if (boardState.hasOwnProperty(key_bs_rand)) {
+                    var existingTile_rand = boardState[key_bs_rand];
+                    var neighbors_rand = getNeighbors(existingTile_rand.x, existingTile_rand.y);
+                    for (var i_n_rand = 0; i_n_rand < neighbors_rand.length; i_n_rand++) {
+                        var neighborInfo_rand = neighbors_rand[i_n_rand];
+                        var spotKey_rand = "" + neighborInfo_rand.nx + "," + neighborInfo_rand.ny;
+                        if (!boardState[spotKey_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_rand)) {
+                             if (isPlacementValid(tileToPlay, neighborInfo_rand.nx, neighborInfo_rand.ny, boardState, true)) {
+                                possiblePlacements_rand.push({ x: neighborInfo_rand.nx, y: neighborInfo_rand.ny, tile: tileToPlay, orientation: tileToPlay.orientation });
+                            }
+                            checkedSpots_rand[spotKey_rand] = true;
                         }
-                        checkedSpots.add(spotKey);
                     }
                 }
             }
-             if (possiblePlacements.length === 0 && Object.keys(boardState).length < 10 ) { // Broader search if no immediate spots
-                const scanRadius = 3;
-                 for (let q_scan = -scanRadius; q_scan <= scanRadius; q_scan++) {
-                    for (let r_scan = -scanRadius; r_scan <= scanRadius; r_scan++) {
-                        if ((Math.abs(q_scan) + Math.abs(r_scan) + Math.abs(q_scan + r_scan)) / 2 > scanRadius) continue;
-                        const spotKey = `${q_scan},${r_scan}`;
-                        if (!boardState[spotKey] && !checkedSpots.has(spotKey)) {
-                            if (isPlacementValid(tileToPlay, q_scan, r_scan, boardState, true)) {
-                                possiblePlacements.push({ x: q_scan, y: r_scan, tile: tileToPlay, orientation: tileToPlay.orientation });
+             if (possiblePlacements_rand.length === 0 && Object.keys(boardState).length < 10 ) {
+                var scanRadius_rand = 3;
+                 for (var q_scan_rand = -scanRadius_rand; q_scan_rand <= scanRadius_rand; q_scan_rand++) {
+                    for (var r_scan_rand = -scanRadius_rand; r_scan_rand <= scanRadius_rand; r_scan_rand++) {
+                        if ((Math.abs(q_scan_rand) + Math.abs(r_scan_rand) + Math.abs(q_scan_rand + r_scan_rand)) / 2 > scanRadius_rand) continue;
+                        var spotKey_sr_rand = "" + q_scan_rand + "," + r_scan_rand;
+                        if (!boardState[spotKey_sr_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_sr_rand)) {
+                            if (isPlacementValid(tileToPlay, q_scan_rand, r_scan_rand, boardState, true)) {
+                                possiblePlacements_rand.push({ x: q_scan_rand, y: r_scan_rand, tile: tileToPlay, orientation: tileToPlay.orientation });
                             }
-                            checkedSpots.add(spotKey);
+                            checkedSpots_rand[spotKey_sr_rand] = true;
                         }
                     }
                 }
             }
         }
 
-        if (possiblePlacements.length > 0) {
-            const chosenPlacement = possiblePlacements[Math.floor(Math.random() * possiblePlacements.length)];
+        if (possiblePlacements_rand.length > 0) {
+            var chosenPlacement_rand = possiblePlacements_rand[Math.floor(Math.random() * possiblePlacements_rand.length)];
             bestMove = {
-                tileId: chosenPlacement.tile.id,
-                orientation: chosenPlacement.orientation,
-                x: chosenPlacement.x,
-                y: chosenPlacement.y
+                tileId: chosenPlacement_rand.tile.id,
+                orientation: chosenPlacement_rand.orientation,
+                x: chosenPlacement_rand.x,
+                y: chosenPlacement_rand.y
             };
         }
-        tileToPlay.orientation = originalOrientation;
+        tileToPlay.orientation = originalOrientation_rand;
 
     } else if (opponentType === 'greedy') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false);
     } else if (opponentType === 'greedy2') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false);
     } else if (opponentType === 'greedy3') {
-        bestMove = await calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true);
     }
-
-    // console.log("[Worker] performAiMove result:", bestMove);
     return bestMove;
-}
+});
 
 function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, opponentType, currentPlayerId) {
-    // console.log(`[Worker] performAiTileRemoval called. OpponentType: ${opponentType}, SurrTiles: ${currentSurroundedTilesData.length}`);
-    let tileToRemove = null;
-    // No need to hydrate currentSurroundedTilesData if we only need id, x, y, playerId for decision making.
-    // If methods of HexTile were needed on these, they would need hydration.
-
+    var tileToRemove = null;
     if (opponentType === 'random') {
-        const opponentTiles = currentSurroundedTilesData.filter(t => t.playerId !== currentPlayerId);
+        var opponentTiles = currentSurroundedTilesData.filter(function(t) { return t.playerId !== currentPlayerId; });
         if (opponentTiles.length > 0) {
             tileToRemove = opponentTiles[Math.floor(Math.random() * opponentTiles.length)];
         } else if (currentSurroundedTilesData.length > 0) {
             tileToRemove = currentSurroundedTilesData[Math.floor(Math.random() * currentSurroundedTilesData.length)];
         }
     } else if (opponentType === 'greedy' || opponentType === 'greedy2' || opponentType === 'greedy3') {
-        const opponentTiles = currentSurroundedTilesData.filter(t => t.playerId !== currentPlayerId);
-        const ownTiles = currentSurroundedTilesData.filter(t => t.playerId === currentPlayerId);
+        var opponentTiles_g = currentSurroundedTilesData.filter(function(t) { return t.playerId !== currentPlayerId; });
+        var ownTiles_g = currentSurroundedTilesData.filter(function(t) { return t.playerId === currentPlayerId; });
 
         if (opponentType === 'greedy3') {
-            // Greedy 3: Prioritize opponent's tiles. If multiple, pick the first one.
-            // If no opponent tiles, but own tiles are surrounded, remove the first own tile.
-            if (opponentTiles.length > 0) {
-                tileToRemove = opponentTiles[0];
-                // console.log(`[Worker] Greedy3 removing opponent tile: ${tileToRemove.id}`);
-            } else if (ownTiles.length > 0) {
-                tileToRemove = ownTiles[0];
-                // console.log(`[Worker] Greedy3 removing own tile: ${tileToRemove.id}`);
-            } else {
-                // This case should not be reached if currentSurroundedTilesData is not empty
-                // console.log(`[Worker] Greedy3: No tiles to remove from list:`, currentSurroundedTilesData);
-            }
+            if (opponentTiles_g.length > 0) tileToRemove = opponentTiles_g[0];
+            else if (ownTiles_g.length > 0) tileToRemove = ownTiles_g[0];
         } else if (opponentType === 'greedy2') {
-            // Greedy 2: More sophisticated choice
-            if (opponentTiles.length > 0) {
-                let bestChoice = null;
-                let bestScore = -Infinity;
-                for (const oppTile of opponentTiles) {
-                    const tempBoard = deepCopyBoardState(boardState);
-                    delete tempBoard[`${oppTile.x},${oppTile.y}`];
-                    const score = evaluateBoard(tempBoard, currentPlayerId);
+            var bestChoice = null;
+            var bestScore = -Infinity;
+            if (opponentTiles_g.length > 0) {
+                for (var i_otg2 = 0; i_otg2 < opponentTiles_g.length; i_otg2++) {
+                    var oppTile = opponentTiles_g[i_otg2];
+                    var tempBoard = deepCopyBoardState(boardState);
+                    delete tempBoard["" + oppTile.x + "," + oppTile.y];
+                    var score = evaluateBoard(tempBoard, currentPlayerId);
                     if (score > bestScore) {
                         bestScore = score;
                         bestChoice = oppTile;
                     }
                 }
                 tileToRemove = bestChoice;
-                // if (tileToRemove) console.log(`[Worker] Greedy2 removing opponent tile: ${tileToRemove.id} for score ${bestScore}`);
-            } else if (ownTiles.length > 0) {
-                let bestChoice = null;
-                let bestScore = -Infinity;
-                for (const ownTile of ownTiles) {
-                    const tempBoard = deepCopyBoardState(boardState);
-                    delete tempBoard[`${ownTile.x},${ownTile.y}`];
-                    const score = evaluateBoard(tempBoard, currentPlayerId);
-                    if (score > bestScore) {
-                        bestScore = score;
+            } else if (ownTiles_g.length > 0) {
+                for (var i_owg2 = 0; i_owg2 < ownTiles_g.length; i_owg2++) {
+                    var ownTile = ownTiles_g[i_owg2];
+                    var tempBoard_own = deepCopyBoardState(boardState);
+                    delete tempBoard_own["" + ownTile.x + "," + ownTile.y];
+                    var score_own = evaluateBoard(tempBoard_own, currentPlayerId);
+                    if (score_own > bestScore) { // Note: should be bestScore_own or initialize bestScore to -Infinity for this block
+                        bestScore = score_own;    // Corrected: use a local bestScore or re-initialize
                         bestChoice = ownTile;
                     }
                 }
-                tileToRemove = bestChoice;
-                // if (tileToRemove) console.log(`[Worker] Greedy2 removing own tile: ${tileToRemove.id} for score ${bestScore}`);
-            } else {
-                // console.log(`[Worker] Greedy2: No tiles to remove from list:`, currentSurroundedTilesData);
+                 tileToRemove = bestChoice; // This was potentially using score from opponent tile block.
             }
         } else { // opponentType === 'greedy'
-            // Greedy 1: Simple choice
-            if (opponentTiles.length > 0) {
-                tileToRemove = opponentTiles[0];
-                // console.log(`[Worker] Greedy1 removing opponent tile: ${tileToRemove.id}`);
-            } else if (ownTiles.length > 0) {
-                tileToRemove = ownTiles[0];
-                // console.log(`[Worker] Greedy1 removing own tile: ${tileToRemove.id}`);
-            } else {
-                // console.log(`[Worker] Greedy1: No tiles to remove from list:`, currentSurroundedTilesData);
-            }
+            if (opponentTiles_g.length > 0) tileToRemove = opponentTiles_g[0];
+            else if (ownTiles_g.length > 0) tileToRemove = ownTiles_g[0];
         }
     }
-
-    // console.log("[Worker] performAiTileRemoval result:", tileToRemove ? {id: tileToRemove.id, x: tileToRemove.x, y: tileToRemove.y} : null);
-    // Return only necessary info (id, x, y) for the main thread to find and remove the tile
     return tileToRemove ? { id: tileToRemove.id, x: tileToRemove.x, y: tileToRemove.y, playerId: tileToRemove.playerId } : null;
 }
 
-
-// --- Minimax AI Helper Functions (copied from script.js) ---
+// --- Minimax AI Helper Functions ---
 function getAllPossibleMoves(currentBoardState, hand, playerId) {
-    const possibleMoves = [];
-    const initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
+    var possibleMoves = [];
+    var initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
+    var sortedHand_moves = [].concat(hand).sort(function(a,b) { return countTriangles(b) - countTriangles(a); });
 
-    const sortedHand = [...hand].sort((a, b) => countTriangles(b) - countTriangles(a));
-
-    for (const tile of sortedHand) { // hand is already hydrated HexTile objects
-        const originalOrientation = tile.orientation;
-        const uniqueOrientations = getUniqueOrientations(tile);
-        for (const o of uniqueOrientations) {
-            tile.orientation = o;
+    for (var i_shm = 0; i_shm < sortedHand_moves.length; i_shm++) {
+        var tile_move = sortedHand_moves[i_shm];
+        var originalOrientation_move = tile_move.orientation;
+        var uniqueOrientations_move = getUniqueOrientations(tile_move);
+        for (var i_uom = 0; i_uom < uniqueOrientations_move.length; i_uom++) {
+            var o_move = uniqueOrientations_move[i_uom];
+            tile_move.orientation = o_move;
             if (initialBoardIsEmpty) {
-                if (isPlacementValid(tile, 0, 0, currentBoardState, true)) {
-                    possibleMoves.push({ tile: {id: tile.id, playerId: tile.playerId, edges: tile.edges}, orientation: o, x: 0, y: 0, playerId: playerId });
+                if (isPlacementValid(tile_move, 0, 0, currentBoardState, true)) {
+                    possibleMoves.push({ tile: {id: tile_move.id, playerId: tile_move.playerId, edges: tile_move.edges}, orientation: o_move, x: 0, y: 0, playerId: playerId });
                 }
             } else {
-                const placementSpots = new Set();
-                for (const key in currentBoardState) {
-                    const existingTile = currentBoardState[key];
-                    const neighbors = getNeighbors(existingTile.x, existingTile.y);
-                    for (const neighborInfo of neighbors) {
-                        const spotKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                        if (!currentBoardState[spotKey]) {
-                            placementSpots.add(spotKey);
+                var placementSpotsObj = {}; // Use object to simulate Set for unique spots
+                for (var key_bsm in currentBoardState) {
+                    if (currentBoardState.hasOwnProperty(key_bsm)) {
+                        var existingTile_move = currentBoardState[key_bsm];
+                        var neighbors_move = getNeighbors(existingTile_move.x, existingTile_move.y);
+                        for (var i_nm = 0; i_nm < neighbors_move.length; i_nm++) {
+                            var neighborInfo_move = neighbors_move[i_nm];
+                            var spotKey_move = "" + neighborInfo_move.nx + "," + neighborInfo_move.ny;
+                            if (!currentBoardState[spotKey_move] && !placementSpotsObj.hasOwnProperty(spotKey_move)) {
+                                placementSpotsObj[spotKey_move] = { x: neighborInfo_move.nx, y: neighborInfo_move.ny };
+                            }
                         }
                     }
                 }
-                 if (placementSpots.size === 0 && Object.keys(currentBoardState).length < 5 && Object.keys(currentBoardState).length > 0) {
-                        const scanRadius = 3;
-                        for (let q = -scanRadius; q <= scanRadius; q++) {
-                            for (let r = -scanRadius; r <= scanRadius; r++) {
-                                // Corrected condition for axial hex radius
-                                if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 > scanRadius) continue;
-                                const spotKey = `${q},${r}`;
-                                if (!currentBoardState[spotKey]) {
-                                    placementSpots.add(spotKey);
+                 if (Object.keys(placementSpotsObj).length === 0 && Object.keys(currentBoardState).length < 5 && Object.keys(currentBoardState).length > 0) {
+                        var scanRadius_move = 3;
+                        for (var q_m = -scanRadius_move; q_m <= scanRadius_move; q_m++) {
+                            for (var r_m = -scanRadius_move; r_m <= scanRadius_move; r_m++) {
+                                if ((Math.abs(q_m) + Math.abs(r_m) + Math.abs(q_m + r_m)) / 2 > scanRadius_move) continue;
+                                var spotKey_sr_move = "" + q_m + "," + r_m;
+                                if (!currentBoardState[spotKey_sr_move] && !placementSpotsObj.hasOwnProperty(spotKey_sr_move)) {
+                                     placementSpotsObj[spotKey_sr_move] = { x: q_m, y: r_m };
                                 }
                             }
                         }
                     }
-                for (const spotKey of placementSpots) {
-                    const [x, y] = spotKey.split(',').map(Number);
-                    if (isPlacementValid(tile, x, y, currentBoardState, true)) {
-                        possibleMoves.push({ tile: {id: tile.id, playerId: tile.playerId, edges: tile.edges}, orientation: o, x: x, y: y, playerId: playerId });
+                for (var spotStrKey in placementSpotsObj) {
+                    if (placementSpotsObj.hasOwnProperty(spotStrKey)) {
+                        var spotCoords = placementSpotsObj[spotStrKey];
+                        // var xy = spotStrKey.split(',').map(Number); // Avoid destructuring from map
+                        // var x_coord = xy[0];
+                        // var y_coord = xy[1];
+                        if (isPlacementValid(tile_move, spotCoords.x, spotCoords.y, currentBoardState, true)) {
+                            possibleMoves.push({ tile: {id: tile_move.id, playerId: tile_move.playerId, edges: tile_move.edges}, orientation: o_move, x: spotCoords.x, y: spotCoords.y, playerId: playerId });
+                        }
                     }
                 }
             }
         }
-        tile.orientation = originalOrientation;
+        tile_move.orientation = originalOrientation_move;
     }
     return possibleMoves;
 }
 
 function evaluateBoard(currentBoardState, playerPerspectiveId) {
-    // console.log(`[Worker evaluateBoard] perspective: ${playerPerspectiveId}, board keys: ${Object.keys(currentBoardState).length}`);
-    // Accessing player1Hand/player2Hand from global scope of worker is problematic.
-    // This function should ideally not depend on global hand states if they are not passed or reconstructed.
-    // For now, assume this NUM_TILES_PER_PLAYER check is a minor heuristic.
-    if (Object.keys(currentBoardState).length === 0 && playerPerspectiveId === 2 /* && player1Hand.length === NUM_TILES_PER_PLAYER */) {
-        // console.log("[Worker evaluateBoard] Penalizing P2 for not making first move.");
+    if (Object.keys(currentBoardState).length === 0 && playerPerspectiveId === 2) {
         return -1000;
     }
     if (Object.keys(currentBoardState).length === 0 && playerPerspectiveId === 1) {
-        // console.log("[Worker evaluateBoard] Neutral score for P1 on empty board.");
         return 0;
     }
-
-    const scores = calculateScoresForBoard(currentBoardState);
-    let evalScore;
+    var scores = calculateScoresForBoard(currentBoardState);
+    var evalScore;
     if (playerPerspectiveId === 1) {
         evalScore = scores.player1Score - scores.player2Score;
     } else {
         evalScore = scores.player2Score - scores.player1Score;
     }
-    // console.log(`[Worker evaluateBoard] P${playerPerspectiveId} perspective. P1Score: ${scores.player1Score}, P2Score: ${scores.player2Score}. Eval: ${evalScore}`);
     return evalScore;
 }
 
-
 function simulateRemovalCycle(initialBoardState, actingPlayerId) {
-    let currentSimBoardState = deepCopyBoardState(initialBoardState);
-    let tilesReturnedToHands = {};
-    let iteration = 0;
-
+    var currentSimBoardState = deepCopyBoardState(initialBoardState);
+    var tilesReturnedToHands = {};
+    var iteration = 0;
     while (true) {
         iteration++;
-        const surroundedTiles = getSurroundedTiles(currentSimBoardState);
+        var surroundedTiles = getSurroundedTiles(currentSimBoardState);
         if (surroundedTiles.length === 0) break;
-
-        let tileToRemove = null;
-        const opponentTilesSurrounded = surroundedTiles.filter(t => t.playerId !== actingPlayerId);
-        const ownTilesSurrounded = surroundedTiles.filter(t => t.playerId === actingPlayerId);
+        var tileToRemove = null;
+        var opponentTilesSurrounded = surroundedTiles.filter(function(t) { return t.playerId !== actingPlayerId; });
+        var ownTilesSurrounded = surroundedTiles.filter(function(t) { return t.playerId === actingPlayerId; });
 
         if (opponentTilesSurrounded.length > 0) {
-            let bestRemovalChoice = null;
-            let maxScoreAfterRemoval = -Infinity;
-            for (const oppTile of opponentTilesSurrounded) {
-                const tempBoard = deepCopyBoardState(currentSimBoardState);
-                delete tempBoard[`${oppTile.x},${oppTile.y}`];
-                const score = evaluateBoard(tempBoard, actingPlayerId);
-                if (score > maxScoreAfterRemoval) {
-                    maxScoreAfterRemoval = score;
-                    bestRemovalChoice = oppTile;
+            var bestRemovalChoice = null;
+            var maxScoreAfterRemoval = -Infinity;
+            for (var i_otsr = 0; i_otsr < opponentTilesSurrounded.length; i_otsr++) {
+                var oppTile_sr = opponentTilesSurrounded[i_otsr];
+                var tempBoard_sr = deepCopyBoardState(currentSimBoardState);
+                delete tempBoard_sr["" + oppTile_sr.x + "," + oppTile_sr.y];
+                var score_sr = evaluateBoard(tempBoard_sr, actingPlayerId);
+                if (score_sr > maxScoreAfterRemoval) {
+                    maxScoreAfterRemoval = score_sr;
+                    bestRemovalChoice = oppTile_sr;
                 }
             }
             tileToRemove = bestRemovalChoice;
         } else if (ownTilesSurrounded.length > 0) {
-            // If AI must remove one of its own tiles, choose the one that is least damaging.
-            let bestOwnRemovalChoice = null;
-            // Initialize with a very low score, as we want to maximize the score (i.e., minimize the damage).
-            // Scores can be negative, so -Infinity is appropriate.
-            let scoreAfterOwnRemoval = -Infinity;
-
-            for (const ownTile of ownTilesSurrounded) {
-                const tempBoard = deepCopyBoardState(currentSimBoardState);
-                delete tempBoard[`${ownTile.x},${ownTile.y}`];
-                const currentScore = evaluateBoard(tempBoard, actingPlayerId);
-
-                if (currentScore > scoreAfterOwnRemoval) {
-                    scoreAfterOwnRemoval = currentScore;
-                    bestOwnRemovalChoice = ownTile;
+            var bestOwnRemovalChoice = null;
+            var scoreAfterOwnRemoval = -Infinity;
+            for (var i_owsr = 0; i_owsr < ownTilesSurrounded.length; i_owsr++) {
+                var ownTile_sr = ownTilesSurrounded[i_owsr];
+                var tempBoard_own_sr = deepCopyBoardState(currentSimBoardState);
+                delete tempBoard_own_sr["" + ownTile_sr.x + "," + ownTile_sr.y];
+                var currentScore_sr = evaluateBoard(tempBoard_own_sr, actingPlayerId);
+                if (currentScore_sr > scoreAfterOwnRemoval) {
+                    scoreAfterOwnRemoval = currentScore_sr;
+                    bestOwnRemovalChoice = ownTile_sr;
                 }
             }
             tileToRemove = bestOwnRemovalChoice;
         }
 
         if (tileToRemove) {
-            delete currentSimBoardState[`${tileToRemove.x},${tileToRemove.y}`];
+            delete currentSimBoardState["" + tileToRemove.x + "," + tileToRemove.y];
             if (!tilesReturnedToHands[tileToRemove.playerId]) {
                 tilesReturnedToHands[tileToRemove.playerId] = [];
             }
             tilesReturnedToHands[tileToRemove.playerId].push({
                 id: tileToRemove.id,
                 playerId: tileToRemove.playerId,
-                edges: [...tileToRemove.edges] // Store necessary data to reconstruct HexTile if needed
+                edges: [].concat(tileToRemove.edges)
             });
         } else {
             break;
         }
-        if (iteration > 10) break; // Safety break
+        if (iteration > 10) break;
     }
     return { boardState: currentSimBoardState, handGains: tilesReturnedToHands };
 }
 
-
-// Minimax with Alpha-Beta Pruning
-// maximizingPlayer is true if it's AI's turn to maximize its score, false if it's opponent's turn (AI minimizes opponent's score from AI's perspective)
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning = true, stats = {nodesAtHorizon: 0, cutoffs: 0}) {
-    // console.log(`[Worker Minimax P${maximizingPlayer ? aiPlayerId : opponentPlayerId} D${depth} Alpha: ${alpha} Beta: ${beta} Pruning: ${useAlphaBetaPruning}] Entry. AI Hand: ${aiHandOriginal.length}, Opp Hand: ${opponentHandOriginal.length}`);
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats) {
+    useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
+    stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
 
     if (depth === 0) {
         stats.nodesAtHorizon++;
-        const evalScore = evaluateBoard(currentBoardState, aiPlayerId); // Evaluate from AI's perspective
-        return { score: evalScore, moves: [] };
+        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
 
-    let bestMoves = [];
-    // Hydrate hands - crucial to ensure fresh copies and HexTile instances for each simulation path
-    const currentMaximizingPlayerHand = maximizingPlayer ? hydrateHand(aiHandOriginal.map(t => ({...t}))) : hydrateHand(opponentHandOriginal.map(t => ({...t})));
-    const currentMinimizingPlayerHand = maximizingPlayer ? hydrateHand(opponentHandOriginal.map(t => ({...t}))) : hydrateHand(aiHandOriginal.map(t => ({...t})));
+    var bestMoves = [];
+    // Ensure Object.assign is used for shallow copying tile data before hydrating, if needed for map.
+    var currentMaximizingPlayerHand = maximizingPlayer ? hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); })) : hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); }));
+    var currentMinimizingPlayerHand = maximizingPlayer ? hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); })) : hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); }));
 
-    const currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
-    const nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
+    var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
+    var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
 
-    const possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn);
+    var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn);
 
-    if (possibleMoves.length === 0) { // No moves for the current player
-        const evalScore = evaluateBoard(currentBoardState, aiPlayerId); // Evaluate from AI's perspective
-        return { score: evalScore, moves: [] };
+    if (possibleMoves.length === 0) {
+        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
 
     if (maximizingPlayer) {
-        let maxEval = -Infinity;
-        for (const move of possibleMoves) {
-            let boardAfterMove_sim = deepCopyBoardState(currentBoardState);
-            const tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [...move.tile.edges]);
+        var maxEval = -Infinity;
+        for (var i_max_m = 0; i_max_m < possibleMoves.length; i_max_m++) {
+            var move = possibleMoves[i_max_m];
+            var boardAfterMove_sim = deepCopyBoardState(currentBoardState);
+            var tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
             tileForSim.orientation = move.orientation;
             tileForSim.x = move.x;
             tileForSim.y = move.y;
-            boardAfterMove_sim[`${move.x},${move.y}`] = tileForSim;
+            boardAfterMove_sim["" + move.x + "," + move.y] = tileForSim;
 
-            let handAfterMove_sim = currentMaximizingPlayerHand.filter(t => t.id !== move.tile.id);
-            let opponentHandForNext_sim = currentMinimizingPlayerHand.map(t => new HexTile(t.id, t.playerId, [...t.edges])); // Fresh copy
+            var handAfterMove_sim = currentMaximizingPlayerHand.filter(function(t) { return t.id !== move.tile.id; });
+            var opponentHandForNext_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges)); });
 
-            const removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn);
+            var removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn);
             boardAfterMove_sim = removalResult.boardState;
-            if (removalResult.handGains[currentPlayerForThisTurn]) {
-                removalResult.handGains[currentPlayerForThisTurn].forEach(rt => handAfterMove_sim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
-            }
-            if (removalResult.handGains[nextPlayerForThisTurn]) { // Opponent gains tiles
-                removalResult.handGains[nextPlayerForThisTurn].forEach(rt => opponentHandForNext_sim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
-            }
 
-            let currentTurnEval;
-            if (handAfterMove_sim.length === 0) { // Current player (maximizer) wins
-                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Big bonus
+            var gainsCurrent = removalResult.handGains[currentPlayerForThisTurn] || [];
+            for(var j=0; j<gainsCurrent.length; j++) handAfterMove_sim.push(new HexTile(gainsCurrent[j].id, gainsCurrent[j].playerId, gainsCurrent[j].edges));
+
+            var gainsNext = removalResult.handGains[nextPlayerForThisTurn] || [];
+            for(var k=0; k<gainsNext.length; k++) opponentHandForNext_sim.push(new HexTile(gainsNext[k].id, gainsNext[k].playerId, gainsNext[k].edges));
+
+            var currentTurnEval;
+            if (handAfterMove_sim.length === 0) {
+                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000;
             } else {
-                 // Pass aiHandOriginal as the first hand (AI's perspective), opponentHandOriginal as second
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats); // Pass stats
+                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats);
                 currentTurnEval = evalResult.score;
             }
 
             if (currentTurnEval > maxEval) {
                 maxEval = currentTurnEval;
-                // For the top-level call (depth corresponding to initial call), store the move.
-                // For deeper calls, we only care about the score.
-                // The check `depth === (initial_depth_for_greedy3_or_2)` would be better if initial_depth was passed,
-                // or assume if it's AI's turn and depth is max, it's the root.
-                // For now, always update moves if it's the maximizing player.
-                 bestMoves = [{ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval }];
+                bestMoves = [{ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval }];
             } else if (currentTurnEval === maxEval) {
-                 bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
+                bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
             }
             alpha = Math.max(alpha, currentTurnEval);
-            // Maximizing player: Prune if alpha > beta (explore if alpha == beta)
-            if (useAlphaBetaPruning && alpha > beta) {
+            if (useAlphaBetaPruning && alpha >= beta) { // Corrected prune condition for maximizer
                 stats.cutoffs++;
-                break; // Beta cut-off
+                break;
             }
         }
         return { score: maxEval, moves: bestMoves };
-    } else { // Minimizing player (opponent's turn from AI's perspective)
-        let minEval = Infinity;
-        for (const move of possibleMoves) {
-            let boardAfterMove_sim = deepCopyBoardState(currentBoardState);
-            const tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [...move.tile.edges]);
-            tileForSim.orientation = move.orientation;
-            tileForSim.x = move.x;
-            tileForSim.y = move.y;
-            boardAfterMove_sim[`${move.x},${move.y}`] = tileForSim;
+    } else { // Minimizing player
+        var minEval = Infinity;
+        for (var i_min_m = 0; i_min_m < possibleMoves.length; i_min_m++) {
+            var move_min = possibleMoves[i_min_m];
+            var boardAfterMove_sim_min = deepCopyBoardState(currentBoardState);
+            var tileForSim_min = new HexTile(move_min.tile.id, currentPlayerForThisTurn, [].concat(move_min.tile.edges));
+            tileForSim_min.orientation = move_min.orientation;
+            tileForSim_min.x = move_min.x;
+            tileForSim_min.y = move_min.y;
+            boardAfterMove_sim_min["" + move_min.x + "," + move_min.y] = tileForSim_min;
 
-            let handAfterMove_sim = currentMaximizingPlayerHand.filter(t => t.id !== move.tile.id); // This is opponent's hand
-            let nextMaximizingHand_sim = currentMinimizingPlayerHand.map(t => new HexTile(t.id, t.playerId, [...t.edges])); // This is AI's hand for next turn
+            var handAfterMove_sim_min = currentMaximizingPlayerHand.filter(function(t) { return t.id !== move_min.tile.id; });
+            var nextMaximizingHand_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges)); });
 
-            const removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn);
-            boardAfterMove_sim = removalResult.boardState;
-            if (removalResult.handGains[currentPlayerForThisTurn]) { // Opponent (current maximizer in this 'else' branch) gains
-                removalResult.handGains[currentPlayerForThisTurn].forEach(rt => handAfterMove_sim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
-            }
-            if (removalResult.handGains[nextPlayerForThisTurn]) { // AI (current minimizer in this 'else' branch) gains
-                removalResult.handGains[nextPlayerForThisTurn].forEach(rt => nextMaximizingHand_sim.push(new HexTile(rt.id, rt.playerId, rt.edges)));
-            }
+            var removalResult_min = simulateRemovalCycle(boardAfterMove_sim_min, currentPlayerForThisTurn);
+            boardAfterMove_sim_min = removalResult_min.boardState;
 
-            let currentTurnEval;
-            if (handAfterMove_sim.length === 0) { // Current player (minimizer/opponent) wins
-                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) - 1000; // Big penalty for AI
+            var gainsCurrent_min = removalResult_min.handGains[currentPlayerForThisTurn] || [];
+            for(var jm=0; jm<gainsCurrent_min.length; jm++) handAfterMove_sim_min.push(new HexTile(gainsCurrent_min[jm].id, gainsCurrent_min[jm].playerId, gainsCurrent_min[jm].edges));
+
+            var gainsNext_min = removalResult_min.handGains[nextPlayerForThisTurn] || [];
+            for(var km=0; km<gainsNext_min.length; km++) nextMaximizingHand_sim.push(new HexTile(gainsNext_min[km].id, gainsNext_min[km].playerId, gainsNext_min[km].edges));
+
+            var currentTurnEval_min;
+            if (handAfterMove_sim_min.length === 0) {
+                currentTurnEval_min = evaluateBoard(boardAfterMove_sim_min, aiPlayerId) - 1000;
             } else {
-                // Order of hands for next call: AI's hand first, then opponent's hand.
-                // So, nextMaximizingHand_sim (AI's hand) then handAfterMove_sim (Opponent's hand)
-                const evalResult = findBestMoveMinimax(boardAfterMove_sim, nextMaximizingHand_sim, handAfterMove_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats); // Pass stats
-                currentTurnEval = evalResult.score;
+                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats);
+                currentTurnEval_min = evalResult_min.score;
             }
 
-            if (currentTurnEval < minEval) {
-                minEval = currentTurnEval;
-                // No need to store moves for minimizing player, only its best score.
+            if (currentTurnEval_min < minEval) {
+                minEval = currentTurnEval_min;
             }
-            beta = Math.min(beta, currentTurnEval);
-            // Minimizing player: Prune if beta < alpha (explore if beta == alpha)
-            if (useAlphaBetaPruning && beta < alpha) {
+            beta = Math.min(beta, currentTurnEval_min);
+            if (useAlphaBetaPruning && beta <= alpha) { // Corrected prune condition for minimizer
                 stats.cutoffs++;
-                break; // Alpha cut-off
+                break;
             }
         }
-        return { score: minEval, moves: [] }; // moves not used by caller for minimizing player
+        return { score: minEval, moves: [] };
     }
 }
 
-
 // --- Worker Message Handler ---
-self.onmessage = async function(e) { // Made async
-    // console.log('[Worker] Message received from main script:', e.data);
-    const { task, boardState, player2Hand, player1Hand, opponentType, currentPlayerId, currentSurroundedTiles } = e.data;
+self.onmessage = _asyncToGenerator(function* (event) {
+    var data = event.data; // Avoid destructuring here for simplicity
+    var task = data.task;
+    var boardStateData = data.boardState;
+    var player2HandData = data.player2Hand;
+    var player1HandData = data.player1Hand;
+    var opponentType = data.opponentType;
+    var currentPlayerId = data.currentPlayerId;
+    var currentSurroundedTilesData = data.currentSurroundedTiles;
 
-    // Reconstruct HexTile instances for boardState from simple data objects
-    const liveBoardState = {};
-    for (const key in boardState) {
-        const tileData = boardState[key];
-        const tile = new HexTile(tileData.id, tileData.playerId, [...tileData.edges]);
-        tile.orientation = tileData.orientation;
-        tile.x = tileData.x;
-        tile.y = tileData.y;
-        liveBoardState[key] = tile;
+    var liveBoardState = {};
+    for (var key_lbs in boardStateData) {
+        if (boardStateData.hasOwnProperty(key_lbs)) {
+            var tileData_lbs = boardStateData[key_lbs];
+            var tile_lbs = new HexTile(tileData_lbs.id, tileData_lbs.playerId, [].concat(tileData_lbs.edges));
+            tile_lbs.orientation = tileData_lbs.orientation;
+            tile_lbs.x = tileData_lbs.x;
+            tile_lbs.y = tileData_lbs.y;
+            liveBoardState[key_lbs] = tile_lbs;
+        }
     }
-
-    // Player hands are arrays of simple data objects, they will be hydrated inside AI functions if needed by HexTile methods.
-    // currentSurroundedTiles are also simple data objects.
 
     if (task === 'aiMove') {
-        const bestMove = await workerPerformAiMove(liveBoardState, player2Hand, player1Hand, opponentType, currentPlayerId); // Added await
+        var bestMove = yield workerPerformAiMove(liveBoardState, player2HandData, player1HandData, opponentType, currentPlayerId);
         self.postMessage({ task: 'aiMoveResult', move: bestMove });
     } else if (task === 'aiTileRemoval') {
-        // currentSurroundedTiles are already plain objects, suitable for workerPerformAiTileRemoval
-        // No async operation in workerPerformAiTileRemoval currently, so no await needed here.
-        // If it were made async in the future for delays, this would need 'await'.
-        const tileToRemove = workerPerformAiTileRemoval(liveBoardState, currentSurroundedTiles, opponentType, currentPlayerId);
+        var tileToRemove = workerPerformAiTileRemoval(liveBoardState, currentSurroundedTilesData, opponentType, currentPlayerId);
         self.postMessage({ task: 'aiTileRemovalResult', tileToRemove: tileToRemove });
     }
-};
+});
 
 // console.log('[Worker] AI Worker script fully loaded and message handler set up.');
