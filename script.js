@@ -88,17 +88,26 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     function animateTileReturn(tile, startX, startY, targetHandElement, callback) {
         const tempTileCanvas = document.createElement('canvas');
-        const sideLength = BASE_HEX_SIDE_LENGTH; // Use base size for animation
-        tempTileCanvas.width = 2 * sideLength + 10;
-        tempTileCanvas.height = Math.sqrt(3) * sideLength + 10;
+        // Use the tile's actual size at current zoom for the animation canvas
+        const sideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
+        // Add a small padding to ensure edges are not cut off during animation
+        const canvasPadding = 10 * currentZoomLevel; // Scale padding with zoom
+        tempTileCanvas.width = 2 * sideLength + canvasPadding;
+        tempTileCanvas.height = Math.sqrt(3) * sideLength + canvasPadding;
         tempTileCanvas.style.position = 'absolute';
+        // The startX, startY passed to this function are already the correct
+        // screen coordinates of the center of the tile on the main canvas.
+        // We need to adjust for the tempTileCanvas's own dimensions to position its top-left.
         tempTileCanvas.style.left = `${startX - tempTileCanvas.width / 2}px`;
         tempTileCanvas.style.top = `${startY - tempTileCanvas.height / 2}px`;
         tempTileCanvas.style.zIndex = '1001'; // Ensure it's above other elements
         document.body.appendChild(tempTileCanvas);
 
         const tileCtx = tempTileCanvas.getContext('2d');
-        drawHexTile(tileCtx, tempTileCanvas.width / 2, tempTileCanvas.height / 2, tile, 1.0); // Draw at zoom 1.0
+        // Draw the tile on the temporary canvas, centered, using currentZoomLevel
+        // The `drawHexTile` function's zoom parameter is relative to its internal BASE_HEX_SIDE_LENGTH.
+        // So, to draw it at the size it appears on the board, we pass currentZoomLevel.
+        drawHexTile(tileCtx, tempTileCanvas.width / 2, tempTileCanvas.height / 2, tile, currentZoomLevel);
 
         const targetRect = targetHandElement.getBoundingClientRect();
         // Target the center of the hand display area
@@ -136,9 +145,14 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         console.log(`Animating removal of tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
 
         // Calculate start position (center of the tile on canvas)
+        // These coordinates are relative to the viewport, as the animated tile is appended to document.body
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
-        const startScreenX = currentOffsetX + scaledHexSideLength * (3/2 * tileToRemove.x) + gameCanvas.getBoundingClientRect().left;
-        const startScreenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tileToRemove.x + Math.sqrt(3) * tileToRemove.y) + gameCanvas.getBoundingClientRect().top;
+        const tileCenterXinCanvas = currentOffsetX + scaledHexSideLength * (3/2 * tileToRemove.x);
+        const tileCenterYinCanvas = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tileToRemove.x + Math.sqrt(3) * tileToRemove.y);
+
+        const canvasRect = gameCanvas.getBoundingClientRect();
+        const startScreenX = tileCenterXinCanvas + canvasRect.left;
+        const startScreenY = tileCenterYinCanvas + canvasRect.top;
 
         // Determine target hand element
         const targetHandElement = tileToRemove.playerId === 1 ? player1HandDisplay : player2HandDisplay;
