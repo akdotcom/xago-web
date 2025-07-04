@@ -111,15 +111,22 @@ function isTileSurrounded(q, r, currentBoardState) {
     return true;
 }
 
-function isSpaceEnclosed(q, r, currentBoardState) {
+function isSpaceEnclosed(q, r, currentBoardState, effectiveDebug) { // Added effectiveDebug
+    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false; // Use effectiveDebug if passed
+
     var neighbors = getNeighbors(q, r);
+    var allNeighborsPresent = true;
     for (var i = 0; i < neighbors.length; i++) {
         var neighborInfo = neighbors[i];
         if (!currentBoardState["" + neighborInfo.nx + "," + neighborInfo.ny]) {
-            return false;
+            allNeighborsPresent = false;
+            break;
         }
     }
-    return true;
+    if (localDebug) { // Conditional logging
+        console.log("[Worker DEBUG] isSpaceEnclosed(" + q + "," + r + ") result: " + allNeighborsPresent);
+    }
+    return allNeighborsPresent;
 }
 
 function getSurroundedTiles(currentBoardState) {
@@ -137,10 +144,17 @@ function getSurroundedTiles(currentBoardState) {
     return surroundedTiles;
 }
 
-function isPlacementValid(tile, x, y, currentBoardState, isDragOver) {
-    isDragOver = isDragOver === undefined ? false : isDragOver;
+function isPlacementValid(tile, x, y, currentBoardState, isDragOver, effectiveDebug) { // Added effectiveDebug
+    isDragOver = isDragOver === undefined ? false : isDragOver; // Keep for compatibility if called without effectiveDebug
+    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false; // Use effectiveDebug if passed
+
+    if (localDebug) {
+        console.log("[Worker DEBUG] isPlacementValid: Checking tile " + tile.id + " at (" + x + "," + y + ") ori: " + tile.orientation);
+    }
+
     var targetKey = "" + x + "," + y;
     if (currentBoardState[targetKey]) {
+        if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - cell occupied.");
         return false;
     }
 
@@ -148,7 +162,9 @@ function isPlacementValid(tile, x, y, currentBoardState, isDragOver) {
     var orientedEdges = tile.getOrientedEdges();
 
     if (placedTilesCount === 0) {
-        return x === 0 && y === 0;
+        var firstMoveValid = (x === 0 && y === 0);
+        if (localDebug) console.log("[Worker DEBUG] isPlacementValid: First move check. Valid: " + firstMoveValid);
+        return firstMoveValid;
     }
 
     var touchesExistingTile = false;
@@ -159,17 +175,28 @@ function isPlacementValid(tile, x, y, currentBoardState, isDragOver) {
         var neighborTile = currentBoardState[neighborKey];
         if (neighborTile) {
             touchesExistingTile = true;
-            var neighborOrientedEdges = neighborTile.getOrientedEdges();
+            var neighborOrientedEdges = neighborTile.getOrientedEdges(); // Ensure neighbor tile is hydrated if necessary, but should be from boardState
             var newTileEdgeType = orientedEdges[neighborInfo.edgeIndexOnNewTile];
             var neighborEdgeType = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
             if (newTileEdgeType !== neighborEdgeType) {
+                if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - edge mismatch with neighbor at (" + neighborInfo.nx + "," + neighborInfo.ny + "). New: " + newTileEdgeType + ", Neighbor: " + neighborEdgeType);
                 return false;
             }
         }
     }
 
-    if (!touchesExistingTile) return false;
-    if (isSpaceEnclosed(x, y, currentBoardState)) return false;
+    if (!touchesExistingTile) {
+        if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - does not touch existing tile.");
+        return false;
+    }
+
+    var spaceIsEnclosed = isSpaceEnclosed(x, y, currentBoardState, localDebug); // Pass localDebug
+    if (spaceIsEnclosed) {
+        if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - space (" + x + "," + y + ") is enclosed. Result from isSpaceEnclosed: " + spaceIsEnclosed);
+        return false;
+    }
+
+    if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Success - tile " + tile.id + " at (" + x + "," + y + ") is a valid placement.");
     return true;
 }
 
@@ -445,7 +472,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
                         }
                     });
 
-                    if (isPlacementValid(tile, pos.x, pos.y, boardState, true)) {
+                    if (isPlacementValid(tile, pos.x, pos.y, boardState, true, effectiveDebug)) { // Pass effectiveDebug
                         var tempBoardState = deepCopyBoardState(boardState);
                         var simTile = new HexTile(tile.id, tile.playerId, tile.edges);
                         simTile.orientation = tile.orientation;
@@ -495,7 +522,7 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
 
         var possiblePlacements_rand = [];
         if (Object.keys(boardState).length === 0) {
-            if (isPlacementValid(tileToPlay, 0, 0, boardState, true)) {
+            if (isPlacementValid(tileToPlay, 0, 0, boardState, true, debug)) { // Pass debug as effectiveDebug
                  possiblePlacements_rand.push({ x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
             }
         } else {
@@ -508,7 +535,7 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
                         var neighborInfo_rand = neighbors_rand[i_n_rand];
                         var spotKey_rand = "" + neighborInfo_rand.nx + "," + neighborInfo_rand.ny;
                         if (!boardState[spotKey_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_rand)) {
-                             if (isPlacementValid(tileToPlay, neighborInfo_rand.nx, neighborInfo_rand.ny, boardState, true)) {
+                             if (isPlacementValid(tileToPlay, neighborInfo_rand.nx, neighborInfo_rand.ny, boardState, true, debug)) { // Pass debug
                                 possiblePlacements_rand.push({ x: neighborInfo_rand.nx, y: neighborInfo_rand.ny, tile: tileToPlay, orientation: tileToPlay.orientation });
                             }
                             checkedSpots_rand[spotKey_rand] = true;
@@ -523,7 +550,7 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
                         if ((Math.abs(q_scan_rand) + Math.abs(r_scan_rand) + Math.abs(q_scan_rand + r_scan_rand)) / 2 > scanRadius_rand) continue;
                         var spotKey_sr_rand = "" + q_scan_rand + "," + r_scan_rand;
                         if (!boardState[spotKey_sr_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_sr_rand)) {
-                            if (isPlacementValid(tileToPlay, q_scan_rand, r_scan_rand, boardState, true)) {
+                            if (isPlacementValid(tileToPlay, q_scan_rand, r_scan_rand, boardState, true, debug)) { // Pass debug
                                 possiblePlacements_rand.push({ x: q_scan_rand, y: r_scan_rand, tile: tileToPlay, orientation: tileToPlay.orientation });
                             }
                             checkedSpots_rand[spotKey_sr_rand] = true;
@@ -619,7 +646,8 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
 }
 
 // --- Minimax AI Helper Functions ---
-function getAllPossibleMoves(currentBoardState, hand, playerId) {
+function getAllPossibleMoves(currentBoardState, hand, playerId, effectiveDebug) { // Added effectiveDebug
+    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false;
     var possibleMoves = [];
     var initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
     var sortedHand_moves = [].concat(hand).sort(function(a,b) { return countTriangles(b) - countTriangles(a); });
@@ -632,7 +660,7 @@ function getAllPossibleMoves(currentBoardState, hand, playerId) {
             var o_move = uniqueOrientations_move[i_uom];
             tile_move.orientation = o_move;
             if (initialBoardIsEmpty) {
-                if (isPlacementValid(tile_move, 0, 0, currentBoardState, true)) {
+                if (isPlacementValid(tile_move, 0, 0, currentBoardState, true, localDebug)) { // Pass localDebug
                     possibleMoves.push({ tile: {id: tile_move.id, playerId: tile_move.playerId, edges: tile_move.edges}, orientation: o_move, x: 0, y: 0, playerId: playerId });
                 }
             } else {
@@ -668,7 +696,7 @@ function getAllPossibleMoves(currentBoardState, hand, playerId) {
                         // var xy = spotStrKey.split(',').map(Number); // Avoid destructuring from map
                         // var x_coord = xy[0];
                         // var y_coord = xy[1];
-                        if (isPlacementValid(tile_move, spotCoords.x, spotCoords.y, currentBoardState, true)) {
+                        if (isPlacementValid(tile_move, spotCoords.x, spotCoords.y, currentBoardState, true, localDebug)) { // Pass localDebug
                             possibleMoves.push({ tile: {id: tile_move.id, playerId: tile_move.playerId, edges: tile_move.edges}, orientation: o_move, x: spotCoords.x, y: spotCoords.y, playerId: playerId });
                         }
                     }
@@ -812,7 +840,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
 
     if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
-    var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn);
+    var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn, effectiveDebug); // Pass effectiveDebug
     if (effectiveDebug) {
         console.timeEnd("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
         console.log("[Worker DEBUG] findBestMoveMinimax: (Depth: " + depth + ") Possible moves:", possibleMoves.length);
