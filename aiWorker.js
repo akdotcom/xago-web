@@ -266,13 +266,16 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
 
     var bestMove = null;
 
+    // Send a message to clear any previous evaluation highlight
+    self.postMessage({ task: 'aiClearEvaluationHighlight' });
+
     if (isGreedy4) { // Check for Greedy 4 first
         console.log("[Worker] AI: Greedy 4 calculating move for Player " + currentPlayerId + ".");
         var depth = 3; // Depth 3 for 4-turn lookahead
         var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
         var minimaxResultPruned = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned
+            depth, -Infinity, Infinity, true, true, statsPruned, depth // Pass initial depth
         );
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
@@ -283,7 +286,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             // Consider making this conditional or for debugging only if performance is an issue.
             findBestMoveMinimax( // For Greedy 3
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning
+                depth, -Infinity, Infinity, true, false, statsNoPruning, depth // Pass initial depth
             );
             totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
             if (totalLeavesWithoutPruning > 0) {
@@ -319,7 +322,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
         var minimaxResultPruned = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned
+            depth, -Infinity, Infinity, true, true, statsPruned, depth // Pass initial depth
         );
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
@@ -328,7 +331,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             findBestMoveMinimax(
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning
+                depth, -Infinity, Infinity, true, false, statsNoPruning, depth // Pass initial depth
             );
             totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
             if (totalLeavesWithoutPruning > 0) {
@@ -359,7 +362,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             console.log("[Worker] Greedy 3 AI: No valid moves found.");
         }
     } else if (isGreedy2) {
-        var minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true);
+        var minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true, {}, 1); // Pass initial depth 1
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
             var chosenMinimaxMoveG2 = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
             bestMove = {
@@ -417,6 +420,17 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
                 }
                 for (var i_ps = 0; i_ps < placementSpots.length; i_ps++) {
                     var pos = placementSpots[i_ps];
+
+                    // For Greedy 1, send evaluation message here
+                    self.postMessage({
+                        task: 'aiEvaluatingMove',
+                        moveData: {
+                            tile: { id: tile.id, playerId: tile.playerId, edges: [].concat(tile.edges), orientation: tile.orientation },
+                            x: pos.x,
+                            y: pos.y
+                        }
+                    });
+
                     if (isPlacementValid(tile, pos.x, pos.y, boardState, true)) {
                         var tempBoardState = deepCopyBoardState(boardState);
                         var simTile = new HexTile(tile.id, tile.playerId, tile.edges);
@@ -729,9 +743,11 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId) {
     return { boardState: currentSimBoardState, handGains: tilesReturnedToHands };
 }
 
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats) {
+// Added initialMaxDepth to track the starting depth for sending evaluation messages
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth) {
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
+    initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth; // Initialize if not provided
 
     if (depth === 0) {
         stats.nodesAtHorizon++;
@@ -756,6 +772,20 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
         var maxEval = -Infinity;
         for (var i_max_m = 0; i_max_m < possibleMoves.length; i_max_m++) {
             var move = possibleMoves[i_max_m];
+
+            // If this is the top-level call for the maximizing player (AI's actual turn), send evaluation message
+            if (depth === initialMaxDepth && maximizingPlayer) {
+                self.postMessage({
+                    task: 'aiEvaluatingMove',
+                    moveData: {
+                        // Ensure we send a plain object for the tile, not a HexTile instance directly
+                        tile: { id: move.tile.id, playerId: move.tile.playerId, edges: [].concat(move.tile.edges), orientation: move.orientation },
+                        x: move.x,
+                        y: move.y
+                    }
+                });
+            }
+
             var boardAfterMove_sim = deepCopyBoardState(currentBoardState);
             var tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
             tileForSim.orientation = move.orientation;
@@ -779,7 +809,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             if (handAfterMove_sim.length === 0) {
                 currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000;
             } else {
-                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats);
+                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats, initialMaxDepth);
                 currentTurnEval = evalResult.score;
             }
 
@@ -823,7 +853,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             if (handAfterMove_sim_min.length === 0) {
                 currentTurnEval_min = evaluateBoard(boardAfterMove_sim_min, aiPlayerId) - 1000;
             } else {
-                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats);
+                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats, initialMaxDepth);
                 currentTurnEval_min = evalResult_min.score;
             }
 
