@@ -280,7 +280,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
 
-        if (statsPruned.nodesAtHorizon > 0) {
+        if (debug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             // Note: Calculating without pruning for comparison can be time-consuming, especially at higher depths.
             // Consider making this conditional or for debugging only if performance is an issue.
@@ -306,12 +306,14 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             };
             console.log("[Worker] Greedy 4 AI Summary: Chose move for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + ".");
             console.log("    Score: " + bestMove.score);
-            console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
-            console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
-            if (totalLeavesWithoutPruning > 0) {
-                console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
-            } else {
-                console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
+            if (debug) { // Conditional logging
+                console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
+                console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
+                if (totalLeavesWithoutPruning > 0) {
+                    console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
+                } else {
+                    console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
+                }
             }
         } else {
             console.log("[Worker] Greedy 4 AI: No valid moves found.");
@@ -327,7 +329,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
 
-        if (statsPruned.nodesAtHorizon > 0) {
+        if (debug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             findBestMoveMinimax(
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
@@ -351,12 +353,14 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             };
             console.log("[Worker] Greedy 3 AI Summary: Chose move for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + "."); // Corrected log
             console.log("    Score: " + bestMove.score);
-            console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
-            console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
-            if (totalLeavesWithoutPruning > 0) {
-                console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
-            } else {
-                console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
+            if (debug) { // Conditional logging
+                console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
+                console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
+                if (totalLeavesWithoutPruning > 0) {
+                    console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
+                } else {
+                    console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
+                }
             }
         } else {
             console.log("[Worker] Greedy 3 AI: No valid moves found.");
@@ -880,6 +884,7 @@ self.onmessage = _asyncToGenerator(function* (event) {
     var opponentType = data.opponentType;
     var currentPlayerId = data.currentPlayerId;
     var currentSurroundedTilesData = data.currentSurroundedTiles;
+    var debug = data.debug || false; // Get the debug flag
 
     var liveBoardState = {};
     for (var key_lbs in boardStateData) {
