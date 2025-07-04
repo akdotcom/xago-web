@@ -259,7 +259,7 @@ function _asyncToGenerator(fn) {
 
 // --- AI Player Logic ---
 
-var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3, isGreedy4) {
+var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3, isGreedy4, debug) { // Added debug parameter
     isGreedy3 = isGreedy3 === undefined ? false : isGreedy3;
     isGreedy4 = isGreedy4 === undefined ? false : isGreedy4; // Added for Greedy 4
     yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
@@ -467,7 +467,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
     return bestMove;
 });
 
-var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId) {
+var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId, debug) { // Added debug parameter
     var bestMove = null;
     var player2Hand = hydrateHand(player2HandOriginal);
     var player1Hand = hydrateHand(player1HandOriginal);
@@ -535,13 +535,13 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
         tileToPlay.orientation = originalOrientation_rand;
 
     } else if (opponentType === 'greedy') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, false);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, false, debug);
     } else if (opponentType === 'greedy2') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false, false);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false, false, debug);
     } else if (opponentType === 'greedy3') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true, false);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true, false, debug);
     } else if (opponentType === 'greedy4') { // Added Greedy 4
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, true);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, true, debug);
     }
     return bestMove;
 });
@@ -884,7 +884,7 @@ self.onmessage = _asyncToGenerator(function* (event) {
     var opponentType = data.opponentType;
     var currentPlayerId = data.currentPlayerId;
     var currentSurroundedTilesData = data.currentSurroundedTiles;
-    var debug = data.debug || false; // Get the debug flag
+    var debugFlag = data.debug || false; // Get the debug flag
 
     var liveBoardState = {};
     for (var key_lbs in boardStateData) {
@@ -899,9 +899,10 @@ self.onmessage = _asyncToGenerator(function* (event) {
     }
 
     if (task === 'aiMove') {
-        var bestMove = yield workerPerformAiMove(liveBoardState, player2HandData, player1HandData, opponentType, currentPlayerId);
+        var bestMove = yield workerPerformAiMove(liveBoardState, player2HandData, player1HandData, opponentType, currentPlayerId, debugFlag);
         self.postMessage({ task: 'aiMoveResult', move: bestMove });
     } else if (task === 'aiTileRemoval') {
+        // Assuming workerPerformAiTileRemoval does not need the debug flag currently. If it did, it would be passed here too.
         var tileToRemove = workerPerformAiTileRemoval(liveBoardState, currentSurroundedTilesData, opponentType, currentPlayerId);
         self.postMessage({ task: 'aiTileRemovalResult', tileToRemove: tileToRemove });
     }
