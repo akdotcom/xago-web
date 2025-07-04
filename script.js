@@ -48,6 +48,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let mouseHoverQ = null;
     let mouseHoverR = null;
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
+    let aiEvaluatingDetails = null; // Stores details of the tile AI is currently evaluating
 
     // Pulsing animation variables for removal highlight
     let pulseStartTime = 0;
@@ -279,56 +280,49 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             // Highlight if in removal mode and tile is one of the surrounded ones
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
-                // The raised effect shadow should ideally not conflict with removal highlighting.
-                // Since the raised shadow is now handled *inside* drawHexTile and restored,
-                // this subsequent stroking for removal highlight should be fine.
-                ctx.strokeStyle = 'red'; // Highlight color - Changed from 'red'
-                // lineWidth will be set dynamically for pulsing later
-                // ctx.lineWidth = 3 * currentZoomLevel; // Placeholder, will be replaced by pulsing logic
-
-                // Pulsing logic for highlight
+            // Pulsing logic for removal highlight
                 const currentTime = Date.now();
                 const elapsedTime = (currentTime - pulseStartTime) % PULSE_DURATION;
-                const pulseProgress = elapsedTime / PULSE_DURATION; // 0 to 1
-
-                // Use a sine wave for smooth oscillation: sin(progress * PI) goes 0 -> 1 -> 0
-                // We want lineWidth to oscillate, e.g., between 2 and 5
-                const minPulseWidth = 2;
-                const maxPulseWidth = 5;
-                const pulseAmplitude = (maxPulseWidth - minPulseWidth) / 2;
-                const currentPulseWidth = minPulseWidth + pulseAmplitude + Math.sin(pulseProgress * Math.PI * 2) * pulseAmplitude;
-                // The above Math.sin(progress * PI * 2) goes from 0 -> 1 -> 0 -> -1 -> 0.
-                // A simpler way for 0 -> 1 -> 0 is Math.sin(pulseProgress * Math.PI)
-                // Let's adjust for a width that starts at min, goes to max, and back to min.
-                // sin wave from 0 to PI goes 0 -> 1 -> 0.
-                // So, minLineWidth + (maxLineWidth - minLineWidth) * sin(progress * PI)
-                // No, that's not quite right for amplitude.
-                // Let's use: base + amplitude * sin(phase).
-                // Phase = progress * 2 * PI for a full cycle.
-                // Width = (min + max)/2 + ((max - min)/2) * sin(elapsedTime / DURATION * 2 * PI)
-                const baseLineWidth = (minPulseWidth + maxPulseWidth) / 2;
-                const amplitude = (maxPulseWidth - minPulseWidth) / 2;
+            const baseLineWidth = (2 + 5) / 2; // minPulseWidth = 2, maxPulseWidth = 5
+            const amplitude = (5 - 2) / 2;
                 const animatedWidth = baseLineWidth + amplitude * Math.sin((elapsedTime / PULSE_DURATION) * 2 * Math.PI);
-
                 ctx.lineWidth = animatedWidth * currentZoomLevel;
+            ctx.strokeStyle = 'red';
 
                 ctx.beginPath();
-                const vertices = [];
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 180 * (60 * i);
-                    vertices.push({
-                        x: screenX + scaledHexSideLength * Math.cos(angle),
-                        y: screenY + scaledHexSideLength * Math.sin(angle)
-                    });
-                }
-                ctx.moveTo(vertices[0].x, vertices[0].y);
-                for (let i = 1; i < 6; i++) {
-                    ctx.lineTo(vertices[i].x, vertices[i].y);
+                const vx = screenX + scaledHexSideLength * Math.cos(angle);
+                const vy = screenY + scaledHexSideLength * Math.sin(angle);
+                if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
                 }
                 ctx.closePath();
                 ctx.stroke();
             }
         }
+
+    // --- Draw AI Evaluation Highlight ---
+    if (aiEvaluatingDetails && aiEvaluatingDetails.tile) {
+        const evalTileData = aiEvaluatingDetails.tile;
+        const evalX = aiEvaluatingDetails.x;
+        const evalY = aiEvaluatingDetails.y;
+
+        // Create a temporary HexTile instance for drawing
+        const tempEvalTile = new HexTile(evalTileData.id, evalTileData.playerId, [...evalTileData.edges]);
+        tempEvalTile.orientation = evalTileData.orientation; // Use orientation from aiEvaluatingDetails
+
+        const evalScreenX = currentOffsetX + scaledHexSideLength * (3/2 * evalX);
+        const evalScreenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * evalX + Math.sqrt(3) * evalY);
+
+        // 1. Draw the translucent tile
+        ctx.save();
+        ctx.globalAlpha = 0.5; // Make it quite translucent
+        drawHexTile(ctx, evalScreenX, evalScreenY, tempEvalTile, currentZoomLevel, true); // true for transparent background
+        ctx.restore();
+
+        // The purple border drawing logic has been removed.
+        // Only the translucent tile will be shown as the AI evaluation highlight.
+    }
     }
 
     // --- Tile Generation ---
@@ -830,6 +824,11 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         player2Score = 0;
         selectedTile = null;
         boardState = {};
+        isRemovingTiles = false; // Explicitly reset
+        currentSurroundedTilesForRemoval = []; // Explicitly reset
+        lastPlacedTileKey = null; // Explicitly reset
+        aiEvaluatingDetails = null; // Clear AI evaluation highlight on reset
+
 
         // Initialize view parameters
         // For the very first tile, center on logical (0,0)
@@ -890,12 +889,20 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         aiWorker = new Worker('aiWorker.js');
         aiWorker.onmessage = function(e) {
             // console.log('[Main] Message received from worker:', e.data);
-            const { task, move, tileToRemove } = e.data;
+            const { task, move, tileToRemove, moveData } = e.data; // Added moveData
 
             if (task === 'aiMoveResult') {
+                aiEvaluatingDetails = null; // Clear evaluation highlight
+                redrawBoardOnCanvas(); // Ensure it's cleared visually
                 handleAiMoveResult(move);
             } else if (task === 'aiTileRemovalResult') {
                 handleAiTileRemovalResult(tileToRemove);
+            } else if (task === 'aiEvaluatingMove') {
+                aiEvaluatingDetails = moveData;
+                redrawBoardOnCanvas(); // Redraw to show the new highlight
+            } else if (task === 'aiClearEvaluationHighlight') {
+                aiEvaluatingDetails = null;
+                redrawBoardOnCanvas();
             }
         };
         aiWorker.onerror = function(error) {
@@ -1445,6 +1452,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
     function switchTurn() {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
+        aiEvaluatingDetails = null; // Clear any AI evaluation highlight when turn switches
         updateGameInfo(); // Update score displays and current player display first
 
         // Check for game end condition *before* new turn actions (like AI move)
@@ -1505,6 +1513,9 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             return;
         }
         console.log("[Main] Initiating AI move via worker.");
+        aiEvaluatingDetails = null; // Clear previous evaluation details before starting new AI move
+        redrawBoardOnCanvas(); // Visually clear the highlight immediately
+
         // Ensure hands and boardState are plain data for the worker
         const plainPlayer1Hand = player1Hand.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: [...tile.edges], orientation: tile.orientation }));
         const plainPlayer2Hand = player2Hand.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: [...tile.edges], orientation: tile.orientation }));
