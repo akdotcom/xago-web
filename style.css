@@ -307,12 +307,22 @@ main {
 */
 
 /* Styling for canvas elements in player hands (if needed beyond JS inline styles) */
-/* .tiles-container canvas { */
-    /* margin: 5px; */ /* Already set via JS */
+.tiles-container canvas {
+    /* margin: 5px; */ /* Already set via JS, but we can control it here if needed */
     /* cursor: pointer; */ /* Already set via JS */
     /* Example: add a default border if not selected */
     /* border: 1px solid #ccc; */
-/* } */
+
+    /* Set a width that acts as a basis for flex items.
+       Calculated from (2 * HAND_TILE_BASE_SIDE_LENGTH) + canvasPadding = (2*28px) + 10px = 66px.
+       This is the ideal width. Flexbox may shrink it. */
+    width: 66px;
+    /* Allow the height to adjust automatically based on the intrinsic aspect ratio
+       defined by the canvas element's width and height attributes. */
+    height: auto;
+    /* Ensure the canvas doesn't grow beyond its specified width if flex properties allow growing. */
+    max-width: 66px; /* Reinforces the width, especially useful if flex-grow is involved */
+}
 
 
 footer {
