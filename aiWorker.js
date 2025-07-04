@@ -260,6 +260,8 @@ function _asyncToGenerator(fn) {
 // --- AI Player Logic ---
 
 var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy3, isGreedy4, debug) { // Added debug parameter
+    const effectiveDebug = (typeof debug === 'boolean' ? debug : (typeof debug !== 'undefined' ? Boolean(debug) : false));
+
     isGreedy3 = isGreedy3 === undefined ? false : isGreedy3;
     isGreedy4 = isGreedy4 === undefined ? false : isGreedy4; // Added for Greedy 4
     yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
@@ -280,7 +282,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
 
-        if (debug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
+        if (effectiveDebug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             // Note: Calculating without pruning for comparison can be time-consuming, especially at higher depths.
             // Consider making this conditional or for debugging only if performance is an issue.
@@ -306,7 +308,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             };
             console.log("[Worker] Greedy 4 AI Summary: Chose move for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + ".");
             console.log("    Score: " + bestMove.score);
-            if (debug) { // Conditional logging
+            if (effectiveDebug) { // Conditional logging
                 console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
                 console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
                 if (totalLeavesWithoutPruning > 0) {
@@ -329,7 +331,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
 
-        if (debug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
+        if (effectiveDebug && statsPruned.nodesAtHorizon > 0) { // Conditional calculation
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             findBestMoveMinimax(
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
@@ -353,7 +355,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             };
             console.log("[Worker] Greedy 3 AI Summary: Chose move for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + "."); // Corrected log
             console.log("    Score: " + bestMove.score);
-            if (debug) { // Conditional logging
+            if (effectiveDebug) { // Conditional logging
                 console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
                 console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
                 if (totalLeavesWithoutPruning > 0) {
