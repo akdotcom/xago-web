@@ -1525,13 +1525,17 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             plainBoardState[key] = { id: tile.id, playerId: tile.playerId, edges: [...tile.edges], orientation: tile.orientation, x: tile.x, y: tile.y };
         }
 
+        const urlParams = new URLSearchParams(window.location.search);
+        const debugFlag = urlParams.get('debug') === '1';
+
         aiWorker.postMessage({
             task: 'aiMove',
             boardState: plainBoardState,
             player1Hand: plainPlayer1Hand, // Opponent's hand for Minimax
             player2Hand: plainPlayer2Hand, // AI's hand
             opponentType: opponentType,
-            currentPlayerId: currentPlayer // Should be 2
+            currentPlayerId: currentPlayer, // Should be 2
+            debug: debugFlag // Pass the debug flag
         });
     }
 
