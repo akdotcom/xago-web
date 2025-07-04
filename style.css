@@ -198,6 +198,7 @@ main {
     min-height: 100px; /* To give some space even when empty */
     padding: 10px;
     border: 1px dashed #ccc;
+    align-items: flex-start; /* Prevent vertical stretching of tiles */
     border-radius: 4px;
 }
 
