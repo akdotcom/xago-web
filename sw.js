@@ -1,4 +1,4 @@
-const CACHE_NAME = 'xago-cache-v1';
+const CACHE_NAME = 'xago-cache-v2'; // Incremented cache version
 const urlsToCache = [
   '/',
   'index.html',
@@ -12,6 +12,7 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Add this line
   // Perform install steps
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -62,14 +63,16 @@ self.addEventListener('fetch', event => {
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
+    self.clients.claim().then(() => { // Add self.clients.claim()
+      return caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            if (cacheWhitelist.indexOf(cacheName) === -1) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      });
     })
   );
 });

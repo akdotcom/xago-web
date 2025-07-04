@@ -264,6 +264,9 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
 
     isGreedy3 = isGreedy3 === undefined ? false : isGreedy3;
     isGreedy4 = isGreedy4 === undefined ? false : isGreedy4; // Added for Greedy 4
+    if (effectiveDebug && (isGreedy4 || isGreedy3)) { // Log entry for relevant modes
+        console.log("[Worker DEBUG] calculateGreedyMove: Entry. PlayerID:", currentPlayerId, "OpponentType (isGreedy4):", isGreedy4, "isGreedy3:", isGreedy3, "EffectiveDebug:", effectiveDebug);
+    }
     yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
 
     var bestMove = null;
@@ -272,12 +275,13 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
     self.postMessage({ task: 'aiClearEvaluationHighlight' });
 
     if (isGreedy4) { // Check for Greedy 4 first
-        console.log("[Worker] AI: Greedy 4 calculating move for Player " + currentPlayerId + ".");
+        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy 4 calculating move for Player " + currentPlayerId + ".");
+        else console.log("[Worker] AI: Greedy 4 calculating move for Player " + currentPlayerId + ".");
         var depth = 3; // Depth 3 for 4-turn lookahead
         var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
         var minimaxResultPruned = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned, depth // Pass initial depth
+            depth, -Infinity, Infinity, true, true, statsPruned, depth, effectiveDebug // Pass initial depth & effectiveDebug
         );
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
@@ -288,7 +292,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             // Consider making this conditional or for debugging only if performance is an issue.
             findBestMoveMinimax( // For Greedy 3
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning, depth // Pass initial depth
+                depth, -Infinity, Infinity, true, false, statsNoPruning, depth, false // Pass initial depth, no debug for this comparison run
             );
             totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
             if (totalLeavesWithoutPruning > 0) {
@@ -320,13 +324,15 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         } else {
             console.log("[Worker] Greedy 4 AI: No valid moves found.");
         }
+        if (effectiveDebug) console.log("[Worker DEBUG] calculateGreedyMove (Greedy 4): Minimax result:", minimaxResultPruned, "Chosen bestMove:", bestMove);
     } else if (isGreedy3) { // Existing Greedy 3 logic
-        console.log("[Worker] AI: Greedy 3 calculating move for Player " + currentPlayerId + ".");
+        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy 3 calculating move for Player " + currentPlayerId + ".");
+        else console.log("[Worker] AI: Greedy 3 calculating move for Player " + currentPlayerId + ".");
         var depth = 2; // Depth 2 for Greedy 3
         var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
         var minimaxResultPruned = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned, depth // Pass initial depth
+            depth, -Infinity, Infinity, true, true, statsPruned, depth, effectiveDebug // Pass initial depth & effectiveDebug
         );
         var percentageSkipped = 0;
         var totalLeavesWithoutPruning = 0;
@@ -335,7 +341,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
             findBestMoveMinimax(
                 boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning, depth // Pass initial depth
+                depth, -Infinity, Infinity, true, false, statsNoPruning, depth, false // Pass initial depth, no debug for this comparison run
             );
             totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
             if (totalLeavesWithoutPruning > 0) {
@@ -367,8 +373,10 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         } else {
             console.log("[Worker] Greedy 3 AI: No valid moves found.");
         }
+        if (effectiveDebug) console.log("[Worker DEBUG] calculateGreedyMove (Greedy 3): Minimax result:", minimaxResultPruned, "Chosen bestMove:", bestMove);
     } else if (isGreedy2) {
-        var minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true, {}, 1); // Pass initial depth 1
+        // Greedy2 logging can be added here if needed, following the pattern. For now, focusing on Greedy 3 & 4.
+        var minimaxResult = findBestMoveMinimax(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, 1, -Infinity, Infinity, true, true, {}, 1, effectiveDebug); // Pass initial depth 1 & effectiveDebug
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
             var chosenMinimaxMoveG2 = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
             bestMove = {
@@ -689,49 +697,69 @@ function evaluateBoard(currentBoardState, playerPerspectiveId) {
     return evalScore;
 }
 
-function simulateRemovalCycle(initialBoardState, actingPlayerId) {
+function simulateRemovalCycle(initialBoardState, actingPlayerId, effectiveDebug) { // Added effectiveDebug
+    if (effectiveDebug) {
+        console.log("[Worker DEBUG] simulateRemovalCycle: Entry. ActingPlayerID:", actingPlayerId);
+        console.time("[Worker DEBUG] simulateRemovalCycle: Full execution time");
+    }
     var currentSimBoardState = deepCopyBoardState(initialBoardState);
     var tilesReturnedToHands = {};
     var iteration = 0;
     while (true) {
         iteration++;
+        if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Iteration " + iteration);
+
         var surroundedTiles = getSurroundedTiles(currentSimBoardState);
-        if (surroundedTiles.length === 0) break;
+        if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Surrounded tiles found:", surroundedTiles.map(function(t){ return t.id; }));
+
+        if (surroundedTiles.length === 0) {
+            if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: No surrounded tiles, breaking.");
+            break;
+        }
         var tileToRemove = null;
         var opponentTilesSurrounded = surroundedTiles.filter(function(t) { return t.playerId !== actingPlayerId; });
         var ownTilesSurrounded = surroundedTiles.filter(function(t) { return t.playerId === actingPlayerId; });
 
+        if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Opponent tiles surrounded:", opponentTilesSurrounded.length, "Own tiles surrounded:", ownTilesSurrounded.length);
+
         if (opponentTilesSurrounded.length > 0) {
             var bestRemovalChoice = null;
             var maxScoreAfterRemoval = -Infinity;
+            if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Evaluating opponent tiles for removal.");
             for (var i_otsr = 0; i_otsr < opponentTilesSurrounded.length; i_otsr++) {
                 var oppTile_sr = opponentTilesSurrounded[i_otsr];
                 var tempBoard_sr = deepCopyBoardState(currentSimBoardState);
                 delete tempBoard_sr["" + oppTile_sr.x + "," + oppTile_sr.y];
                 var score_sr = evaluateBoard(tempBoard_sr, actingPlayerId);
+                if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle:  - Opponent tile " + oppTile_sr.id + ", score if removed: " + score_sr);
                 if (score_sr > maxScoreAfterRemoval) {
                     maxScoreAfterRemoval = score_sr;
                     bestRemovalChoice = oppTile_sr;
                 }
             }
             tileToRemove = bestRemovalChoice;
+            if (effectiveDebug && tileToRemove) console.log("[Worker DEBUG] simulateRemovalCycle: Chosen opponent tile to remove:", tileToRemove.id, "Score:", maxScoreAfterRemoval);
         } else if (ownTilesSurrounded.length > 0) {
             var bestOwnRemovalChoice = null;
-            var scoreAfterOwnRemoval = -Infinity;
+            var scoreAfterOwnRemoval = -Infinity; // Maximize score even when removing own, implies minimizing damage or finding strategic self-removal
+            if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Evaluating own tiles for removal.");
             for (var i_owsr = 0; i_owsr < ownTilesSurrounded.length; i_owsr++) {
                 var ownTile_sr = ownTilesSurrounded[i_owsr];
                 var tempBoard_own_sr = deepCopyBoardState(currentSimBoardState);
                 delete tempBoard_own_sr["" + ownTile_sr.x + "," + ownTile_sr.y];
                 var currentScore_sr = evaluateBoard(tempBoard_own_sr, actingPlayerId);
-                if (currentScore_sr > scoreAfterOwnRemoval) {
+                 if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle:  - Own tile " + ownTile_sr.id + ", score if removed: " + currentScore_sr);
+                if (currentScore_sr > scoreAfterOwnRemoval) { // Still ">" as evaluateBoard is from actingPlayer's perspective.
                     scoreAfterOwnRemoval = currentScore_sr;
                     bestOwnRemovalChoice = ownTile_sr;
                 }
             }
             tileToRemove = bestOwnRemovalChoice;
+            if (effectiveDebug && tileToRemove) console.log("[Worker DEBUG] simulateRemovalCycle: Chosen own tile to remove:", tileToRemove.id, "Score:", scoreAfterOwnRemoval);
         }
 
         if (tileToRemove) {
+            if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: Removing tile " + tileToRemove.id + " from sim board.");
             delete currentSimBoardState["" + tileToRemove.x + "," + tileToRemove.y];
             if (!tilesReturnedToHands[tileToRemove.playerId]) {
                 tilesReturnedToHands[tileToRemove.playerId] = [];
@@ -739,25 +767,40 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId) {
             tilesReturnedToHands[tileToRemove.playerId].push({
                 id: tileToRemove.id,
                 playerId: tileToRemove.playerId,
-                edges: [].concat(tileToRemove.edges)
+                edges: [].concat(tileToRemove.edges) // Ensure edges are copied
             });
         } else {
+            if (effectiveDebug) console.log("[Worker DEBUG] simulateRemovalCycle: No tile chosen for removal, breaking.");
             break;
         }
-        if (iteration > 10) break;
+        if (iteration > 10) {
+             if (effectiveDebug) console.warn("[Worker DEBUG] simulateRemovalCycle: Exceeded 10 iterations, breaking forcefully.");
+            break;
+        }
+    }
+    if (effectiveDebug) {
+        console.log("[Worker DEBUG] simulateRemovalCycle: Returning. HandGains:", JSON.parse(JSON.stringify(tilesReturnedToHands))); // Log a copy
+        console.timeEnd("[Worker DEBUG] simulateRemovalCycle: Full execution time");
     }
     return { boardState: currentSimBoardState, handGains: tilesReturnedToHands };
 }
 
 // Added initialMaxDepth to track the starting depth for sending evaluation messages
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth) {
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug) { // Added effectiveDebug
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
     initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth; // Initialize if not provided
 
+    if (effectiveDebug) {
+        console.log("[Worker DEBUG] findBestMoveMinimax: Entry. Depth:", depth, "Alpha:", alpha, "Beta:", beta, "Maximizing:", maximizingPlayer, "InitialMaxDepth:", initialMaxDepth, "AI:", aiPlayerId, "Opp:", opponentPlayerId);
+        // To avoid excessive logging, let's not log entire board/hands here unless specifically needed for deeper debugging.
+    }
+
     if (depth === 0) {
         stats.nodesAtHorizon++;
-        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
+        var evalScoreBase = evaluateBoard(currentBoardState, aiPlayerId);
+        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax: Base case (depth 0). Score:", evalScoreBase);
+        return { score: evalScoreBase, moves: [] };
     }
 
     var bestMoves = [];
@@ -768,19 +811,30 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
     var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
 
+    if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
     var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn);
+    if (effectiveDebug) {
+        console.timeEnd("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
+        console.log("[Worker DEBUG] findBestMoveMinimax: (Depth: " + depth + ") Possible moves:", possibleMoves.length);
+    }
 
     if (possibleMoves.length === 0) {
-        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
+        var evalScoreNoMoves = evaluateBoard(currentBoardState, aiPlayerId);
+        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax: Base case (no possible moves). Score:", evalScoreNoMoves);
+        return { score: evalScoreNoMoves, moves: [] };
     }
 
     if (maximizingPlayer) {
         var maxEval = -Infinity;
         for (var i_max_m = 0; i_max_m < possibleMoves.length; i_max_m++) {
             var move = possibleMoves[i_max_m];
+            if (effectiveDebug) {
+                console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Evaluating move " + (i_max_m + 1) + "/" + possibleMoves.length + ": Tile " + move.tile.id + " at (" + move.x + "," + move.y + ") ori " + move.orientation);
+                console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1));
+            }
 
             // If this is the top-level call for the maximizing player (AI's actual turn), send evaluation message
-            if (depth === initialMaxDepth && maximizingPlayer) {
+            if (depth === initialMaxDepth && maximizingPlayer) { // This condition is correct for sending evaluation message
                 self.postMessage({
                     task: 'aiEvaluatingMove',
                     moveData: {
@@ -802,7 +856,9 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             var handAfterMove_sim = currentMaximizingPlayerHand.filter(function(t) { return t.id !== move.tile.id; });
             var opponentHandForNext_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges)); });
 
-            var removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn);
+            if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): simulateRemovalCycle");
+            var removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn, effectiveDebug); // Pass effectiveDebug
+            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): simulateRemovalCycle");
             boardAfterMove_sim = removalResult.boardState;
 
             var gainsCurrent = removalResult.handGains[currentPlayerForThisTurn] || [];
@@ -813,29 +869,47 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
             var currentTurnEval;
             if (handAfterMove_sim.length === 0) {
-                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000;
+                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Bonus for emptying hand
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Player emptied hand. Score:", currentTurnEval);
             } else {
-                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats, initialMaxDepth);
+                if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call");
+                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug);
+                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call");
                 currentTurnEval = evalResult.score;
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call returned. Score:", currentTurnEval);
             }
 
             if (currentTurnEval > maxEval) {
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): New best score. Old maxEval:", maxEval, "New:", currentTurnEval);
                 maxEval = currentTurnEval;
-                bestMoves = [{ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval }];
+                bestMoves = [{ tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation}, x: move.x, y: move.y, score: maxEval }];
             } else if (currentTurnEval === maxEval) {
-                bestMoves.push({ tile: {id: move.tile.id, orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Equal best score. Score:", currentTurnEval);
+                bestMoves.push({ tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
             }
+            var oldAlpha = alpha;
             alpha = Math.max(alpha, currentTurnEval);
-            if (useAlphaBetaPruning && alpha >= beta) { // Corrected prune condition for maximizer
+            if (effectiveDebug && oldAlpha !== alpha) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Alpha updated. Old:", oldAlpha, "New:", alpha);
+
+            if (useAlphaBetaPruning && alpha >= beta) {
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Pruning. Alpha:", alpha, "Beta:", beta);
                 stats.cutoffs++;
+                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1)); // End time for this iteration before break
                 break;
             }
+            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1));
         }
+        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Returning. MaxEval:", maxEval, "BestMoves count:", bestMoves.length);
         return { score: maxEval, moves: bestMoves };
     } else { // Minimizing player
         var minEval = Infinity;
         for (var i_min_m = 0; i_min_m < possibleMoves.length; i_min_m++) {
             var move_min = possibleMoves[i_min_m];
+            if (effectiveDebug) {
+                console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Evaluating move " + (i_min_m + 1) + "/" + possibleMoves.length + ": Tile " + move_min.tile.id + " at (" + move_min.x + "," + move_min.y + ") ori " + move_min.orientation);
+                console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1));
+            }
+
             var boardAfterMove_sim_min = deepCopyBoardState(currentBoardState);
             var tileForSim_min = new HexTile(move_min.tile.id, currentPlayerForThisTurn, [].concat(move_min.tile.edges));
             tileForSim_min.orientation = move_min.orientation;
@@ -846,7 +920,9 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             var handAfterMove_sim_min = currentMaximizingPlayerHand.filter(function(t) { return t.id !== move_min.tile.id; });
             var nextMaximizingHand_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges)); });
 
-            var removalResult_min = simulateRemovalCycle(boardAfterMove_sim_min, currentPlayerForThisTurn);
+            if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): simulateRemovalCycle");
+            var removalResult_min = simulateRemovalCycle(boardAfterMove_sim_min, currentPlayerForThisTurn, effectiveDebug); // Pass effectiveDebug
+            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): simulateRemovalCycle");
             boardAfterMove_sim_min = removalResult_min.boardState;
 
             var gainsCurrent_min = removalResult_min.handGains[currentPlayerForThisTurn] || [];
@@ -857,22 +933,34 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
             var currentTurnEval_min;
             if (handAfterMove_sim_min.length === 0) {
-                currentTurnEval_min = evaluateBoard(boardAfterMove_sim_min, aiPlayerId) - 1000;
+                currentTurnEval_min = evaluateBoard(boardAfterMove_sim_min, aiPlayerId) - 1000; // Penalty for opponent emptying hand
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Opponent emptied hand. Score:", currentTurnEval_min);
             } else {
-                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats, initialMaxDepth);
+                if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call");
+                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug);
+                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call");
                 currentTurnEval_min = evalResult_min.score;
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call returned. Score:", currentTurnEval_min);
             }
 
             if (currentTurnEval_min < minEval) {
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): New best score for opponent. Old minEval:", minEval, "New:", currentTurnEval_min);
                 minEval = currentTurnEval_min;
             }
+            var oldBeta = beta;
             beta = Math.min(beta, currentTurnEval_min);
-            if (useAlphaBetaPruning && beta <= alpha) { // Corrected prune condition for minimizer
+            if (effectiveDebug && oldBeta !== beta) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Beta updated. Old:", oldBeta, "New:", beta);
+
+            if (useAlphaBetaPruning && beta <= alpha) {
+                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Pruning. Alpha:", alpha, "Beta:", beta);
                 stats.cutoffs++;
+                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1)); // End time for this iteration before break
                 break;
             }
+            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1));
         }
-        return { score: minEval, moves: [] };
+        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Returning. MinEval:", minEval);
+        return { score: minEval, moves: [] }; // Minimizer only returns score, not moves array
     }
 }
 
