@@ -209,11 +209,16 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             if (newSurroundedList.length > 0) {
                 console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3'].includes(opponentType)) {
-                    console.log(`Player 2 (AI - ${opponentType}) is removing more tiles...`);
+                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4'].includes(opponentType)) { // Added greedy4 to the list
+                    console.log(`Player 2 (AI - ${opponentType}) is removing more tiles... Pausing for 1s.`);
                     player2HandContainer.classList.add('ai-thinking-pulse');
-                    redrawBoardOnCanvas(); // Update highlights for AI
-                    initiateAiTileRemoval();
+                    // Pulsing border is already active or will be activated by redrawBoardOnCanvas + animateView in the main function body
+                    // redrawBoardOnCanvas(); // Ensure highlights are shown for AI
+                    // animateView(); // Ensure pulsing if not already
+                    setTimeout(() => {
+                        console.log(`Player 2 (AI - ${opponentType}) initiating next tile removal after pause.`);
+                        initiateAiTileRemoval();
+                    }, 1000); // 1-second pause
                 } else {
                     player2HandContainer.classList.remove('ai-thinking-pulse');
                     console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
@@ -1584,12 +1589,33 @@ function isSpaceEnclosed(q, r, currentBoardState) {
                 console.log(`[Main] AI (${opponentType}) successfully placed tile ${tileToPlace.id}.`);
 
                 const surroundedAfterAiMove = getSurroundedTiles(boardState);
-                if (surroundedAfterAiMove.length === 0) {
-                     // Pulse was already removed, no need to remove again
+                if (surroundedAfterAiMove.length > 0) {
+                    // 1. Show pulsing red border
+                    currentSurroundedTilesForRemoval = surroundedAfterAiMove;
+                    isRemovingTiles = true; // Set this to enable removal logic and highlighting
+                    pulseStartTime = Date.now();
+                    isPulsingGlobal = true;
+                    redrawBoardOnCanvas(); // Show highlights
+                    animateView(); // Ensure animation loop is running for pulsing
+
+                    // 2. Pause for 1s
+                    console.log("[Main] AI caused tile surrounding. Pausing for 1s before removal.");
+                    setTimeout(() => {
+                        // 3. Trigger haptic feedback (simulated)
+                        // Haptic feedback for AI "tap" is handled in handleAiTileRemovalResult or direct removal
+                        // For now, the main flow continues to checkForSurroundedTilesAndProceed,
+                        // which will lead to AI tile removal if it's AI's turn to remove.
+                        console.log("[Main] AI turn to remove, proceeding to checkForSurroundedTilesAndProceed after pause.");
+                        checkForSurroundedTilesAndProceed(); // This will call initiateAiTileRemoval
+                        updateViewParameters();
+                        animateView();
+                    }, 1000);
+                } else {
+                    // No tiles surrounded, proceed as normal
+                    checkForSurroundedTilesAndProceed();
+                    updateViewParameters();
+                    animateView();
                 }
-                checkForSurroundedTilesAndProceed();
-                updateViewParameters();
-                animateView();
             } else {
                 // The error message now correctly reflects the orientation being used.
                 console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). This should ideally be caught by worker's validation.`);
@@ -1612,6 +1638,12 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
             if (actualTileToRemove && actualTileToRemove.id === tileToRemoveData.id) {
                 console.log(`[Main] AI (${opponentType}) removes tile ${actualTileToRemove.id}.`);
+                // Simulate haptic feedback for AI "tap"
+                console.log(`[Main] AI conceptually 'tapped' tile ${actualTileToRemove.id} for removal. Triggering simulated haptic feedback.`);
+                if (navigator.maxTouchPoints > 0 && typeof navigator.vibrate === 'function') {
+                    navigator.vibrate(100); // Vibrate for 100ms, same as user tap
+                    console.log("[Main] Device vibrated for AI tile removal.");
+                }
                 removeTileFromBoardAndReturnToHand(actualTileToRemove); // This function handles further pulsing logic
             } else {
                 console.error(`[Main] AI Error: Tile to remove ${tileToRemoveData.id} at (${tileToRemoveData.x},${tileToRemoveData.y}) not found or ID mismatch on board.`);
