@@ -1738,24 +1738,18 @@ function updateViewParameters() {
 
     if (placedTiles.length === 0) {
         // No tiles played, center on logical (0,0).
-        // The view should show (0,0) and its immediate surrounding hexes for potential placement.
+        // Calculate zoom as if one tile is at (0,0) with its 1-hex border.
         targetOffsetX = gameCanvas.width / 2;
         targetOffsetY = gameCanvas.height / 2;
-        targetZoomLevel = 0.8; // Start with a sensible zoom for an empty board.
+        // targetZoomLevel = 0.8; // Removed: Zoom will be calculated based on the 7 hexes.
 
-        // Add (0,0) and its direct neighbors to the bounding box calculation.
+        // For an empty board, calculate zoom as if one tile is at (0,0) with its 1-hex border.
+        // This means coordsForBoundingBox should contain (0,0) and its 6 direct neighbors.
         coordsForBoundingBox.add("0,0");
         getNeighbors(0,0).forEach(neighbor => {
             coordsForBoundingBox.add(`${neighbor.nx},${neighbor.ny}`);
         });
-        // Add one more layer around these initial spots to ensure they are not cut off.
-        const initialRelevantCoords = [...coordsForBoundingBox];
-        initialRelevantCoords.forEach(coordStr => {
-            const [q,r] = coordStr.split(',').map(Number);
-            getNeighbors(q,r).forEach(nextNeighbor => {
-                coordsForBoundingBox.add(`${nextNeighbor.nx},${nextNeighbor.ny}`);
-            });
-        });
+        // The loop that added a second layer of neighbors is removed.
 
     } else {
         // Tiles are on the board.
@@ -1848,12 +1842,12 @@ function updateViewParameters() {
     targetZoomLevel = Math.min(targetZoomLevel, 1.8); // Increased max zoom slightly
     targetZoomLevel = Math.max(targetZoomLevel, 0.15); // Decreased min zoom slightly
 
-    // If board was initially empty, and the default calculation leads to a very different zoom,
-    // stick to a reasonable default. The initial 0.8 might be overridden by the calculation,
-    // so this ensures a good starting view.
-    if (placedTiles.length === 0) {
-        targetZoomLevel = Math.min(targetZoomLevel, 0.8); // Ensure initial zoom is not too large
-    }
+    // If board was initially empty, the zoom is now calculated based on a 1-tile scenario.
+    // The clamping `targetZoomLevel = Math.min(targetZoomLevel, 0.8);` is no longer needed
+    // as the new calculation should be authoritative.
+    // if (placedTiles.length === 0) {
+    //     targetZoomLevel = Math.min(targetZoomLevel, 0.8); // Ensure initial zoom is not too large // REMOVED
+    // }
 
     // const scaledSideLength = BASE_HEX_SIDE_LENGTH * targetZoomLevel; // Kept for reference, but not used in the new offset calculation directly here.
     // targetOffsetX = gameCanvas.width / 2 - scaledSideLength * (3/2 * boundingBoxCenterQ); // Old centering logic
