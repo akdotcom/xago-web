@@ -150,38 +150,36 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
         const { lostScoreDelta, brokenPairs, scoringPlayerId } = calculateScoreLostFromPoppedTile(tileToRemove, boardState);
 
-        let oldPlayerScore;
-        let newPlayerScore;
+        let scoreContext = null;
 
         if (lostScoreDelta > 0 && scoringPlayerId === tileToRemove.playerId) {
+            let oldPlayerScoreValue;
             if (tileToRemove.playerId === 1) {
-                oldPlayerScore = player1Score;
-                player1Score -= lostScoreDelta;
-                newPlayerScore = player1Score;
+                oldPlayerScoreValue = player1Score;
             } else {
-                oldPlayerScore = player2Score;
-                player2Score -= lostScoreDelta;
-                newPlayerScore = player2Score;
+                oldPlayerScoreValue = player2Score;
             }
-            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points from popping tile ${tileToRemove.id}. Old: ${oldPlayerScore}, New: ${newPlayerScore}`);
-
-            animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => {
-                animateScoreboardUpdate(tileToRemove.playerId, newPlayerScore, oldPlayerScore, () => {
-                    // Ensure final display is accurate after scoreboard animation
-                    if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
-                    if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
-
-                    proceedWithTileRemovalAnimation(tileToRemove, tileKey);
-                });
-            });
+            // Prepare context for score update after tile animation
+            scoreContext = {
+                lostScoreDelta,
+                brokenPairs,
+                oldPlayerScore: oldPlayerScoreValue,
+                playerIdForScore: tileToRemove.playerId // Store the ID of the player whose score needs to be updated
+            };
+            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points. Tile removal animation will start first.`);
+            // proceedWithTileRemovalAnimation will now handle the score update sequence in its callback, using scoreContext.
+            proceedWithTileRemovalAnimation(tileToRemove, tileKey, scoreContext);
         } else {
-            // No score change, proceed directly with tile removal animation
-            proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+            // No score change, or tile popped does not belong to the player who loses points (e.g. opponent pops own tile - though current rules might not allow this for score loss)
+            // Proceed directly with tile removal animation without score context
+            console.log(`No score change for popping tile ${tileToRemove.id}, or not popped by owner. Proceeding with tile removal animation.`);
+            proceedWithTileRemovalAnimation(tileToRemove, tileKey, null);
         }
     }
 
     // Contains the original logic of animating tile back to hand and subsequent game flow
-    function proceedWithTileRemovalAnimation(tileToRemove, tileKey) {
+    // Now accepts an optional scoreContext object to handle score updates after the animation.
+    function proceedWithTileRemovalAnimation(tileToRemove, tileKey, scoreContext) {
         console.log(`Animating removal of tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
 
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
@@ -225,40 +223,76 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            redrawBoardOnCanvas(); // Final redraw to ensure board is clean
+            redrawBoardOnCanvas(); // Final redraw to ensure board is clean after tile is back in hand
 
-            const newSurroundedList = getSurroundedTiles(boardState);
-            currentSurroundedTilesForRemoval = newSurroundedList;
-            updateViewParameters();
+            // --- New sequence: Pulse and Score Update AFTER tile is back in hand ---
+            if (scoreContext && scoreContext.lostScoreDelta > 0) {
+                console.log("Tile back in hand. Now pulsing broken connections.");
+                pulseBrokenConnections(scoreContext.brokenPairs, () => {
+                    // This callback is after pulseBrokenConnections animation
+                    let newPlayerScoreValue;
+                    if (scoreContext.playerIdForScore === 1) {
+                        player1Score -= scoreContext.lostScoreDelta;
+                        newPlayerScoreValue = player1Score;
+                    } else {
+                        player2Score -= scoreContext.lostScoreDelta;
+                        newPlayerScoreValue = player2Score;
+                    }
+                    console.log(`Broken connections pulse complete. Player ${scoreContext.playerIdForScore} lost ${scoreContext.lostScoreDelta} points. Old: ${scoreContext.oldPlayerScore}, New: ${newPlayerScoreValue}. Animating score.`);
 
-            if (newSurroundedList.length > 0) {
-                console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) {
-                    player2HandContainer.classList.add('ai-thinking-pulse');
-                    setTimeout(() => {
-                        initiateAiTileRemoval();
-                    }, 1000);
-                } else {
-                    player2HandContainer.classList.remove('ai-thinking-pulse');
-                    redrawBoardOnCanvas(); // Update highlights for human
-                }
+                    animateScoreChangeOnBoard(scoreContext.playerIdForScore, scoreContext.brokenPairs, "-1", () => { // textToShow "-1" is ignored
+                        animateScoreboardUpdate(scoreContext.playerIdForScore, newPlayerScoreValue, scoreContext.oldPlayerScore, () => {
+                            // This callback is after the scoreboard visually updates.
+                            console.log("Scoreboard animation complete. Proceeding with game logic (check surrounded, switch turn).");
+                            // Now proceed with the rest of the game logic
+                            continueGameLogicAfterTileRemoval();
+                        });
+                    });
+                });
             } else {
-                console.log("No more surrounded tiles. Ending removal phase.");
-                player2HandContainer.classList.remove('ai-thinking-pulse');
-                isRemovingTiles = false;
-                isPulsingGlobal = false;
-                currentSurroundedTilesForRemoval = [];
-                redrawBoardOnCanvas(); // Clear highlights
-
-                // Scores were already updated if points were lost.
-                // A full calculateAndUpdateTotalScores() here ensures consistency if other factors could change scores,
-                // but for simple pop, it might be redundant if handled precisely.
-                // However, it's safer to call it to ensure the game state is correct before switching turns.
-                calculateAndUpdateTotalScores();
-                switchTurn();
+                // No score change, or no scoreContext provided, proceed directly with game logic
+                console.log("Tile back in hand. No score change to process. Proceeding with game logic.");
+                continueGameLogicAfterTileRemoval();
             }
-            if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) animateView();
         });
+    }
+
+    // Helper function to encapsulate the game logic that follows tile removal and potential score updates
+    function continueGameLogicAfterTileRemoval() {
+        const newSurroundedList = getSurroundedTiles(boardState);
+        currentSurroundedTilesForRemoval = newSurroundedList;
+        updateViewParameters();
+
+        if (newSurroundedList.length > 0) {
+            console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
+            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) {
+                player2HandContainer.classList.add('ai-thinking-pulse');
+                setTimeout(() => {
+                    initiateAiTileRemoval();
+                }, 1000);
+            } else {
+                player2HandContainer.classList.remove('ai-thinking-pulse');
+                redrawBoardOnCanvas(); // Update highlights for human
+            }
+        } else {
+            console.log("No more surrounded tiles. Ending removal phase.");
+            player2HandContainer.classList.remove('ai-thinking-pulse');
+            isRemovingTiles = false;
+            isPulsingGlobal = false; // Ensure this is reset if no more pulsing needed
+            currentSurroundedTilesForRemoval = [];
+            redrawBoardOnCanvas(); // Clear highlights
+
+            // If scores were lost, they were updated before calling this function.
+            // If no scores were lost, calculateAndUpdateTotalScores() does nothing or recalculates (harmless).
+            // It's good practice to call it to ensure the game state is correct before switching turns,
+            // especially if other factors could influence scores (though not currently the case for simple pop).
+            calculateAndUpdateTotalScores(); // This ensures scores are consistent.
+            switchTurn();
+        }
+        // Ensure the animation loop continues if needed for view changes or other ongoing animations.
+        if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) {
+            if (!animationFrameId) animateView();
+        }
     }
 
     // Helper function to check if view animation (pan/zoom) is needed
@@ -375,87 +409,77 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Score Highlight Function ---
     function highlightMatchedTriangles(matchedPairs) {
-        const PULSE_ANIMATION_DURATION = 500; // Total duration of the pulse animation
-        const pulseStartTime = Date.now();
+        // This function is for *gaining* points.
+        // It will use the shared pulsing mechanism.
+        const PULSE_ANIMATION_DURATION = 500; // Duration for score gain pulse
 
-        currentlyHighlightedTriangles = matchedPairs.flatMap(pair => [
+        const trianglesToPulse = matchedPairs.flatMap(pair => [
             { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex, pulseIntensity: 0 },
             { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex, pulseIntensity: 0 }
         ]);
 
-        function animatePulse() {
-            const elapsedTime = Date.now() - pulseStartTime;
-            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
-                currentlyHighlightedTriangles = []; // Clear highlights
-                isPulsingGlobal = false; // Stop forcing redraws for this specific pulse
-                redrawBoardOnCanvas(); // Final redraw to clear
-                // The main animateView loop will stop if nothing else needs animation
-                return;
-            }
+        // Call the generic pulsing function without a callback as score gain sequence handles timing separately.
+        executePulseAnimation(trianglesToPulse, PULSE_ANIMATION_DURATION);
+    }
 
-            // Calculate pulse intensity (e.g., sine wave for smooth pulse in/out)
-            // Intensity goes from 0 to 1 and back to 0 over the duration
-            const progress = elapsedTime / PULSE_ANIMATION_DURATION; // 0 to 1
-            const intensity = Math.sin(progress * Math.PI); // sin(0) = 0, sin(PI/2) = 1, sin(PI) = 0
+    function pulseBrokenConnections(brokenPairs, callback) {
+        // This function is for *losing* points (tile pop).
+        // It will use the shared pulsing mechanism and then execute a callback.
+        const PULSE_ANIMATION_DURATION = 1000; // Potentially longer duration for losing points, or keep same as gain.
 
-            currentlyHighlightedTriangles.forEach(ht => {
-                ht.pulseIntensity = intensity;
-            });
+        const trianglesToPulse = brokenPairs.flatMap(pair => [
+            // For broken pairs, one side is the tile being popped, the other is its former neighbor.
+            // Both sides of the broken connection should pulse.
+            { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex, pulseIntensity: 0 }, // The popped tile's edge
+            { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex, pulseIntensity: 0 }  // The neighbor's edge
+        ]);
+        console.log("Initiating pulse for broken connections:", trianglesToPulse);
+        executePulseAnimation(trianglesToPulse, PULSE_ANIMATION_DURATION, callback);
+    }
 
-            isPulsingGlobal = true; // Ensure animateView keeps running for this effect
-            redrawBoardOnCanvas(); // Redraw to show current pulse state
-
-            // Continue animation if animateView isn't already running it
-            // However, animateView should pick this up if isPulsingGlobal is true.
-            // If animateView is not already running, we might need to kickstart it.
-            if (!animationFrameId && (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0)) {
-                 animateView();
-            }
-            // No direct requestAnimationFrame here; rely on the main animateView loop triggered by isPulsingGlobal.
-        }
-
-        // Start the pulse animation process.
-        // The animateView loop will call redrawBoardOnCanvas, which will use pulseIntensity.
-        // We need a way to update pulseIntensity periodically.
-        // Let's use a simple interval that updates intensities and relies on animateView to draw.
-        // Or, more integrated: make animatePulse part of the main animation loop.
-
-        // For a more integrated approach:
-        // The animateView loop will handle the redrawing. We just need to update intensities.
-        // Let's refine this. The `isPulsingGlobal` flag used for removal pulsing can be reused.
-        // The update of intensities should happen within `animateView` or a function it calls.
-
-        // Simpler approach for now: let `highlightMatchedTriangles` manage its own animation loop
-        // for intensity changes, and `isPulsingGlobal` will make `animateView` redraw.
+    // Generic function to execute the pulsing animation
+    function executePulseAnimation(trianglesDetails, duration, callback) {
+        const pulseStartTime = Date.now();
+        currentlyHighlightedTriangles = trianglesDetails; // Assign to global for drawing
 
         function pulseLoop() {
             const elapsedTime = Date.now() - pulseStartTime;
-            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
-                currentlyHighlightedTriangles = [];
+            if (elapsedTime >= duration) {
+                currentlyHighlightedTriangles = []; // Clear highlights
                 isPulsingGlobal = false; // Stop this specific pulse effect
-                redrawBoardOnCanvas();
+                redrawBoardOnCanvas(); // Final redraw to clear
+
                 // Check if other animations (like view panning/zooming) still need to run
-                if (needsViewAnimation() || activeScoreAnimations.length > 0) { // activeScoreAnimations should be empty now
-                    animateView();
+                // This check is important if animateView was only running due to this pulse.
+                if (needsViewAnimation() || activeScoreAnimations.length > 0) {
+                    if(!animationFrameId) animateView(); // Restart main loop if it stopped
+                }
+
+                if (callback) {
+                    callback(); // Execute callback after animation completes
                 }
                 return;
             }
 
-            const progress = elapsedTime / PULSE_ANIMATION_DURATION;
-            const intensity = Math.sin(progress * Math.PI);
+            const progress = elapsedTime / duration;
+            const intensity = Math.sin(progress * Math.PI); // sin(0) = 0, sin(PI/2) = 1, sin(PI) = 0
             currentlyHighlightedTriangles.forEach(ht => ht.pulseIntensity = intensity);
 
             isPulsingGlobal = true; // Signal that an animation is active
             if (!animationFrameId) { // If main animation loop isn't running, start it.
                 animateView();
-            } else { // If it is running, it will pick up the redraw due to isPulsingGlobal
-                redrawBoardOnCanvas(); // Or simply let animateView handle it. Forcing redraw here ensures immediate update.
+            } else {
+                // If animateView is already running, it will pick up the redraw due to isPulsingGlobal.
+                // Forcing a redraw here can ensure immediate update if animateView's timing is slightly off.
+                // However, it's generally better to let animateView manage redraws.
+                // redrawBoardOnCanvas(); // Optional: force redraw
             }
             requestAnimationFrame(pulseLoop);
         }
 
         pulseLoop(); // Start the animation.
     }
+
 
     function getEdgeMidpointScreenCoords(tileX, tileY, edgeIndex, currentZoom, currentOffsetX, currentOffsetY) {
         const sideLength = BASE_HEX_SIDE_LENGTH * currentZoom;
