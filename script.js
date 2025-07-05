@@ -1767,7 +1767,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             currentSurroundedTilesForRemoval = [];
             console.log("No surrounded tiles to remove (handled in processTileRemoval, though checkForSurroundedTilesAndProceed should catch this).");
             // Normal turn progression
-            calculateScores();
+            calculateAndUpdateTotalScores();
             if (checkGameEnd()) {
                 endGame();
             } else {
@@ -1937,7 +1937,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             }
         } else {
             console.log(`[Main] AI (${opponentType}) could not find any valid move, passed, or move object was malformed. Passing turn. Move received:`, move);
-            calculateScores();
+            calculateAndUpdateTotalScores();
             switchTurn();
         }
     }
@@ -1974,7 +1974,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             isRemovingTiles = false;
             currentSurroundedTilesForRemoval = [];
             redrawBoardOnCanvas();
-            calculateScores();
+            calculateAndUpdateTotalScores();
             switchTurn();
         }
     }
