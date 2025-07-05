@@ -151,27 +151,105 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         const { lostScoreDelta, brokenPairs, scoringPlayerId } = calculateScoreLostFromPoppedTile(tileToRemove, boardState);
 
         let oldPlayerScore;
-        let newPlayerScore;
+        // let newPlayerScore; // Will be calculated later
 
         if (lostScoreDelta > 0 && scoringPlayerId === tileToRemove.playerId) {
+            // Store the old score for animation
             if (tileToRemove.playerId === 1) {
                 oldPlayerScore = player1Score;
+            } else {
+                oldPlayerScore = player2Score;
+            }
+
+            // Placeholder for the new pulsing function
+            // pulseBrokenConnections(brokenPairs, () => {
+            // Actual score decrement and UI update will happen in this callback
+            // For now, let's simulate the delay and then proceed.
+            // This will be replaced by the actual call to pulseBrokenConnections in a later step.
+
+            // Simulate pulseBrokenConnections with a timeout for now
+            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points. Starting pulse for broken connections.`);
+            // Call the actual (still to be created) pulseBrokenConnections function here.
+            // For now, using a timeout to represent its duration.
+            // pulseBrokenConnections(brokenPairs, () => { // This will be the actual call later
+            // --- Code that will go inside pulseBrokenConnections callback ---
+            // Decrement score
+            let newPlayerScore;
+            if (tileToRemove.playerId === 1) {
                 player1Score -= lostScoreDelta;
                 newPlayerScore = player1Score;
             } else {
-                oldPlayerScore = player2Score;
                 player2Score -= lostScoreDelta;
                 newPlayerScore = player2Score;
             }
-            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points from popping tile ${tileToRemove.id}. Old: ${oldPlayerScore}, New: ${newPlayerScore}`);
+            console.log(`Pulse complete. Player ${tileToRemove.playerId} lost ${lostScoreDelta} points. Old: ${oldPlayerScore}, New: ${newPlayerScore}`);
 
+            // Animate scoreboard update
+            // The animateScoreChangeOnBoard is a passthrough, its callback is called immediately.
             animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => {
                 animateScoreboardUpdate(tileToRemove.playerId, newPlayerScore, oldPlayerScore, () => {
                     // Ensure final display is accurate after scoreboard animation
                     if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
                     if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
 
+                    // Proceed with tile removal animation from board to hand
                     proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+                });
+            });
+            // --- End of code for pulseBrokenConnections callback ---
+            // }); // End of placeholder pulseBrokenConnections
+
+            // For now, to keep the structure, let's put the above logic inside a placeholder
+            // that will be replaced by the call to pulseBrokenConnections.
+            // This is a temporary structure for Step 1.
+            // We'll assume `pulseBrokenConnections` will be created in Step 2 and will take ~1000ms.
+            // So, we'll use a setTimeout to simulate this for now.
+            // The actual implementation will involve `pulseBrokenConnections(brokenPairs, callback)`
+
+            // Placeholder for pulseBrokenConnections - this will be replaced by actual call
+            // pulseBrokenConnections(brokenPairs, () => { ... });
+            // For now, let's assume it's called and its callback contains the score update and tile removal.
+            // The actual implementation of pulseBrokenConnections will come in step 2.
+            // For this step, we are just restructuring.
+
+            // The new structure will be:
+            // 1. Calculate lostScoreDelta, brokenPairs.
+            // 2. If lostScoreDelta > 0:
+            //    a. Call pulseBrokenConnections(brokenPairs, () => { // callback starts here
+            //       b. Decrement player score variable.
+            //       c. Call animateScoreboardUpdate(..., () => { // inner callback for scoreboard
+            //          d. Call proceedWithTileRemovalAnimation.
+            //       });
+            //    }); // callback ends here
+            // 3. Else (no score lost):
+            //    a. Call proceedWithTileRemovalAnimation directly.
+
+            // Call pulseBrokenConnections and define its callback
+            pulseBrokenConnections(brokenPairs, () => {
+                // This block is executed after the pulseBrokenConnections animation is complete.
+                let newPlayerScoreValue;
+                if (tileToRemove.playerId === 1) {
+                    // oldPlayerScore was captured before calling pulseBrokenConnections
+                    player1Score -= lostScoreDelta;
+                    newPlayerScoreValue = player1Score;
+                } else {
+                    // oldPlayerScore was captured before calling pulseBrokenConnections
+                    player2Score -= lostScoreDelta;
+                    newPlayerScoreValue = player2Score;
+                }
+                console.log(`Broken connections pulse complete. Player ${tileToRemove.playerId} lost ${lostScoreDelta} points. Old: ${oldPlayerScore}, New: ${newPlayerScoreValue}. Animating score.`);
+
+                // Animate scoreboard update
+                // The animateScoreChangeOnBoard is a passthrough, its callback is called immediately.
+                animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => { // textToShow "-1" is ignored
+                    animateScoreboardUpdate(tileToRemove.playerId, newPlayerScoreValue, oldPlayerScore, () => {
+                        // This callback is after the scoreboard number visually updates.
+                        // Final display is ensured by animateScoreboardUpdate.
+
+                        // Now, after score is updated and animated, proceed with removing the tile from the board.
+                        console.log("Scoreboard animation complete. Proceeding with tile removal from board.");
+                        proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+                    });
                 });
             });
         } else {
@@ -375,87 +453,77 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Score Highlight Function ---
     function highlightMatchedTriangles(matchedPairs) {
-        const PULSE_ANIMATION_DURATION = 500; // Total duration of the pulse animation
-        const pulseStartTime = Date.now();
+        // This function is for *gaining* points.
+        // It will use the shared pulsing mechanism.
+        const PULSE_ANIMATION_DURATION = 500; // Duration for score gain pulse
 
-        currentlyHighlightedTriangles = matchedPairs.flatMap(pair => [
+        const trianglesToPulse = matchedPairs.flatMap(pair => [
             { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex, pulseIntensity: 0 },
             { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex, pulseIntensity: 0 }
         ]);
 
-        function animatePulse() {
-            const elapsedTime = Date.now() - pulseStartTime;
-            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
-                currentlyHighlightedTriangles = []; // Clear highlights
-                isPulsingGlobal = false; // Stop forcing redraws for this specific pulse
-                redrawBoardOnCanvas(); // Final redraw to clear
-                // The main animateView loop will stop if nothing else needs animation
-                return;
-            }
+        // Call the generic pulsing function without a callback as score gain sequence handles timing separately.
+        executePulseAnimation(trianglesToPulse, PULSE_ANIMATION_DURATION);
+    }
 
-            // Calculate pulse intensity (e.g., sine wave for smooth pulse in/out)
-            // Intensity goes from 0 to 1 and back to 0 over the duration
-            const progress = elapsedTime / PULSE_ANIMATION_DURATION; // 0 to 1
-            const intensity = Math.sin(progress * Math.PI); // sin(0) = 0, sin(PI/2) = 1, sin(PI) = 0
+    function pulseBrokenConnections(brokenPairs, callback) {
+        // This function is for *losing* points (tile pop).
+        // It will use the shared pulsing mechanism and then execute a callback.
+        const PULSE_ANIMATION_DURATION = 1000; // Potentially longer duration for losing points, or keep same as gain.
 
-            currentlyHighlightedTriangles.forEach(ht => {
-                ht.pulseIntensity = intensity;
-            });
+        const trianglesToPulse = brokenPairs.flatMap(pair => [
+            // For broken pairs, one side is the tile being popped, the other is its former neighbor.
+            // Both sides of the broken connection should pulse.
+            { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex, pulseIntensity: 0 }, // The popped tile's edge
+            { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex, pulseIntensity: 0 }  // The neighbor's edge
+        ]);
+        console.log("Initiating pulse for broken connections:", trianglesToPulse);
+        executePulseAnimation(trianglesToPulse, PULSE_ANIMATION_DURATION, callback);
+    }
 
-            isPulsingGlobal = true; // Ensure animateView keeps running for this effect
-            redrawBoardOnCanvas(); // Redraw to show current pulse state
-
-            // Continue animation if animateView isn't already running it
-            // However, animateView should pick this up if isPulsingGlobal is true.
-            // If animateView is not already running, we might need to kickstart it.
-            if (!animationFrameId && (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0)) {
-                 animateView();
-            }
-            // No direct requestAnimationFrame here; rely on the main animateView loop triggered by isPulsingGlobal.
-        }
-
-        // Start the pulse animation process.
-        // The animateView loop will call redrawBoardOnCanvas, which will use pulseIntensity.
-        // We need a way to update pulseIntensity periodically.
-        // Let's use a simple interval that updates intensities and relies on animateView to draw.
-        // Or, more integrated: make animatePulse part of the main animation loop.
-
-        // For a more integrated approach:
-        // The animateView loop will handle the redrawing. We just need to update intensities.
-        // Let's refine this. The `isPulsingGlobal` flag used for removal pulsing can be reused.
-        // The update of intensities should happen within `animateView` or a function it calls.
-
-        // Simpler approach for now: let `highlightMatchedTriangles` manage its own animation loop
-        // for intensity changes, and `isPulsingGlobal` will make `animateView` redraw.
+    // Generic function to execute the pulsing animation
+    function executePulseAnimation(trianglesDetails, duration, callback) {
+        const pulseStartTime = Date.now();
+        currentlyHighlightedTriangles = trianglesDetails; // Assign to global for drawing
 
         function pulseLoop() {
             const elapsedTime = Date.now() - pulseStartTime;
-            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
-                currentlyHighlightedTriangles = [];
+            if (elapsedTime >= duration) {
+                currentlyHighlightedTriangles = []; // Clear highlights
                 isPulsingGlobal = false; // Stop this specific pulse effect
-                redrawBoardOnCanvas();
+                redrawBoardOnCanvas(); // Final redraw to clear
+
                 // Check if other animations (like view panning/zooming) still need to run
-                if (needsViewAnimation() || activeScoreAnimations.length > 0) { // activeScoreAnimations should be empty now
-                    animateView();
+                // This check is important if animateView was only running due to this pulse.
+                if (needsViewAnimation() || activeScoreAnimations.length > 0) {
+                    if(!animationFrameId) animateView(); // Restart main loop if it stopped
+                }
+
+                if (callback) {
+                    callback(); // Execute callback after animation completes
                 }
                 return;
             }
 
-            const progress = elapsedTime / PULSE_ANIMATION_DURATION;
-            const intensity = Math.sin(progress * Math.PI);
+            const progress = elapsedTime / duration;
+            const intensity = Math.sin(progress * Math.PI); // sin(0) = 0, sin(PI/2) = 1, sin(PI) = 0
             currentlyHighlightedTriangles.forEach(ht => ht.pulseIntensity = intensity);
 
             isPulsingGlobal = true; // Signal that an animation is active
             if (!animationFrameId) { // If main animation loop isn't running, start it.
                 animateView();
-            } else { // If it is running, it will pick up the redraw due to isPulsingGlobal
-                redrawBoardOnCanvas(); // Or simply let animateView handle it. Forcing redraw here ensures immediate update.
+            } else {
+                // If animateView is already running, it will pick up the redraw due to isPulsingGlobal.
+                // Forcing a redraw here can ensure immediate update if animateView's timing is slightly off.
+                // However, it's generally better to let animateView manage redraws.
+                // redrawBoardOnCanvas(); // Optional: force redraw
             }
             requestAnimationFrame(pulseLoop);
         }
 
         pulseLoop(); // Start the animation.
     }
+
 
     function getEdgeMidpointScreenCoords(tileX, tileY, edgeIndex, currentZoom, currentOffsetX, currentOffsetY) {
         const sideLength = BASE_HEX_SIDE_LENGTH * currentZoom;
