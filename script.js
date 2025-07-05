@@ -1606,7 +1606,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             animateView(); // Ensure animation loop is running for pulsing
             console.log("Tile removal phase. Surrounded tiles:", currentSurroundedTilesForRemoval.map(t => t.id));
 
-            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) { // Added greedy6, greedy8
+            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy4'].includes(opponentType)) {
                 // AI's turn and tiles are surrounded by its move, start AI removal process
                 console.log(`Player 2 (AI - ${opponentType}) is starting tile removal...`);
                 redrawBoardOnCanvas(); // Show highlights
@@ -1674,7 +1674,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         renderPlayerHands();
 
         // Check if AI needs to make a move or remove a tile
-        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8']; // Added greedy6, greedy8
+        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy4'];
         if (currentPlayer === 2 && !isRemovingTiles && aiOpponentTypes.includes(opponentType)) {
             console.log("Player 2 (AI) is thinking... (via switchTurn)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
@@ -2299,10 +2299,7 @@ function animateView() {
                         <option value="random">Random (CPU)</option>
                         <option value="greedy">Greedy 1 (CPU)</option>
                         <option value="greedy2">Greedy 2 (CPU)</option>
-                        <option value="greedy3">Greedy 3 (CPU)</option>
                         <option value="greedy4">Greedy 4 (CPU)</option>
-                        <option value="greedy6">Greedy 6 (CPU)</option>
-                        <option value="greedy8">Greedy 8 (CPU)</option>
                     </select>
                 </div>
             </div>
@@ -2353,7 +2350,7 @@ function animateView() {
 
         // If it's Player 2's turn and a CPU opponent is selected, and not in removal phase,
         // let the AI make a move.
-        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8']; // Added greedy6, greedy8
+        const aiOpponentTypes = ['random', 'greedy', 'greedy2', 'greedy4'];
         if (currentPlayer === 2 && aiOpponentTypes.includes(opponentType) && !isRemovingTiles) {
             console.log("Player 2 (AI) is thinking... (opponent type changed)");
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
