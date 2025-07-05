@@ -1440,7 +1440,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             } else {
             isRemovingTiles = false;
             isPulsingGlobal = false; // Ensure pulsing stops if no tiles were surrounded initially
-                calculateScores(); // Update scores after each turn
+                calculateAndUpdateTotalScores(); // Update scores after each turn
                 switchTurn(); // Always switch turn, game end is checked at the start of the next turn
             }
         }
