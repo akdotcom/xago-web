@@ -1377,7 +1377,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
                 // Wait for highlight to roughly finish before starting +1 animations for better sequence
                 setTimeout(() => {
-                    animateScoreUpdateOnBoard(currentPlayer, scoreDelta, matchedPairs, () => {
+                    animateScoreChangeOnBoard(currentPlayer, matchedPairs, "+1", () => {
                         // Callback after +1 animations on board are done
                         animateScoreboardUpdate(currentPlayer, newPlayerScore, oldPlayerScore, () => {
                             // Callback after scoreboard animation is done
