@@ -2412,18 +2412,60 @@ function animateView() {
 
     // --- Player Hand Rendering ---
     function renderPlayerHands() {
-        playerHandsDisplay.innerHTML = ''; // Clear existing hands
+        const oldPlayer1HandContainer = document.getElementById('player1-hand');
+        const oldPlayer2HandContainer = document.getElementById('player2-hand');
+        let outgoingHandElement = null;
 
+        // Determine which hand is outgoing based on the NEW currentPlayer value
+        // If currentPlayer is 1, player 2's old hand is outgoing (if it exists)
+        // If currentPlayer is 2, player 1's old hand is outgoing (if it exists)
+        if (currentPlayer === 1 && oldPlayer2HandContainer) {
+            outgoingHandElement = oldPlayer2HandContainer;
+        } else if (currentPlayer === 2 && oldPlayer1HandContainer) {
+            outgoingHandElement = oldPlayer1HandContainer;
+        }
+
+        // If there's an outgoing hand, apply animation and set it to be removed
+        if (outgoingHandElement) {
+            // Check if it's already part of playerHandsDisplay before trying to animate/remove
+            if (playerHandsDisplay.contains(outgoingHandElement)) {
+                outgoingHandElement.classList.add('sweeping-out');
+                // Add 'inactive-hand' to make it fade if that's part of the inactive style
+                // but the animation should handle opacity.
+                // outgoingHandElement.classList.add('inactive-hand');
+                // outgoingHandElement.classList.remove('active-hand');
+
+                outgoingHandElement.addEventListener('animationend', function handler() {
+                    if (this.parentNode) { // Check if still in DOM
+                        this.parentNode.removeChild(this);
+                    }
+                    this.classList.remove('sweeping-out');
+                    this.removeEventListener('animationend', handler); // Clean up listener
+                }, { once: true }); // Ensure listener fires only once
+            } else {
+                // If not in playerHandsDisplay, it might be from a previous incomplete animation.
+                // Just ensure it's removed if it's somewhere else or log.
+                if (outgoingHandElement.parentNode) {
+                    outgoingHandElement.parentNode.removeChild(outgoingHandElement);
+                }
+            }
+        }
+
+        // Create new hand containers
         const hand1Div = document.createElement('div');
         hand1Div.id = 'player1-hand';
         hand1Div.classList.add('player-hand');
         hand1Div.innerHTML = `<h2>Player 1 Hand</h2><div class="tiles-container"></div>`;
-        // Assign to global variable player1HandDisplay
-        player1HandDisplay = hand1Div.querySelector('.tiles-container');
+        player1HandDisplay = hand1Div.querySelector('.tiles-container'); // Assign global
 
         const hand2Div = document.createElement('div');
         hand2Div.id = 'player2-hand';
         hand2Div.classList.add('player-hand');
+        // Temporarily hide new hands to prevent flash of unstyled content before animation
+        // hand1Div.style.opacity = '0';
+        // hand2Div.style.opacity = '0';
+
+
         hand2Div.innerHTML = `
             <div class="player2-hand-header">
                 <h2>Player 2 Hand</h2>
@@ -2439,36 +2481,78 @@ function animateView() {
                 </div>
             </div>
             <div class="tiles-container"></div>`;
-        // Assign to global variable player2HandDisplay
-        player2HandDisplay = hand2Div.querySelector('.tiles-container');
+        player2HandDisplay = hand2Div.querySelector('.tiles-container'); // Assign global
+
+        // Determine incoming hand and apply rising animation
+        let incomingHandElement;
+        if (currentPlayer === 1) {
+            incomingHandElement = hand1Div;
+            // Append non-animated hand first if it's not the one being animated in.
+            // This order ensures the animated hand (current player) appears on top if z-index isn't enough.
+            // However, with z-index on animations, the append order primarily dictates visual stacking if z-indices are equal.
+            // The outgoing hand is already being animated out and will be removed.
+            // The new hands need to be appended.
+            if (playerHandsDisplay.contains(outgoingHandElement) && outgoingHandElement === oldPlayer2HandContainer) {
+                // If outgoing P2 is still there, append P1 (incoming), then P2 (new, non-animated)
+                // This path is tricky because outgoingHandElement is removed on animation end.
+                // Simpler: Append new hands in order, then animate the incoming one.
+            }
+        } else { // currentPlayer === 2
+            incomingHandElement = hand2Div;
+        }
+
+        // Clear playerHandsDisplay *after* identifying outgoing and *before* appending new.
+        // This is problematic if outgoing animation is still running.
+        // The outgoing hand element is now detached by its animationend listener.
+        // So, we can clear and append new ones.
+        // Let's make sure playerHandsDisplay is cleared of previous static elements
+        // NOT currently animating out.
+        // This is complex. Alternative: position hands absolutely within playerHandsDisplay.
+        // For now, let's assume the `outgoingHandElement.parentNode.removeChild(this)` works
+        // and we append the new ones.
+
+        // If the outgoing hand was the only child, playerHandsDisplay might be empty now
+        // or it might contain the *other* old hand if only one switched.
+
+        // To simplify, let's ensure playerHandsDisplay is empty of non-animating hands before appending new ones.
+        // Children that are not 'sweeping-out' should be removed.
+        Array.from(playerHandsDisplay.children).forEach(child => {
+            if (!child.classList.contains('sweeping-out')) {
+                playerHandsDisplay.removeChild(child);
+            }
+        });
+
 
         if (currentPlayer === 1) {
-            playerHandsDisplay.appendChild(hand1Div);
-            playerHandsDisplay.appendChild(hand2Div);
-        } else {
-            playerHandsDisplay.appendChild(hand2Div);
-            playerHandsDisplay.appendChild(hand1Div);
+            playerHandsDisplay.appendChild(hand1Div); // P1 (potentially rising)
+            playerHandsDisplay.appendChild(hand2Div); // P2 (static new)
+        } else { // currentPlayer === 2
+            playerHandsDisplay.appendChild(hand2Div); // P2 (potentially rising)
+            playerHandsDisplay.appendChild(hand1Div); // P1 (static new)
         }
+
+        // Apply rising animation to the new incoming hand
+        incomingHandElement.classList.add('rising-in');
+        // incomingHandElement.style.opacity = '1'; // Make visible for animation
+        incomingHandElement.addEventListener('animationend', function handler() {
+            this.classList.remove('rising-in');
+            this.removeEventListener('animationend', handler);
+            // After the new hand has risen, update highlights (active/inactive)
+            updateHandHighlights();
+        }, { once: true });
+
 
         // Re-assign global container vars and opponent selector
-        player1HandContainer = document.getElementById('player1-hand');
-        player2HandContainer = document.getElementById('player2-hand');
+        player1HandContainer = document.getElementById('player1-hand'); // This is now the new hand1Div
+        player2HandContainer = document.getElementById('player2-hand'); // This is now the new hand2Div
         opponentTypeSelector = document.getElementById('opponent-type');
 
-        // Restore opponent type if selector exists and type is known
         if (opponentTypeSelector) {
-            opponentTypeSelector.value = opponentType || "greedy"; // Default to greedy if not set
-            opponentType = opponentTypeSelector.value; // Ensure internal var matches
-
-            // Re-attach event listener for opponent type selector
-            opponentTypeSelector.removeEventListener('change', handleOpponentTypeChange); // Remove old if any
+            opponentTypeSelector.value = opponentType || "greedy";
+            opponentType = opponentTypeSelector.value;
+            opponentTypeSelector.removeEventListener('change', handleOpponentTypeChange);
             opponentTypeSelector.addEventListener('change', handleOpponentTypeChange);
         }
-
-
-        // Re-display tiles in the new containers
-        // Ensure the correct display elements are targeted (the .tiles-container within the new divs)
-        // Use the now-updated global player1HandDisplay and player2HandDisplay
 
         if (player1HandDisplay) displayPlayerHand(1, player1Hand, player1HandDisplay);
         else console.error("Could not find .tiles-container for player 1 hand (player1HandDisplay is null after renderPlayerHands).");
@@ -2476,7 +2560,12 @@ function animateView() {
         if (player2HandDisplay) displayPlayerHand(2, player2Hand, player2HandDisplay);
         else console.error("Could not find .tiles-container for player 2 hand (player2HandDisplay is null after renderPlayerHands).");
 
-        updateHandHighlights(); // Apply active/inactive styles
+        // updateHandHighlights(); // Moved to animationend of rising hand to apply after animation.
+                                // However, the initial state (e.g. inactive for the non-current player) should be set.
+                                // Let's call it, but the active highlight might look odd during rise.
+                                // Consider setting opacity/styles directly before animation if needed.
+        updateHandHighlights(); // Set initial active/inactive states, animation will override opacity/transform.
+
     }
 
     function handleOpponentTypeChange(event) {
