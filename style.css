@@ -140,6 +140,39 @@ main {
     width: 90%; /* Make hands wider */
     max-width: 800px; /* Optional: prevent it from becoming too wide on very large screens */
     transition: opacity 0.3s ease, box-shadow 0.3s ease; /* Smooth transition for changes */
+    position: relative; /* Needed for z-index and potential absolute positioning during animation */
+}
+
+.player-hand.sweeping-out {
+    animation: sweep-out-below 0.5s forwards ease-in-out;
+    z-index: 0; /* Ensure outgoing hand is below incoming */
+}
+
+.player-hand.rising-in {
+    animation: rise-in-from-below 0.5s forwards ease-in-out;
+    z-index: 1; /* Ensure incoming hand is above outgoing */
+}
+
+@keyframes sweep-out-below {
+    0% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100%) scale(0.8); /* Move down and shrink slightly */
+        opacity: 0;
+    }
+}
+
+@keyframes rise-in-from-below {
+    0% {
+        transform: translateY(100%) scale(0.8); /* Start from below and slightly shrunk */
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
 }
 
 .player-hand.active-hand {
