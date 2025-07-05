@@ -150,116 +150,36 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
         const { lostScoreDelta, brokenPairs, scoringPlayerId } = calculateScoreLostFromPoppedTile(tileToRemove, boardState);
 
-        let oldPlayerScore;
-        // let newPlayerScore; // Will be calculated later
+        let scoreContext = null;
 
         if (lostScoreDelta > 0 && scoringPlayerId === tileToRemove.playerId) {
-            // Store the old score for animation
+            let oldPlayerScoreValue;
             if (tileToRemove.playerId === 1) {
-                oldPlayerScore = player1Score;
+                oldPlayerScoreValue = player1Score;
             } else {
-                oldPlayerScore = player2Score;
+                oldPlayerScoreValue = player2Score;
             }
-
-            // Placeholder for the new pulsing function
-            // pulseBrokenConnections(brokenPairs, () => {
-            // Actual score decrement and UI update will happen in this callback
-            // For now, let's simulate the delay and then proceed.
-            // This will be replaced by the actual call to pulseBrokenConnections in a later step.
-
-            // Simulate pulseBrokenConnections with a timeout for now
-            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points. Starting pulse for broken connections.`);
-            // Call the actual (still to be created) pulseBrokenConnections function here.
-            // For now, using a timeout to represent its duration.
-            // pulseBrokenConnections(brokenPairs, () => { // This will be the actual call later
-            // --- Code that will go inside pulseBrokenConnections callback ---
-            // Decrement score
-            let newPlayerScore;
-            if (tileToRemove.playerId === 1) {
-                player1Score -= lostScoreDelta;
-                newPlayerScore = player1Score;
-            } else {
-                player2Score -= lostScoreDelta;
-                newPlayerScore = player2Score;
-            }
-            console.log(`Pulse complete. Player ${tileToRemove.playerId} lost ${lostScoreDelta} points. Old: ${oldPlayerScore}, New: ${newPlayerScore}`);
-
-            // Animate scoreboard update
-            // The animateScoreChangeOnBoard is a passthrough, its callback is called immediately.
-            animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => {
-                animateScoreboardUpdate(tileToRemove.playerId, newPlayerScore, oldPlayerScore, () => {
-                    // Ensure final display is accurate after scoreboard animation
-                    if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
-                    if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
-
-                    // Proceed with tile removal animation from board to hand
-                    proceedWithTileRemovalAnimation(tileToRemove, tileKey);
-                });
-            });
-            // --- End of code for pulseBrokenConnections callback ---
-            // }); // End of placeholder pulseBrokenConnections
-
-            // For now, to keep the structure, let's put the above logic inside a placeholder
-            // that will be replaced by the call to pulseBrokenConnections.
-            // This is a temporary structure for Step 1.
-            // We'll assume `pulseBrokenConnections` will be created in Step 2 and will take ~1000ms.
-            // So, we'll use a setTimeout to simulate this for now.
-            // The actual implementation will involve `pulseBrokenConnections(brokenPairs, callback)`
-
-            // Placeholder for pulseBrokenConnections - this will be replaced by actual call
-            // pulseBrokenConnections(brokenPairs, () => { ... });
-            // For now, let's assume it's called and its callback contains the score update and tile removal.
-            // The actual implementation of pulseBrokenConnections will come in step 2.
-            // For this step, we are just restructuring.
-
-            // The new structure will be:
-            // 1. Calculate lostScoreDelta, brokenPairs.
-            // 2. If lostScoreDelta > 0:
-            //    a. Call pulseBrokenConnections(brokenPairs, () => { // callback starts here
-            //       b. Decrement player score variable.
-            //       c. Call animateScoreboardUpdate(..., () => { // inner callback for scoreboard
-            //          d. Call proceedWithTileRemovalAnimation.
-            //       });
-            //    }); // callback ends here
-            // 3. Else (no score lost):
-            //    a. Call proceedWithTileRemovalAnimation directly.
-
-            // Call pulseBrokenConnections and define its callback
-            pulseBrokenConnections(brokenPairs, () => {
-                // This block is executed after the pulseBrokenConnections animation is complete.
-                let newPlayerScoreValue;
-                if (tileToRemove.playerId === 1) {
-                    // oldPlayerScore was captured before calling pulseBrokenConnections
-                    player1Score -= lostScoreDelta;
-                    newPlayerScoreValue = player1Score;
-                } else {
-                    // oldPlayerScore was captured before calling pulseBrokenConnections
-                    player2Score -= lostScoreDelta;
-                    newPlayerScoreValue = player2Score;
-                }
-                console.log(`Broken connections pulse complete. Player ${tileToRemove.playerId} lost ${lostScoreDelta} points. Old: ${oldPlayerScore}, New: ${newPlayerScoreValue}. Animating score.`);
-
-                // Animate scoreboard update
-                // The animateScoreChangeOnBoard is a passthrough, its callback is called immediately.
-                animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => { // textToShow "-1" is ignored
-                    animateScoreboardUpdate(tileToRemove.playerId, newPlayerScoreValue, oldPlayerScore, () => {
-                        // This callback is after the scoreboard number visually updates.
-                        // Final display is ensured by animateScoreboardUpdate.
-
-                        // Now, after score is updated and animated, proceed with removing the tile from the board.
-                        console.log("Scoreboard animation complete. Proceeding with tile removal from board.");
-                        proceedWithTileRemovalAnimation(tileToRemove, tileKey);
-                    });
-                });
-            });
+            // Prepare context for score update after tile animation
+            scoreContext = {
+                lostScoreDelta,
+                brokenPairs,
+                oldPlayerScore: oldPlayerScoreValue,
+                playerIdForScore: tileToRemove.playerId // Store the ID of the player whose score needs to be updated
+            };
+            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points. Tile removal animation will start first.`);
+            // proceedWithTileRemovalAnimation will now handle the score update sequence in its callback, using scoreContext.
+            proceedWithTileRemovalAnimation(tileToRemove, tileKey, scoreContext);
         } else {
-            // No score change, proceed directly with tile removal animation
-            proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+            // No score change, or tile popped does not belong to the player who loses points (e.g. opponent pops own tile - though current rules might not allow this for score loss)
+            // Proceed directly with tile removal animation without score context
+            console.log(`No score change for popping tile ${tileToRemove.id}, or not popped by owner. Proceeding with tile removal animation.`);
+            proceedWithTileRemovalAnimation(tileToRemove, tileKey, null);
         }
     }
 
     // Contains the original logic of animating tile back to hand and subsequent game flow
-    function proceedWithTileRemovalAnimation(tileToRemove, tileKey) {
+    // Now accepts an optional scoreContext object to handle score updates after the animation.
+    function proceedWithTileRemovalAnimation(tileToRemove, tileKey, scoreContext) {
         console.log(`Animating removal of tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
 
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
@@ -303,40 +223,76 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            redrawBoardOnCanvas(); // Final redraw to ensure board is clean
+            redrawBoardOnCanvas(); // Final redraw to ensure board is clean after tile is back in hand
 
-            const newSurroundedList = getSurroundedTiles(boardState);
-            currentSurroundedTilesForRemoval = newSurroundedList;
-            updateViewParameters();
+            // --- New sequence: Pulse and Score Update AFTER tile is back in hand ---
+            if (scoreContext && scoreContext.lostScoreDelta > 0) {
+                console.log("Tile back in hand. Now pulsing broken connections.");
+                pulseBrokenConnections(scoreContext.brokenPairs, () => {
+                    // This callback is after pulseBrokenConnections animation
+                    let newPlayerScoreValue;
+                    if (scoreContext.playerIdForScore === 1) {
+                        player1Score -= scoreContext.lostScoreDelta;
+                        newPlayerScoreValue = player1Score;
+                    } else {
+                        player2Score -= scoreContext.lostScoreDelta;
+                        newPlayerScoreValue = player2Score;
+                    }
+                    console.log(`Broken connections pulse complete. Player ${scoreContext.playerIdForScore} lost ${scoreContext.lostScoreDelta} points. Old: ${scoreContext.oldPlayerScore}, New: ${newPlayerScoreValue}. Animating score.`);
 
-            if (newSurroundedList.length > 0) {
-                console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) {
-                    player2HandContainer.classList.add('ai-thinking-pulse');
-                    setTimeout(() => {
-                        initiateAiTileRemoval();
-                    }, 1000);
-                } else {
-                    player2HandContainer.classList.remove('ai-thinking-pulse');
-                    redrawBoardOnCanvas(); // Update highlights for human
-                }
+                    animateScoreChangeOnBoard(scoreContext.playerIdForScore, scoreContext.brokenPairs, "-1", () => { // textToShow "-1" is ignored
+                        animateScoreboardUpdate(scoreContext.playerIdForScore, newPlayerScoreValue, scoreContext.oldPlayerScore, () => {
+                            // This callback is after the scoreboard visually updates.
+                            console.log("Scoreboard animation complete. Proceeding with game logic (check surrounded, switch turn).");
+                            // Now proceed with the rest of the game logic
+                            continueGameLogicAfterTileRemoval();
+                        });
+                    });
+                });
             } else {
-                console.log("No more surrounded tiles. Ending removal phase.");
-                player2HandContainer.classList.remove('ai-thinking-pulse');
-                isRemovingTiles = false;
-                isPulsingGlobal = false;
-                currentSurroundedTilesForRemoval = [];
-                redrawBoardOnCanvas(); // Clear highlights
-
-                // Scores were already updated if points were lost.
-                // A full calculateAndUpdateTotalScores() here ensures consistency if other factors could change scores,
-                // but for simple pop, it might be redundant if handled precisely.
-                // However, it's safer to call it to ensure the game state is correct before switching turns.
-                calculateAndUpdateTotalScores();
-                switchTurn();
+                // No score change, or no scoreContext provided, proceed directly with game logic
+                console.log("Tile back in hand. No score change to process. Proceeding with game logic.");
+                continueGameLogicAfterTileRemoval();
             }
-            if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) animateView();
         });
+    }
+
+    // Helper function to encapsulate the game logic that follows tile removal and potential score updates
+    function continueGameLogicAfterTileRemoval() {
+        const newSurroundedList = getSurroundedTiles(boardState);
+        currentSurroundedTilesForRemoval = newSurroundedList;
+        updateViewParameters();
+
+        if (newSurroundedList.length > 0) {
+            console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
+            if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) {
+                player2HandContainer.classList.add('ai-thinking-pulse');
+                setTimeout(() => {
+                    initiateAiTileRemoval();
+                }, 1000);
+            } else {
+                player2HandContainer.classList.remove('ai-thinking-pulse');
+                redrawBoardOnCanvas(); // Update highlights for human
+            }
+        } else {
+            console.log("No more surrounded tiles. Ending removal phase.");
+            player2HandContainer.classList.remove('ai-thinking-pulse');
+            isRemovingTiles = false;
+            isPulsingGlobal = false; // Ensure this is reset if no more pulsing needed
+            currentSurroundedTilesForRemoval = [];
+            redrawBoardOnCanvas(); // Clear highlights
+
+            // If scores were lost, they were updated before calling this function.
+            // If no scores were lost, calculateAndUpdateTotalScores() does nothing or recalculates (harmless).
+            // It's good practice to call it to ensure the game state is correct before switching turns,
+            // especially if other factors could influence scores (though not currently the case for simple pop).
+            calculateAndUpdateTotalScores(); // This ensures scores are consistent.
+            switchTurn();
+        }
+        // Ensure the animation loop continues if needed for view changes or other ongoing animations.
+        if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) {
+            if (!animationFrameId) animateView();
+        }
     }
 
     // Helper function to check if view animation (pan/zoom) is needed
