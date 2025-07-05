@@ -625,7 +625,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         ctx.strokeRect(0, 0, gameCanvas.width, gameCanvas.height);
 
 
-        boardState = {}; // Reset board state
+        // boardState = {}; // Reset board state // <--- THIS LINE IS REMOVED to preserve loaded state
         // The old cell creation loop is removed.
         // Event listeners for drag/drop on cells are removed.
         // Click handling will be added directly to the canvas later.
