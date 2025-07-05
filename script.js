@@ -54,6 +54,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let pulseStartTime = 0;
     const PULSE_DURATION = 1000; // milliseconds for one full pulse cycle
     let isPulsingGlobal = false; // To keep animateView running for pulsing
+    let currentlyHighlightedTriangles = []; // For score animation highlights
+    let activeScoreAnimations = []; // For "+1" animations on the board
 
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
@@ -143,10 +145,45 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
 
     function removeTileFromBoardAndReturnToHand(tileToRemove) {
+        console.log(`Initiating removal process for tile ${tileToRemove.id} by player ${tileToRemove.playerId}`);
+
+        const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
+        const { lostScoreDelta, brokenPairs, scoringPlayerId } = calculateScoreLostFromPoppedTile(tileToRemove, boardState);
+
+        let oldPlayerScore;
+        let newPlayerScore;
+
+        if (lostScoreDelta > 0 && scoringPlayerId === tileToRemove.playerId) {
+            if (tileToRemove.playerId === 1) {
+                oldPlayerScore = player1Score;
+                player1Score -= lostScoreDelta;
+                newPlayerScore = player1Score;
+            } else {
+                oldPlayerScore = player2Score;
+                player2Score -= lostScoreDelta;
+                newPlayerScore = player2Score;
+            }
+            console.log(`Player ${tileToRemove.playerId} will lose ${lostScoreDelta} points from popping tile ${tileToRemove.id}. Old: ${oldPlayerScore}, New: ${newPlayerScore}`);
+
+            animateScoreChangeOnBoard(tileToRemove.playerId, brokenPairs, "-1", () => {
+                animateScoreboardUpdate(tileToRemove.playerId, newPlayerScore, oldPlayerScore, () => {
+                    // Ensure final display is accurate after scoreboard animation
+                    if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
+                    if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
+
+                    proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+                });
+            });
+        } else {
+            // No score change, proceed directly with tile removal animation
+            proceedWithTileRemovalAnimation(tileToRemove, tileKey);
+        }
+    }
+
+    // Contains the original logic of animating tile back to hand and subsequent game flow
+    function proceedWithTileRemovalAnimation(tileToRemove, tileKey) {
         console.log(`Animating removal of tile ${tileToRemove.id} at (${tileToRemove.x}, ${tileToRemove.y}) for player ${tileToRemove.playerId}`);
 
-        // Calculate start position (center of the tile on canvas)
-        // These coordinates are relative to the viewport, as the animated tile is appended to document.body
         const scaledHexSideLength = BASE_HEX_SIDE_LENGTH * currentZoomLevel;
         const tileCenterXinCanvas = currentOffsetX + scaledHexSideLength * (3/2 * tileToRemove.x);
         const tileCenterYinCanvas = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * tileToRemove.x + Math.sqrt(3) * tileToRemove.y);
@@ -155,73 +192,54 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         const startScreenX = tileCenterXinCanvas + canvasRect.left;
         const startScreenY = tileCenterYinCanvas + canvasRect.top;
 
-        // Determine target hand element
         const targetHandElement = tileToRemove.playerId === 1 ? player1HandDisplay : player2HandDisplay;
 
-        // Temporarily hide the tile on the board by redrawing the board without it.
-        // This will be done more cleanly by removing it from boardState *before* animation,
-        // but redrawing the board without it for now.
-        const tileKey = `${tileToRemove.x},${tileToRemove.y}`;
-        const originalTileData = boardState[tileKey]; // Save it
-        delete boardState[tileKey]; // Temporarily remove for redraw
+        // It's important that the tile is logically removed from boardState *before* animateTileReturn starts,
+        // so that redraws during the animation don't show it.
+        // However, the original code deleted it temporarily, then redrew, then relied on it being deleted.
+        // Let's make the deletion permanent here, before the animation.
+        if (boardState[tileKey]) {
+            delete boardState[tileKey];
+            console.log(`Tile ${tileKey} permanently deleted from boardState before animation.`);
+        } else {
+            console.warn(`Tile ${tileKey} was already removed from boardState before proceedWithTileRemovalAnimation.`);
+        }
         redrawBoardOnCanvas(); // Redraw board without the tile that will be animated
 
         animateTileReturn(tileToRemove, startScreenX, startScreenY, targetHandElement, () => {
-            // This is the callback function, executed after animation completes.
-            console.log(`Animation complete for tile ${tileToRemove.id}. Finalizing removal.`);
+            console.log(`Animation complete for tile ${tileToRemove.id}. Finalizing removal actions.`);
 
-            // Restore tile to boardState if it was only temporarily removed for redrawing.
-            // Actually, the plan is to remove it from boardState *after* animation.
-            // The delete operation above was temporary. So, if it's still in originalTileData,
-            // it means it was present. Now we permanently remove it.
-            // boardState[tileKey] = originalTileData; // Put it back before "official" removal if needed
-            // delete boardState[tileKey]; // This is the "official" removal from boardState logic.
-            // The line `delete boardState[tileKey]` was already done before animation.
-            // So, at this point, the tile is already logically removed from the board.
-
-            // 2. Return to Owner's Hand
             if (tileToRemove.playerId === 1) {
                 player1Hand.push(tileToRemove);
             } else {
                 player2Hand.push(tileToRemove);
             }
 
-            // 3. Reset Tile Properties
             tileToRemove.x = null;
             tileToRemove.y = null;
-            tileToRemove.orientation = 0; // Reset orientation
+            tileToRemove.orientation = 0;
 
-            // 4. Update Owner's Hand Display
             if (tileToRemove.playerId === 1) {
                 displayPlayerHand(1, player1Hand, player1HandDisplay);
             } else {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
-            // 5. Redraw Board (already done without the tile, but a final ensure)
-            redrawBoardOnCanvas();
+            redrawBoardOnCanvas(); // Final redraw to ensure board is clean
 
-            // 6. Check for More Surrounded Tiles
-            const newSurroundedList = getSurroundedTiles(boardState); // boardState is now correctly updated
+            const newSurroundedList = getSurroundedTiles(boardState);
             currentSurroundedTilesForRemoval = newSurroundedList;
-
-            updateViewParameters(); // Update view after a tile is removed
+            updateViewParameters();
 
             if (newSurroundedList.length > 0) {
                 console.log("More surrounded tiles found:", newSurroundedList.map(t => t.id));
-                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) { // Added greedy6, greedy8
-                    console.log(`Player 2 (AI - ${opponentType}) is removing more tiles... Pausing for 1s.`);
+                if (currentPlayer === 2 && ['random', 'greedy', 'greedy2', 'greedy3', 'greedy4', 'greedy6', 'greedy8'].includes(opponentType)) {
                     player2HandContainer.classList.add('ai-thinking-pulse');
-                    // Pulsing border is already active or will be activated by redrawBoardOnCanvas + animateView in the main function body
-                    // redrawBoardOnCanvas(); // Ensure highlights are shown for AI
-                    // animateView(); // Ensure pulsing if not already
                     setTimeout(() => {
-                        console.log(`Player 2 (AI - ${opponentType}) initiating next tile removal after pause.`);
                         initiateAiTileRemoval();
-                    }, 1000); // 1-second pause
+                    }, 1000);
                 } else {
                     player2HandContainer.classList.remove('ai-thinking-pulse');
-                    console.log(`Player ${currentPlayer}, click on a highlighted tile to remove it.`);
                     redrawBoardOnCanvas(); // Update highlights for human
                 }
             } else {
@@ -230,12 +248,16 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 isRemovingTiles = false;
                 isPulsingGlobal = false;
                 currentSurroundedTilesForRemoval = [];
-                console.log("Tile removal complete. Finishing turn.");
                 redrawBoardOnCanvas(); // Clear highlights
-                calculateScores();
+
+                // Scores were already updated if points were lost.
+                // A full calculateAndUpdateTotalScores() here ensures consistency if other factors could change scores,
+                // but for simple pop, it might be redundant if handled precisely.
+                // However, it's safer to call it to ensure the game state is correct before switching turns.
+                calculateAndUpdateTotalScores();
                 switchTurn();
             }
-            if (isPulsingGlobal || needsViewAnimation()) animateView();
+            if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) animateView();
         });
     }
 
@@ -322,7 +344,114 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // The purple border drawing logic has been removed.
         // Only the translucent tile will be shown as the AI evaluation highlight.
     }
+
+    // --- Draw Score Animations ---
+    if (activeScoreAnimations.length > 0) {
+        const currentTime = Date.now();
+        activeScoreAnimations = activeScoreAnimations.filter(anim => {
+            const elapsedTime = currentTime - anim.startTime;
+            if (elapsedTime >= anim.duration) {
+                if (anim.onComplete) anim.onComplete();
+                return false; // Remove from list
+            }
+
+            const progress = elapsedTime / anim.duration;
+            const floatDistance = 30 * currentZoomLevel; // How far the text floats up
+            const currentY = anim.y - (progress * floatDistance);
+            const opacity = 1 - progress;
+
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.fillStyle = anim.color;
+            const fontSize = 16 * currentZoomLevel; // Scaled font size
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(anim.text, anim.x, currentY);
+            ctx.restore();
+            return true; // Keep in list
+        });
     }
+    }
+
+    // --- Score Highlight Function ---
+    function highlightMatchedTriangles(matchedPairs) {
+        currentlyHighlightedTriangles = matchedPairs.map(pair => [
+            { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex },
+            { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex }
+        ]).flat(); // Flatten to a list of individual tile/edge objects for easier checking in drawHexTile
+
+        redrawBoardOnCanvas(); // Redraw to show highlights
+
+        setTimeout(() => {
+            currentlyHighlightedTriangles = [];
+            redrawBoardOnCanvas(); // Redraw to clear highlights
+            // Potentially call next step in animation sequence here (e.g., scoreboard update)
+        }, 1000); // Highlight duration: 1 second
+    }
+
+    function getEdgeMidpointScreenCoords(tileX, tileY, edgeIndex, currentZoom, currentOffsetX, currentOffsetY) {
+        const sideLength = BASE_HEX_SIDE_LENGTH * currentZoom;
+        // Calculate center of the hex tile on screen
+        const hexCenterX = currentOffsetX + sideLength * (3/2 * tileX);
+        const hexCenterY = currentOffsetY + sideLength * (Math.sqrt(3)/2 * tileX + Math.sqrt(3) * tileY);
+
+        // Get vertices of the edge
+        const angle1 = Math.PI / 180 * (60 * edgeIndex);
+        const v1x = hexCenterX + sideLength * Math.cos(angle1);
+        const v1y = hexCenterY + sideLength * Math.sin(angle1);
+
+        const angle2 = Math.PI / 180 * (60 * ((edgeIndex + 1) % 6));
+        const v2x = hexCenterX + sideLength * Math.cos(angle2);
+        const v2y = hexCenterY + sideLength * Math.sin(angle2);
+
+        // Midpoint of the edge
+        const midX = (v1x + v2x) / 2;
+        const midY = (v1y + v2y) / 2;
+
+        return { x: midX, y: midY };
+    }
+
+    // scoreDelta is positive for gain, negative for loss (though we pass absolute count for items)
+    // itemsList is matchedPairs for gains, brokenPairs for losses
+    // textToShow is "+1" or "-1"
+    function animateScoreChangeOnBoard(playerId, itemsList, textToShow, callback) {
+        if (!itemsList || itemsList.length === 0) {
+            if (callback) callback();
+            return;
+        }
+
+        const animationDuration = 1000; // 1 second for each text item to float and fade
+        let animationsPending = itemsList.length;
+
+        itemsList.forEach(item => {
+            // item can be a matchedPair or a brokenPair. Both have tile1.x, tile1.y, tile1.edgeIndex
+            const { x: midX, y: midY } = getEdgeMidpointScreenCoords(
+                item.tile1.x, item.tile1.y, item.tile1.edgeIndex,
+                currentZoomLevel, currentOffsetX, currentOffsetY
+            );
+
+            activeScoreAnimations.push({
+                id: `scoreAnim-${Date.now()}-${Math.random()}`, // Unique ID
+                x: midX,
+                y: midY,
+                text: textToShow,
+                startTime: Date.now(),
+                duration: animationDuration,
+                color: playerId === 1 ? 'lightblue' : 'lightcoral', // Player's color for consistency, could change for "-1"
+                onComplete: () => {
+                    animationsPending--;
+                    if (animationsPending === 0 && callback) {
+                        callback();
+                    }
+                }
+            });
+        });
+
+        if (!isPulsingGlobal && !needsViewAnimation() && activeScoreAnimations.length > 0) {
+            animateView(); // Ensure animation loop is running
+        }
+    }
+
 
     // --- Tile Generation ---
     // const UNIQUE_TILE_PATTERNS = [  // This is a duplicate, removing
@@ -562,6 +691,24 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 ctx.closePath();
                 ctx.fillStyle = tile.getPlayerColor;
                 ctx.fill();
+
+                // Check if this specific triangle edge should be highlighted
+                const isHighlighted = currentlyHighlightedTriangles.some(ht => {
+                    // tile.x and tile.y store the logical board coordinates
+                    return ht.x === tile.x && ht.y === tile.y && ht.edgeIndex === i;
+                });
+
+                if (isHighlighted) {
+                    ctx.strokeStyle = 'gold'; // Highlight color
+                    ctx.lineWidth = 3 * zoom; // Highlight line width
+                    // Redraw the triangle path for the highlight stroke
+                    ctx.beginPath();
+                    ctx.moveTo(tipX, tipY);
+                    ctx.lineTo(base1X, base1Y);
+                    ctx.lineTo(base2X, base2Y);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
 
             } else { // Blank edge
                 ctx.beginPath();
@@ -1213,11 +1360,49 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             updatePlacementHighlights(); // Clear highlights on the board
 
-            // Instead of directly calculating scores and switching turns,
-            // call the new function to check for surrounded tiles.
-            checkForSurroundedTilesAndProceed(); // This function might call redrawBoardOnCanvas internally
-            updateViewParameters();
-            animateView(); // Start animation after view parameters are updated
+            const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, lastPlacedTileKey);
+
+            if (scoreDelta > 0 && scoringPlayerId === currentPlayer) {
+                let oldPlayerScore;
+                if (currentPlayer === 1) {
+                    oldPlayerScore = player1Score;
+                    player1Score += scoreDelta; // Update score model immediately
+                } else {
+                    oldPlayerScore = player2Score;
+                    player2Score += scoreDelta; // Update score model immediately
+                }
+                const newPlayerScore = (currentPlayer === 1) ? player1Score : player2Score;
+
+                highlightMatchedTriangles(matchedPairs); // Highlights for 1s
+
+                // Wait for highlight to roughly finish before starting +1 animations for better sequence
+                setTimeout(() => {
+                    animateScoreUpdateOnBoard(currentPlayer, scoreDelta, matchedPairs, () => {
+                        // Callback after +1 animations on board are done
+                        animateScoreboardUpdate(currentPlayer, newPlayerScore, oldPlayerScore, () => {
+                            // Callback after scoreboard animation is done
+                            // calculateAndUpdateTotalScores(); // Recalculates and calls updateGameInfo
+                            // updateGameInfo(); // Ensure scoreboard reflects the final score if calculateAndUpdateTotalScores is too heavy or redundant
+                            // player1Score and player2Score are already updated. updateGameInfo will display them.
+                            // No real need to call calculateAndUpdateTotalScores if model is already correct.
+                            // Just ensure display is synced.
+                            if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
+                            if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
+
+
+                            checkForSurroundedTilesAndProceed();
+                            updateViewParameters();
+                            animateView();
+                        });
+                    });
+                }, 700); // Start +1 animations slightly before highlight fully disappears or concurrently.
+
+            } else {
+                // No score change from this placement
+                checkForSurroundedTilesAndProceed();
+                updateViewParameters();
+                animateView();
+            }
 
         } else {
             // Placement was invalid, message already set by isPlacementValid
@@ -1712,16 +1897,21 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         // Disable further moves, or handle via selectedTile being null / hands empty
     }
 
-    // Calculates scores based on a given board state
-    function calculateScoresForBoard(currentBoardState) {
+    // Calculates scores based on a given board state.
+    // If forTileKey is provided, it calculates the score delta and matched pairs for that specific tile's placement.
+    // Otherwise, it calculates the total score for the entire board.
+    function calculateScoresForBoard(currentBoardState, forTileKey = null) {
         let p1Score = 0;
         let p2Score = 0;
+        let scoreDelta = 0;
+        const matchedPairs = []; // For newly formed connections if forTileKey is specified
 
-        for (const key in currentBoardState) {
-            const tile = currentBoardState[key];
-            // Ensure tile and its properties are valid, especially if board state is a copy
+        const tilesToProcess = forTileKey ? { [forTileKey]: currentBoardState[forTileKey] } : currentBoardState;
+
+        for (const key in tilesToProcess) {
+            const tile = tilesToProcess[key];
             if (!tile || typeof tile.getOrientedEdges !== 'function' || typeof tile.playerId === 'undefined') {
-                console.warn("Skipping invalid tile in calculateScoresForBoard:", tile);
+                // console.warn("Skipping invalid tile in calculateScoresForBoard:", tile); // Can be noisy for delta calculation
                 continue;
             }
             const { x, y } = tile;
@@ -1730,35 +1920,151 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
             for (const neighborInfo of neighbors) {
                 const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                const neighborTile = currentBoardState[neighborKey];
+                const neighborTile = currentBoardState[neighborKey]; // Check against the full boardState
 
+                // When calculating for a specific tile (forTileKey), we are interested in connections
+                // *between* forTileKey and its neighbors.
+                // If not forTileKey, we count all connections.
                 if (neighborTile && typeof neighborTile.getOrientedEdges === 'function' && neighborTile.playerId === tile.playerId) {
                     const edgeOnThisTile = orientedEdges[neighborInfo.edgeIndexOnNewTile];
                     const neighborOrientedEdges = neighborTile.getOrientedEdges();
                     const edgeOnNeighborTile = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
 
                     if (edgeOnThisTile === 1 && edgeOnNeighborTile === 1) {
-                        if (tile.playerId === 1) {
-                            p1Score++;
+                        if (forTileKey) {
+                            // Only count if one of the tiles is the forTileKey tile
+                            // and the other is its direct neighbor involved in this specific check.
+                            // This ensures we only count points generated by placing forTileKey.
+                            if (key === forTileKey && neighborKey === `${neighborInfo.nx},${neighborInfo.ny}`) {
+                                scoreDelta++; // Each matched pair for the new tile contributes 1 to its player's score delta
+                                matchedPairs.push({
+                                    tile1: { x: tile.x, y: tile.y, edgeIndex: neighborInfo.edgeIndexOnNewTile },
+                                    tile2: { x: neighborTile.x, y: neighborTile.y, edgeIndex: neighborInfo.edgeIndexOnNeighborTile },
+                                    playerId: tile.playerId
+                                });
+                            }
                         } else {
-                            p2Score++;
+                            // Calculating total score, not delta
+                            if (tile.playerId === 1) {
+                                p1Score++;
+                            } else {
+                                p2Score++;
+                            }
                         }
                     }
                 }
             }
         }
-        p1Score /= 2;
-        p2Score /= 2;
-        return { player1Score: p1Score, player2Score: p2Score };
+
+        if (forTileKey) {
+            // scoreDelta is already the raw count of new connections for the placed tile.
+            // No division by 2 needed here as we are focusing on the single tile's direct new scores.
+            return { scoreDelta: scoreDelta, matchedPairs: matchedPairs, scoringPlayerId: currentBoardState[forTileKey]?.playerId };
+        } else {
+            // For total score, divide by 2 as each connection is counted twice
+            p1Score /= 2;
+            p2Score /= 2;
+            return { player1Score: p1Score, player2Score: p2Score };
+        }
     }
 
-    function calculateScores() {
-        const scores = calculateScoresForBoard(boardState);
-        player1Score = scores.player1Score;
-        player2Score = scores.player2Score;
+    // Calculates and updates total scores, and can also return delta for a specific placement.
+    // This function will primarily be used to update the global scores after animations.
+    // For getting delta for animations, call calculateScoresForBoard directly.
+    function calculateAndUpdateTotalScores() {
+        const scores = calculateScoresForBoard(boardState); // No forTileKey, gets total
+        if (scores.player1Score !== undefined) player1Score = scores.player1Score;
+        if (scores.player2Score !== undefined) player2Score = scores.player2Score;
 
-        updateGameInfo();
-        console.log(`Scores calculated: P1: ${player1Score}, P2: ${player2Score}`);
+        updateGameInfo(); // Updates the scoreboard display
+        // console.log(`Total scores updated: P1: ${player1Score}, P2: ${player2Score}`); // Logging done by animateScoreboardUpdate or at end of turn.
+    }
+
+    // Calculates the score lost if a specific tile were to be popped.
+    function calculateScoreLostFromPoppedTile(tileToPop, currentBoardState) {
+        let lostScoreDelta = 0;
+        const brokenPairs = []; // To store info about connections being broken
+
+        if (!tileToPop || typeof tileToPop.getOrientedEdges !== 'function') {
+            console.warn("Invalid tileToPop in calculateScoreLostFromPoppedTile");
+            return { lostScoreDelta, brokenPairs };
+        }
+
+        const { x, y, playerId } = tileToPop;
+        const orientedEdges = tileToPop.getOrientedEdges();
+        const neighbors = getNeighbors(x, y);
+
+        for (const neighborInfo of neighbors) {
+            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+            const neighborTile = currentBoardState[neighborKey];
+
+            if (neighborTile && neighborTile.playerId === playerId && typeof neighborTile.getOrientedEdges === 'function') {
+                const edgeOnPoppedTile = orientedEdges[neighborInfo.edgeIndexOnNewTile];
+                const neighborOrientedEdges = neighborTile.getOrientedEdges();
+                const edgeOnNeighborTile = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
+
+                if (edgeOnPoppedTile === 1 && edgeOnNeighborTile === 1) {
+                    lostScoreDelta++;
+                    brokenPairs.push({
+                        tile1: { x: tileToPop.x, y: tileToPop.y, edgeIndex: neighborInfo.edgeIndexOnNewTile }, // The popped tile
+                        tile2: { x: neighborTile.x, y: neighborTile.y, edgeIndex: neighborInfo.edgeIndexOnNeighborTile }, // The neighbor
+                        playerId: playerId
+                    });
+                }
+            }
+        }
+        // lostScoreDelta is the direct count of connections broken, each worth 1 point.
+        return { lostScoreDelta, brokenPairs, scoringPlayerId: playerId };
+    }
+
+
+    function animateScoreboardUpdate(playerId, newScore, oldScore, callback) {
+        const scoreDisplayElement = playerId === 1 ? p1ScoreDisplayFloater : p2ScoreDisplayFloater;
+        if (!scoreDisplayElement) {
+            if (callback) callback();
+            return;
+        }
+
+        const scoreDifference = newScore - oldScore;
+        if (scoreDifference === 0) {
+            if (callback) callback();
+            return;
+        }
+
+        const increment = scoreDifference > 0 ? 1 : -1;
+        let currentAnimatedScore = oldScore;
+        const durationPerPoint = 100; // ms per point change
+        const totalDuration = Math.abs(scoreDifference) * durationPerPoint;
+
+        // Optional: Flash effect
+        scoreDisplayElement.style.transition = 'transform 0.1s ease-in-out, color 0.1s ease-in-out';
+        scoreDisplayElement.style.transform = 'scale(1.2)';
+        scoreDisplayElement.style.color = 'gold';
+
+
+        function updateStep() {
+            currentAnimatedScore += increment;
+            scoreDisplayElement.textContent = currentAnimatedScore;
+
+            if (currentAnimatedScore !== newScore) {
+                setTimeout(updateStep, durationPerPoint);
+            } else {
+                // Reset visual effect and call callback
+                scoreDisplayElement.textContent = newScore; // Ensure final score is accurate
+                scoreDisplayElement.style.transform = 'scale(1)';
+                scoreDisplayElement.style.color = playerId === 1 ? 'lightblue' : 'lightcoral'; // Reset to player color
+
+                console.log(`Player ${playerId} score animated from ${oldScore} to ${newScore}`);
+                if (callback) callback();
+            }
+        }
+
+        setTimeout(() => { // Start the stepping after the initial flash
+            scoreDisplayElement.style.transform = 'scale(1.1)'; // Slightly smaller than peak after the main flash
+            // Color reset will happen when the animation step completes or if it was a zero-sum change.
+            // For the flash, we want the gold to persist for the 100ms.
+            updateStep();
+        }, 100); // Duration of initial flash. Gold color persists for this, then step logic takes over.
     }
 
 
@@ -1933,7 +2239,8 @@ function animateView() {
 
     // If isPulsingGlobal is true, we always need to redraw for the pulsing effect,
     // even if the view itself (pan/zoom) is stable.
-    if (needsRedraw || isPulsingGlobal) {
+    // Also continue if there are active score animations.
+    if (needsRedraw || isPulsingGlobal || activeScoreAnimations.length > 0) {
         redrawBoardOnCanvas(); // Redraw with new current values (this now includes pulsing logic if active)
         if (selectedTile && !isRemovingTiles) { // If a tile is selected (and not removing), placement highlights also need to be updated
             updatePlacementHighlights();
@@ -1942,7 +2249,7 @@ function animateView() {
         // No need for updatePlacementHighlights() in that specific case for the removal pulsing itself.
         animationFrameId = requestAnimationFrame(animateView); // Continue animation
     } else {
-        animationFrameId = null; // Animation finished (no view change, no pulsing)
+        animationFrameId = null; // Animation finished (no view change, no pulsing, no score animations)
         // Final redraw to ensure exact target values are rendered if needed,
         // and that any highlights (placement or removal) are correctly shown or cleared.
         redrawBoardOnCanvas(); // This will draw current board state.
