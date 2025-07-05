@@ -37,6 +37,25 @@ main {
     /* display: inline-block; might be useful if canvas is also inline-block and we want them to size together */
 }
 
+#game-over-banner {
+    text-align: center;
+    padding: 20px;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    font-size: 1.5em;
+    font-weight: bold;
+    border-radius: 8px;
+    margin: 20px auto;
+    width: 80%; /* Or a specific max-width */
+    max-width: 600px;
+    z-index: 100;
+    /* Initially hidden by the .hidden class */
+}
+
+.hidden {
+    display: none !important; /* Important to override other display styles if needed */
+}
+
 /* Removed #game-info styles */
 
 #player-scores {
