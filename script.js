@@ -17,6 +17,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // const player2ScoreDisplay = document.getElementById('player2-score'); // Removed
     const playerScoresContainer = document.getElementById('player-scores'); // New container for scores
     let p1ScoreDisplayFloater, p2ScoreDisplayFloater; // Will be created dynamically
+    const gameOverBanner = document.getElementById('game-over-banner'); // Added for game over banner
 
     const resetGameButton = document.getElementById('reset-game');
     // player1HandContainer and player2HandContainer will be created dynamically
@@ -1095,6 +1096,12 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // gameMessageDisplay.textContent = "Player 1's turn. Select a tile and place it on the board."; // Removed
         console.log("Player 1's turn. Select a tile and place it on the board.");
 
+        // Hide the game over banner
+        if (gameOverBanner) {
+            gameOverBanner.classList.add('hidden');
+            // Or gameOverBanner.style.display = 'none';
+        }
+
         gameInitialized = true;
         console.log("Game initialized. Player 1 hand:", player1Hand, "Player 2 hand:", player2Hand);
 
@@ -1973,8 +1980,15 @@ function isSpaceEnclosed(q, r, currentBoardState) {
         console.log(`Game Over! ${detailedMessage}`);
         console.log("Game ended. ", detailedMessage);
 
-        // Display the celebratory message to the user
-        alert(celebratoryMessage);
+        // Display the celebratory message to the user using the banner
+        if (gameOverBanner) {
+            gameOverBanner.textContent = celebratoryMessage;
+            gameOverBanner.classList.remove('hidden');
+            // Or gameOverBanner.style.display = 'block'; if not using class toggling for visibility
+        } else {
+            // Fallback if banner element isn't found for some reason
+            alert(celebratoryMessage);
+        }
 
         // Disable further moves, or handle via selectedTile being null / hands empty
     }
