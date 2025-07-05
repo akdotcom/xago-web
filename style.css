@@ -155,22 +155,22 @@ main {
 
 @keyframes sweep-out-below {
     0% {
-        transform: translateY(0) scale(1);
+        transform: translateY(0);
         opacity: 1;
     }
     100% {
-        transform: translateY(100%) scale(0.8); /* Move down and shrink slightly */
+        transform: translateY(100%); /* Move down */
         opacity: 0;
     }
 }
 
 @keyframes rise-in-from-below {
     0% {
-        transform: translateY(100%) scale(0.8); /* Start from below and slightly shrunk */
+        transform: translateY(100%); /* Start from below */
         opacity: 0;
     }
     100% {
-        transform: translateY(0) scale(1);
+        transform: translateY(0);
         opacity: 1;
     }
 }
