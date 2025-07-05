@@ -117,7 +117,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         const endX = targetRect.left + targetRect.width / 2 - tempTileCanvas.width / 2 + window.scrollX;
         const endY = targetRect.top + targetRect.height / 2 - tempTileCanvas.height / 2 + window.scrollY;
 
-        const duration = 500; // Animation duration in ms
+        const duration = 1000; // Animation duration in ms
         let startTime = null;
 
         function animationStep(timestamp) {
