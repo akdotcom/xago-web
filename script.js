@@ -346,47 +346,115 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     }
 
     // --- Draw Score Animations ---
-    if (activeScoreAnimations.length > 0) {
-        const currentTime = Date.now();
-        activeScoreAnimations = activeScoreAnimations.filter(anim => {
-            const elapsedTime = currentTime - anim.startTime;
-            if (elapsedTime >= anim.duration) {
-                if (anim.onComplete) anim.onComplete();
-                return false; // Remove from list
-            }
-
-            const progress = elapsedTime / anim.duration;
-            const floatDistance = 30 * currentZoomLevel; // How far the text floats up
-            const currentY = anim.y - (progress * floatDistance);
-            const opacity = 1 - progress;
-
-            ctx.save();
-            ctx.globalAlpha = opacity;
-            ctx.fillStyle = anim.color;
-            const fontSize = 16 * currentZoomLevel; // Scaled font size
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.fillText(anim.text, anim.x, currentY);
-            ctx.restore();
-            return true; // Keep in list
-        });
-    }
+    // if (activeScoreAnimations.length > 0) { // Entire block for "+1" text animation removed
+    //     const currentTime = Date.now();
+    //     activeScoreAnimations = activeScoreAnimations.filter(anim => {
+    //         const elapsedTime = currentTime - anim.startTime;
+    //         if (elapsedTime >= anim.duration) {
+    //             if (anim.onComplete) anim.onComplete();
+    //             return false; // Remove from list
+    //         }
+    //
+    //         const progress = elapsedTime / anim.duration;
+    //         const floatDistance = 30 * currentZoomLevel; // How far the text floats up
+    //         const currentY = anim.y - (progress * floatDistance);
+    //         const opacity = 1 - progress;
+    //
+    //         ctx.save();
+    //         ctx.globalAlpha = opacity;
+    //         ctx.fillStyle = anim.color;
+    //         const fontSize = 16 * currentZoomLevel; // Scaled font size
+    //         ctx.font = `bold ${fontSize}px Arial`;
+    //         ctx.textAlign = 'center';
+    //         ctx.fillText(anim.text, anim.x, currentY);
+    //         ctx.restore();
+    //         return true; // Keep in list
+    //     });
+    // }
     }
 
     // --- Score Highlight Function ---
     function highlightMatchedTriangles(matchedPairs) {
-        currentlyHighlightedTriangles = matchedPairs.map(pair => [
-            { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex },
-            { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex }
-        ]).flat(); // Flatten to a list of individual tile/edge objects for easier checking in drawHexTile
+        const PULSE_ANIMATION_DURATION = 1000; // Total duration of the pulse animation
+        const pulseStartTime = Date.now();
 
-        redrawBoardOnCanvas(); // Redraw to show highlights
+        currentlyHighlightedTriangles = matchedPairs.flatMap(pair => [
+            { x: pair.tile1.x, y: pair.tile1.y, edgeIndex: pair.tile1.edgeIndex, pulseIntensity: 0 },
+            { x: pair.tile2.x, y: pair.tile2.y, edgeIndex: pair.tile2.edgeIndex, pulseIntensity: 0 }
+        ]);
 
-        setTimeout(() => {
-            currentlyHighlightedTriangles = [];
-            redrawBoardOnCanvas(); // Redraw to clear highlights
-            // Potentially call next step in animation sequence here (e.g., scoreboard update)
-        }, 1000); // Highlight duration: 1 second
+        function animatePulse() {
+            const elapsedTime = Date.now() - pulseStartTime;
+            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
+                currentlyHighlightedTriangles = []; // Clear highlights
+                isPulsingGlobal = false; // Stop forcing redraws for this specific pulse
+                redrawBoardOnCanvas(); // Final redraw to clear
+                // The main animateView loop will stop if nothing else needs animation
+                return;
+            }
+
+            // Calculate pulse intensity (e.g., sine wave for smooth pulse in/out)
+            // Intensity goes from 0 to 1 and back to 0 over the duration
+            const progress = elapsedTime / PULSE_ANIMATION_DURATION; // 0 to 1
+            const intensity = Math.sin(progress * Math.PI); // sin(0) = 0, sin(PI/2) = 1, sin(PI) = 0
+
+            currentlyHighlightedTriangles.forEach(ht => {
+                ht.pulseIntensity = intensity;
+            });
+
+            isPulsingGlobal = true; // Ensure animateView keeps running for this effect
+            redrawBoardOnCanvas(); // Redraw to show current pulse state
+
+            // Continue animation if animateView isn't already running it
+            // However, animateView should pick this up if isPulsingGlobal is true.
+            // If animateView is not already running, we might need to kickstart it.
+            if (!animationFrameId && (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0)) {
+                 animateView();
+            }
+            // No direct requestAnimationFrame here; rely on the main animateView loop triggered by isPulsingGlobal.
+        }
+
+        // Start the pulse animation process.
+        // The animateView loop will call redrawBoardOnCanvas, which will use pulseIntensity.
+        // We need a way to update pulseIntensity periodically.
+        // Let's use a simple interval that updates intensities and relies on animateView to draw.
+        // Or, more integrated: make animatePulse part of the main animation loop.
+
+        // For a more integrated approach:
+        // The animateView loop will handle the redrawing. We just need to update intensities.
+        // Let's refine this. The `isPulsingGlobal` flag used for removal pulsing can be reused.
+        // The update of intensities should happen within `animateView` or a function it calls.
+
+        // Simpler approach for now: let `highlightMatchedTriangles` manage its own animation loop
+        // for intensity changes, and `isPulsingGlobal` will make `animateView` redraw.
+
+        function pulseLoop() {
+            const elapsedTime = Date.now() - pulseStartTime;
+            if (elapsedTime >= PULSE_ANIMATION_DURATION) {
+                currentlyHighlightedTriangles = [];
+                isPulsingGlobal = false; // Stop this specific pulse effect
+                redrawBoardOnCanvas();
+                // Check if other animations (like view panning/zooming) still need to run
+                if (needsViewAnimation() || activeScoreAnimations.length > 0) { // activeScoreAnimations should be empty now
+                    animateView();
+                }
+                return;
+            }
+
+            const progress = elapsedTime / PULSE_ANIMATION_DURATION;
+            const intensity = Math.sin(progress * Math.PI);
+            currentlyHighlightedTriangles.forEach(ht => ht.pulseIntensity = intensity);
+
+            isPulsingGlobal = true; // Signal that an animation is active
+            if (!animationFrameId) { // If main animation loop isn't running, start it.
+                animateView();
+            } else { // If it is running, it will pick up the redraw due to isPulsingGlobal
+                redrawBoardOnCanvas(); // Or simply let animateView handle it. Forcing redraw here ensures immediate update.
+            }
+            requestAnimationFrame(pulseLoop);
+        }
+
+        pulseLoop(); // Start the animation.
     }
 
     function getEdgeMidpointScreenCoords(tileX, tileY, edgeIndex, currentZoom, currentOffsetX, currentOffsetY) {
@@ -415,40 +483,18 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // itemsList is matchedPairs for gains, brokenPairs for losses
     // textToShow is "+1" or "-1"
     function animateScoreChangeOnBoard(playerId, itemsList, textToShow, callback) {
-        if (!itemsList || itemsList.length === 0) {
-            if (callback) callback();
-            return;
-        }
+        // The functionality for showing "+1" text has been removed.
+        // This function might still be called in the scoring sequence.
+        // We will just call the callback directly if it exists.
+        // The `activeScoreAnimations` array and its processing in `redrawBoardOnCanvas`
+        // have also been commented out/removed.
 
-        const animationDuration = 1000; // 1 second for each text item to float and fade
-        let animationsPending = itemsList.length;
-
-        itemsList.forEach(item => {
-            // item can be a matchedPair or a brokenPair. Both have tile1.x, tile1.y, tile1.edgeIndex
-            const { x: midX, y: midY } = getEdgeMidpointScreenCoords(
-                item.tile1.x, item.tile1.y, item.tile1.edgeIndex,
-                currentZoomLevel, currentOffsetX, currentOffsetY
-            );
-
-            activeScoreAnimations.push({
-                id: `scoreAnim-${Date.now()}-${Math.random()}`, // Unique ID
-                x: midX,
-                y: midY,
-                text: textToShow,
-                startTime: Date.now(),
-                duration: animationDuration,
-                color: playerId === 1 ? 'lightblue' : 'lightcoral', // Player's color for consistency, could change for "-1"
-                onComplete: () => {
-                    animationsPending--;
-                    if (animationsPending === 0 && callback) {
-                        callback();
-                    }
-                }
-            });
-        });
-
-        if (!isPulsingGlobal && !needsViewAnimation() && activeScoreAnimations.length > 0) {
-            animateView(); // Ensure animation loop is running
+        // Ensure `isPulsingGlobal` and `needsViewAnimation` are still checked
+        // if `animateView` needs to be called for other reasons, though typically
+        // the score highlight itself will handle that.
+        // For now, just call the callback.
+        if (callback) {
+            callback();
         }
     }
 
@@ -692,22 +738,30 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 ctx.fillStyle = tile.getPlayerColor;
                 ctx.fill();
 
-                // Check if this specific triangle edge should be highlighted
-                const isHighlighted = currentlyHighlightedTriangles.some(ht => {
-                    // tile.x and tile.y store the logical board coordinates
+                // Check if this specific triangle edge should be highlighted for pulsing shadow
+                const highlightInfo = currentlyHighlightedTriangles.find(ht => {
                     return ht.x === tile.x && ht.y === tile.y && ht.edgeIndex === i;
                 });
 
-                if (isHighlighted) {
-                    ctx.strokeStyle = 'gold'; // Highlight color
-                    ctx.lineWidth = 3 * zoom; // Highlight line width
-                    // Redraw the triangle path for the highlight stroke
+                if (highlightInfo && highlightInfo.pulseIntensity > 0) {
+                    ctx.save();
+                    ctx.shadowColor = tile.getPlayerColor; // Shadow color same as triangle
+                    ctx.shadowBlur = highlightInfo.pulseIntensity * 10 * zoom; // Intensity controls blur
+                    ctx.shadowOffsetX = 0; // No offset for a glow effect
+                    ctx.shadowOffsetY = 0;
+
+                    // Redraw the triangle path to apply the shadow.
+                    // The fill of this path will cast the shadow.
+                    // We don't stroke it here, as the shadow is cast by the fill.
+                    ctx.fillStyle = tile.getPlayerColor; // Fill must be opaque to cast shadow
                     ctx.beginPath();
                     ctx.moveTo(tipX, tipY);
                     ctx.lineTo(base1X, base1Y);
                     ctx.lineTo(base2X, base2Y);
                     ctx.closePath();
-                    ctx.stroke();
+                    ctx.fill(); // This fill casts the shadow
+
+                    ctx.restore(); // Restore context to remove shadow for subsequent drawings
                 }
 
             } else { // Blank edge
@@ -1360,55 +1414,73 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             updatePlacementHighlights(); // Clear highlights on the board
 
-            const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, lastPlacedTileKey);
+            // Call the new centralized function to handle scoring, animations, and game progression
+            processSuccessfulPlacement(lastPlacedTileKey, currentPlayer);
 
-            if (scoreDelta > 0 && scoringPlayerId === currentPlayer) {
-                let oldPlayerScore;
-                if (currentPlayer === 1) {
-                    oldPlayerScore = player1Score;
-                    player1Score += scoreDelta; // Update score model immediately
-                } else {
-                    oldPlayerScore = player2Score;
-                    player2Score += scoreDelta; // Update score model immediately
-                }
-                const newPlayerScore = (currentPlayer === 1) ? player1Score : player2Score;
-
-                highlightMatchedTriangles(matchedPairs); // Highlights for 1s
-
-                // Wait for highlight to roughly finish before starting +1 animations for better sequence
-                setTimeout(() => {
-                    animateScoreChangeOnBoard(currentPlayer, matchedPairs, "+1", () => {
-                        // Callback after +1 animations on board are done
-                        animateScoreboardUpdate(currentPlayer, newPlayerScore, oldPlayerScore, () => {
-                            // Callback after scoreboard animation is done
-                            // calculateAndUpdateTotalScores(); // Recalculates and calls updateGameInfo
-                            // updateGameInfo(); // Ensure scoreboard reflects the final score if calculateAndUpdateTotalScores is too heavy or redundant
-                            // player1Score and player2Score are already updated. updateGameInfo will display them.
-                            // No real need to call calculateAndUpdateTotalScores if model is already correct.
-                            // Just ensure display is synced.
-                            if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
-                            if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
-
-
-                            checkForSurroundedTilesAndProceed();
-                            updateViewParameters();
-                            animateView();
-                        });
-                    });
-                }, 700); // Start +1 animations slightly before highlight fully disappears or concurrently.
-
-            } else {
-                // No score change from this placement
-                checkForSurroundedTilesAndProceed();
-                updateViewParameters();
-                animateView();
-            }
+            // The old logic for score calculation, animation, and checkForSurroundedTilesAndProceed
+            // has been moved into processSuccessfulPlacement.
 
         } else {
             // Placement was invalid, message already set by isPlacementValid
             console.log("Invalid placement.");
         }
     }
+
+// New function to process successful placement and subsequent actions
+function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
+    const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, placedTileKey);
+
+    if (scoreDelta > 0 && scoringPlayerId === playerOfTurn) {
+        let oldPlayerScore;
+        if (playerOfTurn === 1) {
+            oldPlayerScore = player1Score;
+            player1Score += scoreDelta; // Update score model immediately
+        } else { // playerOfTurn === 2
+            oldPlayerScore = player2Score;
+            player2Score += scoreDelta; // Update score model immediately
+        }
+        const newPlayerScore = (playerOfTurn === 1) ? player1Score : player2Score;
+
+        highlightMatchedTriangles(matchedPairs); // This starts the pulse animation
+
+        // The pulse animation (highlightMatchedTriangles) runs for its duration.
+        // After the pulse, we want to animate the scoreboard.
+        // We need a way for highlightMatchedTriangles to signal completion or wait for it.
+        // For now, let's assume highlightMatchedTriangles takes about 1000ms.
+        // Then, animateScoreChangeOnBoard (now a passthrough) will lead to scoreboard update.
+
+        // Sequence:
+        // 1. highlightMatchedTriangles (pulse visual, runs for ~1000ms)
+        // 2. animateScoreChangeOnBoard (acts as a delayer/sequencer via its callback)
+        // 3. animateScoreboardUpdate (updates the score display)
+        // 4. checkForSurroundedTilesAndProceed (game logic continuation)
+
+        // To ensure scoreboard animation starts after pulse, we can delay its chain.
+        // The pulse itself is visual and doesn't have a direct callback.
+        // Let's use a timeout that matches the pulse duration.
+        setTimeout(() => {
+            animateScoreChangeOnBoard(playerOfTurn, matchedPairs, "+1", () => { // textToShow is now ignored
+                // Callback after animateScoreChangeOnBoard (which is immediate)
+                animateScoreboardUpdate(playerOfTurn, newPlayerScore, oldPlayerScore, () => {
+                    // Callback after scoreboard animation is done
+                    if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
+                    if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
+
+                    checkForSurroundedTilesAndProceed();
+                    updateViewParameters();
+                    animateView();
+                });
+            });
+        }, 1000); // Delay matches PULSE_ANIMATION_DURATION in highlightMatchedTriangles
+
+    } else {
+        // No score change from this placement
+        checkForSurroundedTilesAndProceed();
+        updateViewParameters();
+        animateView();
+    }
+        }
+
 
     function placeTileOnBoard(tile, x, y) {
         if (!isPlacementValid(tile, x, y)) {
@@ -1773,34 +1845,19 @@ function isSpaceEnclosed(q, r, currentBoardState) {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
                 console.log(`[Main] AI (${opponentType}) successfully placed tile ${tileToPlace.id}.`);
 
-                const surroundedAfterAiMove = getSurroundedTiles(boardState);
-                if (surroundedAfterAiMove.length > 0) {
-                    // 1. Show pulsing red border
-                    currentSurroundedTilesForRemoval = surroundedAfterAiMove;
-                    isRemovingTiles = true; // Set this to enable removal logic and highlighting
-                    pulseStartTime = Date.now();
-                    isPulsingGlobal = true;
-                    redrawBoardOnCanvas(); // Show highlights
-                    animateView(); // Ensure animation loop is running for pulsing
+                // Call the new centralized function to handle scoring, animations, and game progression
+                // lastPlacedTileKey is updated by placeTileOnBoard, currentPlayer should be 2 for AI
+                processSuccessfulPlacement(lastPlacedTileKey, 2);
 
-                    // 2. Pause for 1s
-                    console.log("[Main] AI caused tile surrounding. Pausing for 1s before removal.");
-                    setTimeout(() => {
-                        // 3. Trigger haptic feedback (simulated)
-                        // Haptic feedback for AI "tap" is handled in handleAiTileRemovalResult or direct removal
-                        // For now, the main flow continues to checkForSurroundedTilesAndProceed,
-                        // which will lead to AI tile removal if it's AI's turn to remove.
-                        console.log("[Main] AI turn to remove, proceeding to checkForSurroundedTilesAndProceed after pause.");
-                        checkForSurroundedTilesAndProceed(); // This will call initiateAiTileRemoval
-                        updateViewParameters();
-                        animateView();
-                    }, 1000);
-                } else {
-                    // No tiles surrounded, proceed as normal
-                    checkForSurroundedTilesAndProceed();
-                    updateViewParameters();
-                    animateView();
-                }
+                // The old logic for checkForSurroundedTilesAndProceed, updateViewParameters, and animateView
+                // is now handled within processSuccessfulPlacement or its subsequent calls.
+                // The specific logic for AI-caused surrounding and delayed removal initiation
+                // that was here:
+                // const surroundedAfterAiMove = getSurroundedTiles(boardState);
+                // if (surroundedAfterAiMove.length > 0) { ... } else { ... }
+                // This will now be handled by checkForSurroundedTilesAndProceed called within processSuccessfulPlacement.
+                // checkForSurroundedTilesAndProceed already contains logic to initiate AI tile removal
+                // if it's AI's turn and tiles are surrounded.
             } else {
                 // The error message now correctly reflects the orientation being used.
                 console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). This should ideally be caught by worker's validation.`);
