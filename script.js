@@ -1989,7 +1989,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     }
 
     function endGame() {
-        calculateScores();
+        calculateAndUpdateTotalScores();
         let celebratoryMessage = "";
 
         if (player1Score > player2Score) { // Player 1 wins
