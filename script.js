@@ -346,31 +346,31 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     }
 
     // --- Draw Score Animations ---
-    if (activeScoreAnimations.length > 0) {
-        const currentTime = Date.now();
-        activeScoreAnimations = activeScoreAnimations.filter(anim => {
-            const elapsedTime = currentTime - anim.startTime;
-            if (elapsedTime >= anim.duration) {
-                if (anim.onComplete) anim.onComplete();
-                return false; // Remove from list
-            }
-
-            const progress = elapsedTime / anim.duration;
-            const floatDistance = 30 * currentZoomLevel; // How far the text floats up
-            const currentY = anim.y - (progress * floatDistance);
-            const opacity = 1 - progress;
-
-            ctx.save();
-            ctx.globalAlpha = opacity;
-            ctx.fillStyle = anim.color;
-            const fontSize = 16 * currentZoomLevel; // Scaled font size
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.fillText(anim.text, anim.x, currentY);
-            ctx.restore();
-            return true; // Keep in list
-        });
-    }
+    // if (activeScoreAnimations.length > 0) { // Entire block removed to disable +1 text
+    //     const currentTime = Date.now();
+    //     activeScoreAnimations = activeScoreAnimations.filter(anim => {
+    //         const elapsedTime = currentTime - anim.startTime;
+    //         if (elapsedTime >= anim.duration) {
+    //             if (anim.onComplete) anim.onComplete();
+    //             return false; // Remove from list
+    //         }
+    //
+    //         const progress = elapsedTime / anim.duration;
+    //         const floatDistance = 30 * currentZoomLevel; // How far the text floats up
+    //         const currentY = anim.y - (progress * floatDistance);
+    //         const opacity = 1 - progress;
+    //
+    //         ctx.save();
+    //         ctx.globalAlpha = opacity;
+    //         ctx.fillStyle = anim.color;
+    //         const fontSize = 16 * currentZoomLevel; // Scaled font size
+    //         ctx.font = `bold ${fontSize}px Arial`;
+    //         ctx.textAlign = 'center';
+    //         ctx.fillText(anim.text, anim.x, currentY);
+    //         ctx.restore();
+    //         return true; // Keep in list
+    //     });
+    // }
     }
 
     // --- Score Highlight Function ---
@@ -415,41 +415,32 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // itemsList is matchedPairs for gains, brokenPairs for losses
     // textToShow is "+1" or "-1"
     function animateScoreChangeOnBoard(playerId, itemsList, textToShow, callback) {
+        // The core logic of this function was to create text animations ("+1", "-1")
+        // on the board. Since that's removed, this function might seem redundant
+        // if it only calls the callback.
+        // However, it's part of a sequence:
+        // highlightMatchedTriangles -> (this function) -> animateScoreboardUpdate
+        // We'll keep the structure and immediately call the callback.
+        // The `itemsList` and `textToShow` are no longer used here but are kept for signature consistency
+        // if other parts of the system expect to call it this way.
+
         if (!itemsList || itemsList.length === 0) {
             if (callback) callback();
             return;
         }
 
-        const animationDuration = 1000; // 1 second for each text item to float and fade
-        let animationsPending = itemsList.length;
-
-        itemsList.forEach(item => {
-            // item can be a matchedPair or a brokenPair. Both have tile1.x, tile1.y, tile1.edgeIndex
-            const { x: midX, y: midY } = getEdgeMidpointScreenCoords(
-                item.tile1.x, item.tile1.y, item.tile1.edgeIndex,
-                currentZoomLevel, currentOffsetX, currentOffsetY
-            );
-
-            activeScoreAnimations.push({
-                id: `scoreAnim-${Date.now()}-${Math.random()}`, // Unique ID
-                x: midX,
-                y: midY,
-                text: textToShow,
-                startTime: Date.now(),
-                duration: animationDuration,
-                color: playerId === 1 ? 'lightblue' : 'lightcoral', // Player's color for consistency, could change for "-1"
-                onComplete: () => {
-                    animationsPending--;
-                    if (animationsPending === 0 && callback) {
-                        callback();
-                    }
-                }
-            });
-        });
-
-        if (!isPulsingGlobal && !needsViewAnimation() && activeScoreAnimations.length > 0) {
-            animateView(); // Ensure animation loop is running
+        // No actual animation elements are created or pushed to activeScoreAnimations.
+        // We just need to ensure the callback is eventually called.
+        // Since there are no individual animations, the callback can be triggered once.
+        if (callback) {
+            // If there was a delay or multiple "pending" animations before,
+            // now we can call it directly or after a minimal delay if that helps flow.
+            // For simplicity, let's call it directly.
+            callback();
         }
+
+        // The check to start animateView() is also removed as activeScoreAnimations is no longer populated here.
+        // animateView() will still run if isPulsingGlobal or needsViewAnimation are true.
     }
 
 
@@ -699,15 +690,27 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                 });
 
                 if (isHighlighted) {
-                    ctx.strokeStyle = 'gold'; // Highlight color
-                    ctx.lineWidth = 3 * zoom; // Highlight line width
-                    // Redraw the triangle path for the highlight stroke
+                    // New shadow pulse effect
+                    ctx.save();
+                    ctx.shadowColor = tile.getPlayerColor; // Use player's color for the shadow
+                    ctx.shadowBlur = 15 * zoom; // Adjust blur for desired pulse intensity
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+
+                    // We need to draw something that can cast this shadow.
+                    // Drawing the triangle again (filled or stroked) will cast the shadow.
+                    // A simple stroke around the triangle is likely best.
+                    ctx.strokeStyle = 'rgba(0,0,0,0)'; // Make the stroke itself invisible or match shadow
+                    ctx.lineWidth = 1 * zoom; // Minimal line width, shadow does the work
+
                     ctx.beginPath();
                     ctx.moveTo(tipX, tipY);
                     ctx.lineTo(base1X, base1Y);
                     ctx.lineTo(base2X, base2Y);
                     ctx.closePath();
-                    ctx.stroke();
+                    ctx.stroke(); // This stroke casts the shadow
+
+                    ctx.restore(); // Restore context to remove shadow for subsequent drawings
                 }
 
             } else { // Blank edge
@@ -1362,40 +1365,40 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
             const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, lastPlacedTileKey);
 
-            if (scoreDelta > 0 && scoringPlayerId === currentPlayer) {
-                let oldPlayerScore;
-                if (currentPlayer === 1) {
+            // Player scores (player1Score, player2Score) are updated here before animations.
+            // The scoringPlayerId is the player who owns the tile that made the connection.
+            let actualScoringPlayer = scoringPlayerId; // This should be correct.
+            let oldPlayerScore;
+
+            if (scoreDelta > 0) { // Score was gained by actualScoringPlayer
+                if (actualScoringPlayer === 1) {
                     oldPlayerScore = player1Score;
-                    player1Score += scoreDelta; // Update score model immediately
-                } else {
+                    player1Score += scoreDelta;
+                } else { // actualScoringPlayer === 2
                     oldPlayerScore = player2Score;
-                    player2Score += scoreDelta; // Update score model immediately
+                    player2Score += scoreDelta;
                 }
-                const newPlayerScore = (currentPlayer === 1) ? player1Score : player2Score;
+                const newPlayerScore = (actualScoringPlayer === 1) ? player1Score : player2Score;
 
                 highlightMatchedTriangles(matchedPairs); // Highlights for 1s
 
-                // Wait for highlight to roughly finish before starting +1 animations for better sequence
+                // The timeout is to allow highlightMatchedTriangles to be visible.
                 setTimeout(() => {
-                    animateScoreUpdateOnBoard(currentPlayer, scoreDelta, matchedPairs, () => {
-                        // Callback after +1 animations on board are done
-                        animateScoreboardUpdate(currentPlayer, newPlayerScore, oldPlayerScore, () => {
-                            // Callback after scoreboard animation is done
-                            // calculateAndUpdateTotalScores(); // Recalculates and calls updateGameInfo
-                            // updateGameInfo(); // Ensure scoreboard reflects the final score if calculateAndUpdateTotalScores is too heavy or redundant
-                            // player1Score and player2Score are already updated. updateGameInfo will display them.
-                            // No real need to call calculateAndUpdateTotalScores if model is already correct.
-                            // Just ensure display is synced.
+                    // animateScoreChangeOnBoard is called with actualScoringPlayer.
+                    // It no longer creates "+1" texts but calls its callback.
+                    animateScoreChangeOnBoard(actualScoringPlayer, matchedPairs, "+1", () => {
+                        // animateScoreboardUpdate is called with actualScoringPlayer.
+                        animateScoreboardUpdate(actualScoringPlayer, newPlayerScore, oldPlayerScore, () => {
+                            // Ensure scoreboard reflects the final score.
                             if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
                             if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
-
 
                             checkForSurroundedTilesAndProceed();
                             updateViewParameters();
                             animateView();
                         });
                     });
-                }, 700); // Start +1 animations slightly before highlight fully disappears or concurrently.
+                }, 700); // Delay to sync with highlightMatchedTriangles.
 
             } else {
                 // No score change from this placement
@@ -1773,33 +1776,76 @@ function isSpaceEnclosed(q, r, currentBoardState) {
                 displayPlayerHand(2, player2Hand, player2HandDisplay);
                 console.log(`[Main] AI (${opponentType}) successfully placed tile ${tileToPlace.id}.`);
 
-                const surroundedAfterAiMove = getSurroundedTiles(boardState);
-                if (surroundedAfterAiMove.length > 0) {
-                    // 1. Show pulsing red border
-                    currentSurroundedTilesForRemoval = surroundedAfterAiMove;
-                    isRemovingTiles = true; // Set this to enable removal logic and highlighting
-                    pulseStartTime = Date.now();
-                    isPulsingGlobal = true;
-                    redrawBoardOnCanvas(); // Show highlights
-                    animateView(); // Ensure animation loop is running for pulsing
+                // Replicate scoring animation logic from handleCellClick for AI moves
+                const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, lastPlacedTileKey);
+                let actualScoringPlayer = scoringPlayerId; // This should be 2 for the AI
+                let oldPlayerScore;
 
-                    // 2. Pause for 1s
-                    console.log("[Main] AI caused tile surrounding. Pausing for 1s before removal.");
+                if (scoreDelta > 0) {
+                    if (actualScoringPlayer === 1) { // This case should ideally not be hit if AI is player 2
+                        oldPlayerScore = player1Score;
+                        player1Score += scoreDelta;
+                    } else { // AI is player 2
+                        oldPlayerScore = player2Score;
+                        player2Score += scoreDelta;
+                    }
+                    const newPlayerScore = (actualScoringPlayer === 1) ? player1Score : player2Score;
+
+                    highlightMatchedTriangles(matchedPairs); // Highlights for 1s
+
                     setTimeout(() => {
-                        // 3. Trigger haptic feedback (simulated)
-                        // Haptic feedback for AI "tap" is handled in handleAiTileRemovalResult or direct removal
-                        // For now, the main flow continues to checkForSurroundedTilesAndProceed,
-                        // which will lead to AI tile removal if it's AI's turn to remove.
-                        console.log("[Main] AI turn to remove, proceeding to checkForSurroundedTilesAndProceed after pause.");
-                        checkForSurroundedTilesAndProceed(); // This will call initiateAiTileRemoval
+                        animateScoreChangeOnBoard(actualScoringPlayer, matchedPairs, "+1", () => {
+                            animateScoreboardUpdate(actualScoringPlayer, newPlayerScore, oldPlayerScore, () => {
+                                if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
+                                if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
+
+                                // After score animations, check for surrounded tiles (which could lead to AI removal)
+                                const surroundedAfterAiMove = getSurroundedTiles(boardState);
+                                if (surroundedAfterAiMove.length > 0) {
+                                    currentSurroundedTilesForRemoval = surroundedAfterAiMove;
+                                    isRemovingTiles = true;
+                                    pulseStartTime = Date.now();
+                                    isPulsingGlobal = true;
+                                    redrawBoardOnCanvas(); // Show highlights
+                                    animateView(); // Ensure animation loop for pulsing
+
+                                    console.log("[Main] AI caused tile surrounding. Pausing for 1s before AI removal decision.");
+                                    setTimeout(() => {
+                                        console.log("[Main] AI turn to remove, proceeding to checkForSurroundedTilesAndProceed after pause.");
+                                        checkForSurroundedTilesAndProceed(); // This will trigger initiateAiTileRemoval if it's AI's turn
+                                        updateViewParameters(); // Update view based on new state
+                                        animateView();
+                                    }, 1000);
+                                } else {
+                                    // No tiles surrounded, proceed as normal (switch turn or end game)
+                                    checkForSurroundedTilesAndProceed();
+                                    updateViewParameters();
+                                    animateView();
+                                }
+                            });
+                        });
+                    }, 700); // Delay to sync with highlightMatchedTriangles
+                } else {
+                    // No score change from this placement, directly check for surrounded tiles
+                    const surroundedAfterAiMove = getSurroundedTiles(boardState);
+                    if (surroundedAfterAiMove.length > 0) {
+                        currentSurroundedTilesForRemoval = surroundedAfterAiMove;
+                        isRemovingTiles = true;
+                        pulseStartTime = Date.now();
+                        isPulsingGlobal = true;
+                        redrawBoardOnCanvas();
+                        animateView();
+                        console.log("[Main] AI caused tile surrounding (no score). Pausing for 1s before AI removal decision.");
+                        setTimeout(() => {
+                            checkForSurroundedTilesAndProceed();
+                            updateViewParameters();
+                            animateView();
+                        }, 1000);
+                    } else {
+                        checkForSurroundedTilesAndProceed();
                         updateViewParameters();
                         animateView();
-                    }, 1000);
-                } else {
-                    // No tiles surrounded, proceed as normal
-                    checkForSurroundedTilesAndProceed();
-                    updateViewParameters();
-                    animateView();
+                    }
                 }
             } else {
                 // The error message now correctly reflects the orientation being used.
