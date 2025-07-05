@@ -246,6 +246,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                             console.log("Scoreboard animation complete. Proceeding with game logic (check surrounded, switch turn).");
                             // Now proceed with the rest of the game logic
                             continueGameLogicAfterTileRemoval();
+                    updateURLWithGameState(); // Update URL after tile removal effects are processed
                         });
                     });
                 });
@@ -289,6 +290,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             calculateAndUpdateTotalScores(); // This ensures scores are consistent.
             switchTurn();
         }
+        updateURLWithGameState(); // Update URL after removal logic concludes or continues
         // Ensure the animation loop continues if needed for view changes or other ongoing animations.
         if (isPulsingGlobal || needsViewAnimation() || activeScoreAnimations.length > 0) {
             if (!animationFrameId) animateView();
@@ -1039,20 +1041,55 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Game Initialization ---
     function initializeGame() {
-        console.log("Initializing game...");
-        player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
-        player2Hand = generateUniqueTilesForPlayer(2, NUM_TILES_PER_PLAYER);
+        console.log("Attempting to initialize game...");
+        let loadedState = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameStateParam = urlParams.get('gameState');
 
-        currentPlayer = 1;
-        player1Score = 0;
-        player2Score = 0;
-        selectedTile = null;
-        boardState = {};
-        isRemovingTiles = false; // Explicitly reset
-        currentSurroundedTilesForRemoval = []; // Explicitly reset
-        lastPlacedTileKey = null; // Explicitly reset
-        aiEvaluatingDetails = null; // Clear AI evaluation highlight on reset
+        if (gameStateParam) {
+            console.log("Found gameState parameter in URL. Attempting to load.");
+            loadedState = deserializeGameStateFromString(decodeURIComponent(gameStateParam));
+            if (loadedState) {
+                console.log("Successfully deserialized game state from URL.");
+                // Apply the loaded state
+                boardState = loadedState.boardState;
+                player1Hand = loadedState.player1Hand;
+                player2Hand = loadedState.player2Hand;
+                currentPlayer = loadedState.currentPlayer;
+                player1Score = loadedState.player1Score;
+                player2Score = loadedState.player2Score;
+                opponentType = loadedState.opponentType;
+                isRemovingTiles = loadedState.isRemovingTiles;
+                currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
+                lastPlacedTileKey = loadedState.lastPlacedTileKey;
+                // Note: selectedTile is intentionally not restored from URL to avoid complex UI state.
+                // User will need to re-select a tile if they were in the middle of a move.
+                selectedTile = null;
+                aiEvaluatingDetails = null; // Reset this on any load
+                console.log("Game state loaded from URL.");
+            } else {
+                console.warn("Failed to deserialize game state from URL, or state was null. Starting a new game.");
+                // Fall through to default initialization
+            }
+        }
 
+        if (!loadedState) { // If no state loaded from URL, initialize a new game
+            console.log("No valid game state in URL or loading failed. Initializing a new game.");
+            player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
+            player2Hand = generateUniqueTilesForPlayer(2, NUM_TILES_PER_PLAYER);
+            currentPlayer = 1;
+            player1Score = 0;
+            player2Score = 0;
+            selectedTile = null;
+            boardState = {};
+            isRemovingTiles = false;
+            currentSurroundedTilesForRemoval = [];
+            lastPlacedTileKey = null;
+            aiEvaluatingDetails = null;
+            opponentType = "greedy"; // Default opponent type for new games
+        }
+
+        // Common initialization steps regardless of new or loaded game:
 
         // Initialize view parameters
         // For the very first tile, center on logical (0,0)
@@ -1106,6 +1143,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // redrawBoardOnCanvas(); // animateView will handle the first draw
         animateView(); // Start animation loop (will draw immediately if no animation needed)
         resizeCanvas(); // Call after full initialization
+        updateURLWithGameState(); // Set initial game state in URL
     }
 
     // --- Web Worker Setup ---
@@ -1504,6 +1542,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
         updateViewParameters();
         animateView();
     }
+    updateURLWithGameState(); // Update URL after a tile placement is fully processed
         }
 
 
@@ -1781,6 +1820,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             if (player2HandContainer) player2HandContainer.classList.add('ai-thinking-pulse');
             initiateAiTileRemoval();
         }
+        updateURLWithGameState(); // Update URL after turn switch and before AI might act
     }
 
 
@@ -2446,6 +2486,7 @@ function animateView() {
         } else if (opponentType === 'human' || currentPlayer === 1) {
             if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse');
         }
+        updateURLWithGameState(); // Update URL after opponent type changes
     }
 
     // --- Start the game ---
@@ -2802,6 +2843,92 @@ function animateView() {
             newBoardState[key] = newTile;
         }
         return newBoardState;
+    }
+
+    // --- Game State Persistence ---
+    function serializeGameStateToString() {
+        const gameState = {
+            boardState: {}, // Will be populated with serializable tile data
+            player1Hand: player1Hand.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: tile.edges, orientation: tile.orientation })),
+            player2Hand: player2Hand.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: tile.edges, orientation: tile.orientation })),
+            currentPlayer: currentPlayer,
+            player1Score: player1Score,
+            player2Score: player2Score,
+            opponentType: opponentType,
+            isRemovingTiles: isRemovingTiles,
+            currentSurroundedTilesForRemoval: currentSurroundedTilesForRemoval.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: tile.edges, orientation: tile.orientation, x: tile.x, y: tile.y })),
+            lastPlacedTileKey: lastPlacedTileKey,
+            // Optional: Persist view state
+            // currentOffsetX: currentOffsetX,
+            // currentOffsetY: currentOffsetY,
+            // currentZoomLevel: currentZoomLevel,
+        };
+
+        // Serialize boardState: HexTile objects need to be converted to plain objects
+        for (const key in boardState) {
+            const tile = boardState[key];
+            gameState.boardState[key] = {
+                id: tile.id,
+                playerId: tile.playerId,
+                edges: tile.edges,
+                orientation: tile.orientation,
+                x: tile.x,
+                y: tile.y,
+            };
+        }
+        return JSON.stringify(gameState);
+    }
+
+    function updateURLWithGameState() {
+        const serializedState = serializeGameStateToString();
+        const newUrl = `${window.location.pathname}?gameState=${encodeURIComponent(serializedState)}`;
+        history.pushState({ gameState: serializedState }, "", newUrl);
+        // console.log("Game state updated in URL."); // Optional: for debugging
+    }
+
+    function deserializeGameStateFromString(stateString) {
+        try {
+            const savedState = JSON.parse(stateString);
+            if (!savedState) return null;
+
+            // Helper to reconstruct HexTile instances
+            const rehydrateTile = (tileData) => {
+                if (!tileData) return null;
+                const tile = new HexTile(tileData.id, tileData.playerId, [...tileData.edges]);
+                tile.orientation = tileData.orientation || 0;
+                tile.x = tileData.x !== undefined ? tileData.x : null;
+                tile.y = tileData.y !== undefined ? tileData.y : null;
+                return tile;
+            };
+
+            const gameState = {
+                boardState: {},
+                player1Hand: savedState.player1Hand ? savedState.player1Hand.map(rehydrateTile) : [],
+                player2Hand: savedState.player2Hand ? savedState.player2Hand.map(rehydrateTile) : [],
+                currentPlayer: savedState.currentPlayer || 1,
+                player1Score: savedState.player1Score || 0,
+                player2Score: savedState.player2Score || 0,
+                opponentType: savedState.opponentType || "greedy",
+                isRemovingTiles: savedState.isRemovingTiles || false,
+                currentSurroundedTilesForRemoval: savedState.currentSurroundedTilesForRemoval ? savedState.currentSurroundedTilesForRemoval.map(rehydrateTile) : [],
+                lastPlacedTileKey: savedState.lastPlacedTileKey || null,
+                // Optional: Restore view state if it was saved
+                // currentOffsetX: savedState.currentOffsetX,
+                // currentOffsetY: savedState.currentOffsetY,
+                // currentZoomLevel: savedState.currentZoomLevel,
+            };
+
+            if (savedState.boardState) {
+                for (const key in savedState.boardState) {
+                    gameState.boardState[key] = rehydrateTile(savedState.boardState[key]);
+                }
+            }
+            return gameState;
+
+        } catch (error) {
+            console.error("Error deserializing game state:", error);
+            return null; // Return null or default state if parsing fails
+        }
     }
 
 });
