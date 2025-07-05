@@ -412,17 +412,17 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
                 for (var i_ps = 0; i_ps < placementSpots.length; i_ps++) {
                     var pos = placementSpots[i_ps];
 
-                    // For Greedy 1, send evaluation message here
-                    self.postMessage({
-                        task: 'aiEvaluatingMove',
-                        moveData: {
-                            tile: { id: tile.id, playerId: tile.playerId, edges: [].concat(tile.edges), orientation: tile.orientation },
-                            x: pos.x,
-                            y: pos.y
-                        }
-                    });
-
                     if (isPlacementValid(tile, pos.x, pos.y, boardState, true, effectiveDebug)) { // Pass effectiveDebug
+                        // For Greedy 1, send evaluation message here, *after* validation
+                        self.postMessage({
+                            task: 'aiEvaluatingMove',
+                            moveData: {
+                                tile: { id: tile.id, playerId: tile.playerId, edges: [].concat(tile.edges), orientation: tile.orientation },
+                                x: pos.x,
+                                y: pos.y
+                            }
+                        });
+
                         var tempBoardState = deepCopyBoardState(boardState);
                         var simTile = new HexTile(tile.id, tile.playerId, tile.edges);
                         simTile.orientation = tile.orientation;
