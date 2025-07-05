@@ -375,7 +375,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Score Highlight Function ---
     function highlightMatchedTriangles(matchedPairs) {
-        const PULSE_ANIMATION_DURATION = 1000; // Total duration of the pulse animation
+        const PULSE_ANIMATION_DURATION = 500; // Total duration of the pulse animation
         const pulseStartTime = Date.now();
 
         currentlyHighlightedTriangles = matchedPairs.flatMap(pair => [
