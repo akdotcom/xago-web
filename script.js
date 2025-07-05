@@ -1105,6 +1105,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         currentZoomLevel = targetZoomLevel;
         // redrawBoardOnCanvas(); // animateView will handle the first draw
         animateView(); // Start animation loop (will draw immediately if no animation needed)
+        resizeCanvas(); // Call after full initialization
     }
 
     // --- Web Worker Setup ---
@@ -2450,6 +2451,69 @@ function animateView() {
     // --- Start the game ---
     initializeGame();
 
+    // --- Canvas Resize Logic ---
+    function resizeCanvas() {
+        const gameCanvas = document.getElementById('game-canvas');
+        const gameboardArea = document.getElementById('gameboard-area'); // Get the container
+        const mainElement = document.querySelector('main'); // Get the main element
+
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        if (windowHeight >= windowWidth) {
+            // New logic: board full width, 50% window height, no top margin
+            gameboardArea.style.width = '100vw'; // Make container full viewport width
+            gameboardArea.style.marginLeft = 'calc(-1 * (100vw - 100%) / 2)'; // Adjust margin to break out of parent constraints if necessary
+            gameboardArea.style.marginRight = 'calc(-1 * (100vw - 100%) / 2)';// Adjust margin to break out of parent constraints if necessary
+
+            gameCanvas.width = windowWidth; // Set backing store size
+            gameCanvas.style.width = '100%'; // Canvas takes 100% of gameboardArea
+
+            gameCanvas.height = windowHeight * 0.5; // Set backing store size
+            gameCanvas.style.height = '50vh'; // Use vh for 50% viewport height
+
+            gameCanvas.style.margin = "0 auto"; // Remove top/bottom margin, keep auto for horizontal centering
+            gameboardArea.style.marginTop = "0"; // Ensure container also has no top margin
+            // gameboardArea's other margins (left/right) are handled by the calc for 100vw behavior
+            if (mainElement) mainElement.style.marginTop = '0px';
+
+        } else {
+            // Original logic: respect CSS for aspect ratio and max-width
+            gameboardArea.style.width = ''; // Reset container width to CSS default
+            gameboardArea.style.marginLeft = ''; // Reset container margin
+            gameboardArea.style.marginRight = ''; // Reset container margin
+            if (mainElement) mainElement.style.marginTop = '20px'; // Restore default top margin
+            // Reset styles to let CSS handle it, or apply specific fixed sizes if that was the old way.
+            // The CSS has max-width: 100% and height: auto.
+            // We also need to restore the canvas's internal width/height attributes
+            // to something sensible if they were changed, or let updateViewParameters handle it.
+            // Let's set a default size and let updateViewParameters adjust the view.
+            // The original canvas HTML is <canvas id="game-canvas" width="600" height="500"></canvas>
+            gameCanvas.width = 600; // Default backing store
+            gameCanvas.height = 500; // Default backing store
+
+            gameCanvas.style.width = ''; // Reset to let CSS control (or set to gameCanvas.width + 'px')
+            gameCanvas.style.height = ''; // Reset to let CSS control (or set to gameCanvas.height + 'px')
+
+            gameCanvas.style.margin = "20px auto"; // Restore original margin from CSS
+            gameboardArea.style.marginTop = ""; // Reset container margin
+        }
+
+        // After resizing the canvas, view parameters need to be updated.
+        updateViewParameters();
+        // And the view needs to be animated/redrawn to reflect these changes.
+        // Set current to target immediately for resize, then animateView will draw.
+        currentOffsetX = targetOffsetX;
+        currentOffsetY = targetOffsetY;
+        currentZoomLevel = targetZoomLevel;
+        animateView(); // This will redraw the board based on new canvas size and view params
+    }
+
+    // Call resizeCanvas on load and on window resize
+    window.addEventListener('resize', resizeCanvas);
+    // Call it once initially after game setup might also be good,
+    // or ensure initializeGame's call to updateViewParameters is sufficient.
+    // Let's add it at the end of initializeGame.
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
