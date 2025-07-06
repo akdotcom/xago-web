@@ -1040,40 +1040,45 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     }
 
     // --- Game Initialization ---
-    function initializeGame() {
-        console.log("Attempting to initialize game...");
+    function initializeGame(isReset = false) { // Added isReset parameter
+        console.log(`Attempting to initialize game... Reset flag: ${isReset}`);
         let loadedState = null;
-        const urlParams = new URLSearchParams(window.location.search);
-        const gameStateParam = urlParams.get('gameState');
 
-        if (gameStateParam) {
-            console.log("Found gameState parameter in URL. Attempting to load.");
-            loadedState = deserializeGameStateFromString(decodeURIComponent(gameStateParam));
-            if (loadedState) {
-                console.log("Successfully deserialized game state from URL.");
-                // Apply the loaded state
-                boardState = loadedState.boardState;
-                player1Hand = loadedState.player1Hand;
-                player2Hand = loadedState.player2Hand;
-                currentPlayer = loadedState.currentPlayer;
-                player1Score = loadedState.player1Score;
-                player2Score = loadedState.player2Score;
-                opponentType = loadedState.opponentType;
-                isRemovingTiles = loadedState.isRemovingTiles;
-                currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
-                lastPlacedTileKey = loadedState.lastPlacedTileKey;
-                // Note: selectedTile is intentionally not restored from URL to avoid complex UI state.
-                // User will need to re-select a tile if they were in the middle of a move.
-                selectedTile = null;
-                aiEvaluatingDetails = null; // Reset this on any load
-                console.log("Game state loaded from URL.");
-            } else {
-                console.warn("Failed to deserialize game state from URL, or state was null. Starting a new game.");
-                // Fall through to default initialization
+        if (!isReset) { // Only attempt to load from URL if not a reset
+            const urlParams = new URLSearchParams(window.location.search);
+            const gameStateParam = urlParams.get('gameState');
+
+            if (gameStateParam) {
+                console.log("Found gameState parameter in URL. Attempting to load.");
+                loadedState = deserializeGameStateFromString(decodeURIComponent(gameStateParam));
+                if (loadedState) {
+                    console.log("Successfully deserialized game state from URL.");
+                    // Apply the loaded state
+                    boardState = loadedState.boardState;
+                    player1Hand = loadedState.player1Hand;
+                    player2Hand = loadedState.player2Hand;
+                    currentPlayer = loadedState.currentPlayer;
+                    player1Score = loadedState.player1Score;
+                    player2Score = loadedState.player2Score;
+                    opponentType = loadedState.opponentType;
+                    isRemovingTiles = loadedState.isRemovingTiles;
+                    currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
+                    lastPlacedTileKey = loadedState.lastPlacedTileKey;
+                    // Note: selectedTile is intentionally not restored from URL to avoid complex UI state.
+                    // User will need to re-select a tile if they were in the middle of a move.
+                    selectedTile = null;
+                    aiEvaluatingDetails = null; // Reset this on any load
+                    console.log("Game state loaded from URL.");
+                } else {
+                    console.warn("Failed to deserialize game state from URL, or state was null. Starting a new game.");
+                    // Fall through to default initialization
+                }
             }
+        } else {
+            console.log("Resetting game: Skipping URL parameter check.");
         }
 
-        if (!loadedState) { // If no state loaded from URL, initialize a new game
+        if (!loadedState || isReset) { // If no state loaded from URL OR if it's a reset, initialize a new game
             console.log("No valid game state in URL or loading failed. Initializing a new game.");
             player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
             player2Hand = generateUniqueTilesForPlayer(2, NUM_TILES_PER_PLAYER);
@@ -2400,7 +2405,7 @@ function animateView() {
         console.log("Reset game button clicked.");
         const preservedOpponentType = opponentTypeSelector ? opponentTypeSelector.value : "greedy"; // Store current opponent type
         // initializeGame() already handles clearing the canvas and resetting state.
-        initializeGame();
+        initializeGame(true); // Pass true to indicate a reset
         // opponentTypeSelector will be re-created by renderPlayerHands called in initializeGame
         // We need to set its value *after* it's created.
         if (opponentTypeSelector) {
