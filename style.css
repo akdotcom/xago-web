@@ -470,3 +470,34 @@ footer {
     border: 2px dashed green;
 }
 */
+
+/* Toast Notification Styles */
+.toast {
+    visibility: hidden; /* Use visibility to manage state for animations */
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 2px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1001; /* Above other elements, but below modal if any */
+    left: 50%;
+    bottom: 30px;
+    font-size: 17px;
+    opacity: 0; /* Start fully transparent */
+    transition: opacity 0.5s, visibility 0s 0.5s; /* Delay visibility transition until opacity is done */
+}
+
+.toast.show {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 0.5s; /* Fade in */
+}
+
+/* .hidden class is already defined and uses display: none !important;
+   We are using visibility and opacity for the toast for smoother transitions.
+   If .hidden were applied to the toast, it would override the visibility.
+   The JS will manage adding/removing a 'show' class instead.
+*/
