@@ -58,10 +58,6 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let currentlyHighlightedTriangles = []; // For score animation highlights
     let activeScoreAnimations = []; // For "+1" animations on the board
 
-    // State variables for toast notification logic
-    let isFirstTurn = true;
-    let playerHasRotatedTileThisGame = {1: false, 2: false};
-
     // --- Tile Representation ---
     // Edge types: 0 for blank, 1 for triangle
     // Edges are ordered clockwise starting from the top edge.
@@ -1085,7 +1081,6 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         if (!loadedState || isReset) { // If no state loaded from URL OR if it's a reset, initialize a new game
             console.log("No valid game state in URL or loading failed. Initializing a new game.");
             player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
-            player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
             player2Hand = generateUniqueTilesForPlayer(2, NUM_TILES_PER_PLAYER);
             currentPlayer = 1;
             player1Score = 0;
@@ -1097,10 +1092,6 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             lastPlacedTileKey = null;
             aiEvaluatingDetails = null;
             opponentType = "greedy"; // Default opponent type for new games
-
-            // Initialize toast notification state variables
-            isFirstTurn = true;
-            playerHasRotatedTileThisGame = {1: false, 2: false};
         }
 
         // Common initialization steps regardless of new or loaded game:
@@ -1380,8 +1371,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         if (selectedTile && selectedTile.tile.id === tile.id && !isDragStart) {
             // Tile is already selected, and this is not a drag initiation, so rotate it
             selectedTile.tile.rotate();
-            playerHasRotatedTileThisGame[currentPlayer] = true; // Update rotation tracker
-            console.log(`Tile ${selectedTile.tile.id} rotated by clicking. Player ${currentPlayer} has now rotated. New orientation: ${selectedTile.tile.orientation}`);
+            console.log(`Tile ${selectedTile.tile.id} rotated by clicking. New orientation: ${selectedTile.tile.orientation}`);
 
             // Re-draw the selected tile in the hand
             const tileCtx = tileCanvasElement.getContext('2d');
@@ -1429,19 +1419,6 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             }
             console.log("Selected tile for interaction (click or drag):", selectedTile);
             updatePlacementHighlights(); // Update highlights for board placement
-
-            // Toast notification logic
-            if (!isDragStart) { // Only show toast on actual click selection, not drag start
-                const currentTileEdges = tile.getOrientedEdges().toString();
-                const allTrianglesPattern = UNIQUE_TILE_PATTERNS[UNIQUE_TILE_PATTERNS.length - 1].toString();
-                const allBlanksPattern = UNIQUE_TILE_PATTERNS[0].toString();
-
-                const isSpecialTile = currentTileEdges === allTrianglesPattern || currentTileEdges === allBlanksPattern;
-
-                if (!isFirstTurn && !playerHasRotatedTileThisGame[currentPlayer] && !isSpecialTile) {
-                    showToast("Tap again to rotate the tile.");
-                }
-            }
         }
     }
 
@@ -1450,8 +1427,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         if (event.key === 'r' || event.key === 'R') {
             if (selectedTile && selectedTile.tile && selectedTile.handElement) {
                 selectedTile.tile.rotate();
-                playerHasRotatedTileThisGame[currentPlayer] = true; // Update rotation tracker
-                console.log(`Tile ${selectedTile.tile.id} rotated by keypress. Player ${currentPlayer} has now rotated. New orientation: ${selectedTile.tile.orientation}`);
+                console.log(`Tile ${selectedTile.tile.id} rotated. New orientation: ${selectedTile.tile.orientation}`);
 
                 // Re-draw the selected tile in the hand
                 const tileCanvas = selectedTile.handElement;
@@ -1594,13 +1570,6 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
         // Visual update will be handled by a dedicated drawing function that iterates boardState
         // and draws all tiles on the canvas. This function will be called after successful placement.
         console.log(`Tile ${tile.id} placed at ${x},${y}. Board state updated. Last placed key: ${lastPlacedTileKey}`);
-
-        // Update isFirstTurn state variable
-        if (isFirstTurn) {
-            isFirstTurn = false;
-            console.log("First turn is now complete.");
-        }
-
         redrawBoardOnCanvas(); // Redraw the entire board with the new tile
 
         // const cell = getBoardCell(x,y); // Obsolete
@@ -2601,31 +2570,6 @@ function animateView() {
     // Call it once initially after game setup might also be good,
     // or ensure initializeGame's call to updateViewParameters is sufficient.
     // Let's add it at the end of initializeGame.
-
-    // --- Toast Notification Functionality ---
-    let toastTimeout = null; // To manage the timeout for hiding the toast
-
-    function showToast(message) {
-        const toastElement = document.getElementById('toast-notification');
-        if (!toastElement) {
-            console.error("Toast notification element not found.");
-            return;
-        }
-
-        toastElement.textContent = message;
-        toastElement.classList.add('show');
-
-        // Clear any existing timeout to prevent premature hiding if called multiple times
-        if (toastTimeout) {
-            clearTimeout(toastTimeout);
-        }
-
-        // Hide the toast after 3 seconds (or your preferred duration)
-        toastTimeout = setTimeout(() => {
-            toastElement.classList.remove('show');
-            toastTimeout = null; // Clear the timeout ID
-        }, 3000);
-    }
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
