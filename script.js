@@ -2452,7 +2452,7 @@ function animateView() {
         const hand1Div = document.createElement('div');
         hand1Div.id = 'player1-hand';
         hand1Div.classList.add('player-hand');
-        hand1Div.innerHTML = `<h2>Player 1 Hand</h2><div class="tiles-container"></div>`;
+        hand1Div.innerHTML = `<h2>Player 1</h2><div class="tiles-container"></div>`;
         player1HandDisplay = hand1Div.querySelector('.tiles-container');
 
         const hand2Div = document.createElement('div');
@@ -2460,9 +2460,8 @@ function animateView() {
         hand2Div.classList.add('player-hand');
         hand2Div.innerHTML = `
             <div class="player2-hand-header">
-                <h2>Player 2 Hand</h2>
+                <h2>Player 2</h2>
                 <div id="opponent-selector-container">
-                    <label for="opponent-type">Mode:</label>
                     <select id="opponent-type">
                         <option value="human">Human</option>
                         <option value="random">Random (CPU)</option>
