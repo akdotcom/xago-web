@@ -46,6 +46,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let isRemovingTiles = false; // Tracks if the game is in the tile removal phase
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
     let opponentType = "greedy"; // Default to Greedy 1 opponent
+    let player1GameMode = "basic"; // Player 1's game mode
+    let player1MadeFirstMove = false; // Tracks if Player 1 has made their first move
     let mouseHoverQ = null;
     let mouseHoverR = null;
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
@@ -59,7 +61,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let activeScoreAnimations = []; // For "+1" animations on the board
 
     // State variables for toast notification logic
-    let isFirstTurn = true;
+    let isFirstTurn = true; // This seems to track if ANY player has made the first move of the game.
     let playerHasRotatedTileThisGame = {1: false, 2: false};
 
     // --- Tile Representation ---
@@ -1065,6 +1067,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
                     player1Score = loadedState.player1Score;
                     player2Score = loadedState.player2Score;
                     opponentType = loadedState.opponentType;
+            player1GameMode = loadedState.player1GameMode || "basic"; // Load P1 game mode
+            player1MadeFirstMove = loadedState.player1MadeFirstMove || false; // Load P1 first move status
                     isRemovingTiles = loadedState.isRemovingTiles;
                     currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
                     lastPlacedTileKey = loadedState.lastPlacedTileKey;
@@ -1097,9 +1101,11 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             lastPlacedTileKey = null;
             aiEvaluatingDetails = null;
             opponentType = "greedy"; // Default opponent type for new games
+            player1GameMode = "basic"; // Reset P1 game mode for new games
+            player1MadeFirstMove = false; // Reset P1 first move status for new games
 
             // Initialize toast notification state variables
-            isFirstTurn = true;
+            isFirstTurn = true; // Tracks if the *very first tile of the game* has been placed
             playerHasRotatedTileThisGame = {1: false, 2: false};
         }
 
@@ -1490,10 +1496,8 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             // Remove from hand
             if (currentPlayer === 1) {
                 player1Hand = player1Hand.filter(t => t.id !== selectedTile.tile.id);
-                // displayPlayerHand(1, player1Hand, player1HandDisplay); // Re-rendering the hand is done by initializeGame or if explicitly needed
-            } else {
+            } else { // currentPlayer === 2
                 player2Hand = player2Hand.filter(t => t.id !== selectedTile.tile.id);
-                // displayPlayerHand(2, player2Hand, player2HandDisplay);
             }
 
             // No need to redraw the placed tile in hand as it's being removed.
@@ -1595,10 +1599,21 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
         // and draws all tiles on the canvas. This function will be called after successful placement.
         console.log(`Tile ${tile.id} placed at ${x},${y}. Board state updated. Last placed key: ${lastPlacedTileKey}`);
 
-        // Update isFirstTurn state variable
-        if (isFirstTurn) {
+        // Update isFirstTurn state variable (tracks if the *very first tile of the game* has been placed)
+        if (isFirstTurn) { // This refers to the overall game's first turn
             isFirstTurn = false;
-            console.log("First turn is now complete.");
+            console.log("The first tile of the game has been placed.");
+        }
+
+        // Specifically for Player 1's first move and locking the toggle
+        if (currentPlayer === 1 && !player1MadeFirstMove) {
+            player1MadeFirstMove = true;
+            console.log("Player 1 has made their first move. Game mode toggle will be locked.");
+            const p1ModeToggle = document.getElementById('player1-game-mode');
+            if (p1ModeToggle) {
+                p1ModeToggle.disabled = true;
+                p1ModeToggle.classList.add('locked-toggle'); // For potential specific styling
+            }
         }
 
         redrawBoardOnCanvas(); // Redraw the entire board with the new tile
@@ -2434,27 +2449,55 @@ function animateView() {
 
     resetGameButton.addEventListener('click', () => {
         console.log("Reset game button clicked.");
-        const preservedOpponentType = opponentTypeSelector ? opponentTypeSelector.value : "greedy"; // Store current opponent type
-        // initializeGame() already handles clearing the canvas and resetting state.
-        initializeGame(true); // Pass true to indicate a reset
-        // opponentTypeSelector will be re-created by renderPlayerHands called in initializeGame
-        // We need to set its value *after* it's created.
+        const preservedOpponentType = opponentTypeSelector ? opponentTypeSelector.value : "greedy";
+
+        // Reset Player 1 specific states before full game re-initialization
+        player1GameMode = "basic";
+        player1MadeFirstMove = false;
+
+        initializeGame(true); // Pass true to indicate a reset (this calls renderPlayerHands)
+
+        // Restore opponent type if selector exists (it should after initializeGame)
         if (opponentTypeSelector) {
             opponentTypeSelector.value = preservedOpponentType;
         }
         opponentType = preservedOpponentType; // Update internal variable
-        console.log(`Opponent type preserved as: ${opponentType}`);
+
+        // Ensure Player 1's mode toggle is reset in the DOM (should be handled by renderPlayerHands)
+        // but an explicit check/set here can be a safeguard.
+        const p1ModeToggle = document.getElementById('player1-game-mode');
+        if (p1ModeToggle) {
+            p1ModeToggle.value = "basic";
+            p1ModeToggle.disabled = false;
+            p1ModeToggle.classList.remove('locked-toggle');
+        }
+        console.log(`Game reset. Opponent type preserved as: ${opponentType}. Player 1 mode reset to Basic.`);
     });
 
     // --- Player Hand Rendering ---
     function renderPlayerHands() {
         // Create new hand containers
+        // Player 1 Hand
         const hand1Div = document.createElement('div');
         hand1Div.id = 'player1-hand';
         hand1Div.classList.add('player-hand');
-        hand1Div.innerHTML = `<h2>Player 1</h2><div class="tiles-container"></div>`;
+        // Add Player 1 mode selector similar to Player 2's opponent selector
+        hand1Div.innerHTML = `
+            <div class="player1-hand-header">
+                <h2>Player 1</h2>
+                <div id="player1-mode-selector-container">
+                    <label for="player1-game-mode">Mode:</label>
+                    <select id="player1-game-mode">
+                        <option value="basic">Basic</option>
+                        <option value="moving">With Moving</option>
+                    </select>
+                </div>
+            </div>
+            <div class="tiles-container"></div>`;
+
         player1HandDisplay = hand1Div.querySelector('.tiles-container');
 
+        // Player 2 Hand
         const hand2Div = document.createElement('div');
         hand2Div.id = 'player2-hand';
         hand2Div.classList.add('player-hand');
@@ -2490,13 +2533,25 @@ function animateView() {
         // Re-assign global container vars and opponent selector
         player1HandContainer = document.getElementById('player1-hand');
         player2HandContainer = document.getElementById('player2-hand');
-        opponentTypeSelector = document.getElementById('opponent-type');
 
+        // Setup Player 1's game mode selector
+        const player1ModeSelector = document.getElementById('player1-game-mode');
+        if (player1ModeSelector) {
+            player1ModeSelector.value = player1GameMode; // Set initial value
+            player1ModeSelector.disabled = player1MadeFirstMove; // Disable if first move made
+            if (player1MadeFirstMove) {
+                player1ModeSelector.classList.add('locked-toggle');
+            }
+
+            player1ModeSelector.removeEventListener('change', handlePlayer1ModeChange); // Prevent multiple listeners
+            player1ModeSelector.addEventListener('change', handlePlayer1ModeChange);
+        }
+
+        // Setup Player 2's opponent type selector
+        opponentTypeSelector = document.getElementById('opponent-type');
         if (opponentTypeSelector) {
             opponentTypeSelector.value = opponentType || "greedy";
-            opponentType = opponentTypeSelector.value;
-            // Ensure event listener is only added once or correctly managed if this function is called multiple times
-            // A simple way is to remove then add, though ideally this setup happens once.
+            opponentType = opponentTypeSelector.value; // Ensure internal state matches DOM on render
             opponentTypeSelector.removeEventListener('change', handleOpponentTypeChange);
             opponentTypeSelector.addEventListener('change', handleOpponentTypeChange);
         }
@@ -2509,6 +2564,14 @@ function animateView() {
         else console.error("Could not find .tiles-container for player 2 hand (player2HandDisplay is null after renderPlayerHands).");
 
         updateHandHighlights(); // Update active/inactive states
+    }
+
+    function handlePlayer1ModeChange(event) {
+        if (!player1MadeFirstMove) { // Should not be changeable if first move made, but check anyway
+            player1GameMode = event.target.value;
+            console.log(`Player 1 game mode changed to: ${player1GameMode}`);
+            updateURLWithGameState(); // Persist change
+        }
     }
 
     function handleOpponentTypeChange(event) {
@@ -2925,6 +2988,8 @@ function animateView() {
             player1Score: player1Score,
             player2Score: player2Score,
             opponentType: opponentType,
+            player1GameMode: player1GameMode, // Persist Player 1's game mode
+            player1MadeFirstMove: player1MadeFirstMove, // Persist Player 1's first move status
             isRemovingTiles: isRemovingTiles,
             currentSurroundedTilesForRemoval: currentSurroundedTilesForRemoval.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: tile.edges, orientation: tile.orientation, x: tile.x, y: tile.y })),
             lastPlacedTileKey: lastPlacedTileKey,
@@ -2979,6 +3044,8 @@ function animateView() {
                 player1Score: savedState.player1Score || 0,
                 player2Score: savedState.player2Score || 0,
                 opponentType: savedState.opponentType || "greedy",
+                player1GameMode: savedState.player1GameMode || "basic", // Restore P1 game mode
+                player1MadeFirstMove: savedState.player1MadeFirstMove || false, // Restore P1 first move status
                 isRemovingTiles: savedState.isRemovingTiles || false,
                 currentSurroundedTilesForRemoval: savedState.currentSurroundedTilesForRemoval ? savedState.currentSurroundedTilesForRemoval.map(rehydrateTile) : [],
                 lastPlacedTileKey: savedState.lastPlacedTileKey || null,

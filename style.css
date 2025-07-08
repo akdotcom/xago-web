@@ -184,34 +184,65 @@ main {
     margin-bottom: 5px; /* Reduce margin to bring selector closer */
 }
 
-.player2-hand-header {
+/* Common styles for player hand headers */
+.player1-hand-header, .player2-hand-header {
     display: flex;
     align-items: center; /* Align items vertically in the center */
     justify-content: space-between; /* Puts space between title and selector */
     margin-bottom: 10px; /* Space below the header block */
 }
 
-.player2-hand-header h2 {
+.player1-hand-header h2, .player2-hand-header h2 {
     margin: 0; /* Remove default margins from h2 */
     text-align: left; /* Align title to the left */
 }
 
-#player2-hand #opponent-selector-container {
+/* Container for Player 1's mode selector */
+#player1-mode-selector-container {
     display: flex;
     align-items: center;
     gap: 8px;
-    /* margin-bottom is now on player2-hand-header */
 }
 
-#player2-hand #opponent-selector-container label {
+#player1-mode-selector-container label {
     font-size: 0.9em;
-    margin-right: 0;
 }
 
-#player2-hand #opponent-selector-container select {
+#player1-mode-selector-container select {
     font-size: 0.9em;
     padding: 2px 5px;
 }
+
+/* Container for Player 2's opponent type selector */
+#opponent-selector-container { /* ID is specific to P2's selector container div */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#opponent-selector-container label { /* Targets label within P2's selector container */
+    font-size: 0.9em;
+}
+
+#opponent-selector-container select { /* Targets select within P2's selector container */
+    font-size: 0.9em;
+    padding: 2px 5px;
+}
+
+/* Styling for the locked toggle */
+select.locked-toggle {
+    background-color: #e9e9e9; /* Slightly greyed out */
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+/* Fallback for general disabled select styling if class isn't applied or for broader consistency */
+select:disabled {
+    background-color: #f0f0f0; /* Standard disabled background */
+    color: #999; /* Dimmed text color */
+    cursor: not-allowed;
+    opacity: 0.6; /* General opacity for disabled elements */
+}
+
 
 .tiles-container {
     display: flex;
