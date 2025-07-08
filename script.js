@@ -2484,7 +2484,7 @@ function animateView() {
         // Add Player 1 mode selector similar to Player 2's opponent selector
         hand1Div.innerHTML = `
             <div class="player1-hand-header">
-                <h2>Player 1 Hand</h2>
+                <h2>Player 1</h2>
                 <div id="player1-mode-selector-container">
                     <label for="player1-game-mode">Mode:</label>
                     <select id="player1-game-mode">
@@ -2494,6 +2494,7 @@ function animateView() {
                 </div>
             </div>
             <div class="tiles-container"></div>`;
+
         player1HandDisplay = hand1Div.querySelector('.tiles-container');
 
         // Player 2 Hand
@@ -2502,9 +2503,8 @@ function animateView() {
         hand2Div.classList.add('player-hand');
         hand2Div.innerHTML = `
             <div class="player2-hand-header">
-                <h2>Player 2 Hand</h2>
+                <h2>Player 2</h2>
                 <div id="opponent-selector-container">
-                    <label for="opponent-type">Mode:</label>
                     <select id="opponent-type">
                         <option value="human">Human</option>
                         <option value="random">Random (CPU)</option>
