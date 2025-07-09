@@ -55,6 +55,13 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
     let aiEvaluatingDetails = null; // Stores details of the tile AI is currently evaluating
 
+    // Long press detection variables
+    let longPressTimer = null;
+    let pressStartTime = 0;
+    let pressStartCoords = null; // { x: pixelX, y: pixelY } on canvas
+    const LONG_PRESS_DURATION = 500; // milliseconds
+    let longPressJustHappened = false; // Flag to prevent click after long press
+
     // Pulsing animation variables for removal highlight
     let pulseStartTime = 0;
     const PULSE_DURATION = 1000; // milliseconds for one full pulse cycle
@@ -342,9 +349,15 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             // For tiles on the board, isSelected is typically false (it's for hand tile glow).
             // transparentBackground is also false for board tiles.
             const isLastPlaced = (key === lastPlacedTileKey);
-            drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel, false, false, isLastPlaced);
+            const isCurrentlyBoardSelected = selectedTile && selectedTile.isBoardTile && selectedTile.tile.id === tile.id;
+
+            // Pass isCurrentlyBoardSelected to drawHexTile
+            drawHexTile(ctx, screenX, screenY, tile, currentZoomLevel, false, false, isLastPlaced, isCurrentlyBoardSelected);
 
             // Highlight if in removal mode and tile is one of the surrounded ones
+            // This should not conflict with isBoardSelected, as isRemovingTiles implies a different game phase.
+            // If isBoardSelected and isRemovingTiles could be true simultaneously for the same tile,
+            // drawHexTile might need logic to prioritize or combine highlights. For now, assume distinct phases.
             if (isRemovingTiles && currentSurroundedTilesForRemoval.some(st => st.id === tile.id)) {
             // Pulsing logic for removal highlight
                 const currentTime = Date.now();
@@ -661,14 +674,17 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     // transparentBackground: if true, skips drawing the white background fill of the hexagon body
     // isSelected: if true, draws a selection highlight (typically for hand tiles)
     // isRaisedEffect: if true, draws an outer shadow to make the tile look raised (for last placed board tile)
-    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false, isSelected = false, isRaisedEffect = false) {
+    // isBoardSelected: if true, draws a distinct highlight for a tile selected directly on the board.
+    function drawHexTile(ctx, cx, cy, tile, zoom = 1.0, transparentBackground = false, isSelected = false, isRaisedEffect = false, isBoardSelected = false) {
         const orientedEdges = tile.getOrientedEdges();
         const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
 
         let originalShadowColor, originalShadowBlur, originalShadowOffsetX, originalShadowOffsetY;
         let raisedEffectApplied = false;
 
-        if (isRaisedEffect && !isSelected) { // Apply raised effect only if not also having selection glow
+        // isBoardSelected highlight should take precedence over isRaisedEffect if both could apply.
+        // isSelected is for hand tiles, isBoardSelected for board tiles. They shouldn't both be true.
+        if (isRaisedEffect && !isSelected && !isBoardSelected) {
             // It's better to save and restore the entire context for robust shadow application
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
@@ -843,6 +859,30 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         ctx.shadowOffsetY = 0;
 
         // ctx.restore(); // If ctx.save() was used
+        }
+
+        // Draw board selection highlight if isBoardSelected is true
+        if (isBoardSelected) {
+            ctx.shadowColor = 'cyan';
+            ctx.shadowBlur = 8 * zoom;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.strokeStyle = '#00FFFF'; // Cyan stroke color for the highlight itself
+            ctx.lineWidth = 2 * zoom;   // A slightly thicker line for the board selection
+
+            ctx.beginPath();
+            ctx.moveTo(vertices[0].x, vertices[0].y);
+            for (let i = 1; i < 6; i++) {
+                ctx.lineTo(vertices[i].x, vertices[i].y);
+            }
+            ctx.closePath();
+            ctx.stroke(); // This stroke casts the shadow and provides the line
+
+            // Reset shadow properties
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
         }
     }
 
@@ -1477,56 +1517,69 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     function handleCellClick(x, y) {
         console.log(`Cell clicked: x=${x}, y=${y}`);
+        // Initial checks for selectedTile and player mismatch are now primarily handled by the main canvas click listener before calling this.
+        // However, keeping them here as safeguards is fine, but they should return boolean.
         if (!selectedTile) {
-            console.log("Please select a tile first (from hand or board).");
-            return;
+            console.log("handleCellClick: No tile selected.");
+            return false;
         }
         if (selectedTile.originalPlayerId !== currentPlayer) {
-            console.log("Error: Tile selection does not match current player.");
-            return;
+            console.error("handleCellClick: Error: Selected tile's player ID does not match current player.");
+            return false;
         }
 
         if (selectedTile.isBoardTile) {
-            // --- Attempt to MOVE the tile ---
+            // --- Attempt to MOVE the selected board tile ---
             const tileMovedSuccessfully = moveTileOnBoard(selectedTile.tile, x, y, selectedTile.originalX, selectedTile.originalY, selectedTile.maxMoveDistance);
 
-            // Always remove the temporary hand representation after a move attempt
-            if (selectedTile.handElement && selectedTile.handElement.parentNode) {
-                selectedTile.handElement.remove();
-            }
+            // selectedTile.handElement is null for board tiles due to prior changes in selectTileFromBoard,
+            // so no specific handElement removal is needed here for board tiles.
 
             if (tileMovedSuccessfully) {
-                selectedTile = null;
-                currentlySelectedTileCanvas = null;
-                redrawBoardOnCanvas(); // Ensure highlights are cleared
+                // moveTileOnBoard now handles nullifying selectedTile, redrawing, and calling processSuccessfulPlacement.
+                return true;
             } else {
-                console.log("Invalid move. Tile remains selected from board.");
-                // Keep selectedTile so player can try another spot or rotate.
-                // Highlights for moving should still be active or re-shown.
-                updateMoveHighlights(selectedTile.tile, selectedTile.maxMoveDistance);
-                showToast("Invalid move. Try a different spot or rotation."); // Toast for invalid move
+                // moveTileOnBoard calls updateMoveHighlights and showToast on failure.
+                // selectedTile remains selected if moveTileOnBoard returns false.
+                // The main click handler will use this 'false' to deselect the tile.
+                return false;
             }
         } else {
-            // --- Attempt to PLACE a NEW tile (existing logic) ---
-            if (placeTileOnBoard(selectedTile.tile, x, y)) {
+            // --- Attempt to PLACE a NEW tile from hand ---
+            const tileToPlace = selectedTile.tile;
+            const handElementToRemove = selectedTile.handElement;
+
+            if (placeTileOnBoard(tileToPlace, x, y)) {
+                // Remove tile from hand's data model
                 if (currentPlayer === 1) {
-                    player1Hand = player1Hand.filter(t => t.id !== selectedTile.tile.id);
+                    player1Hand = player1Hand.filter(t => t.id !== tileToPlace.id);
                 } else {
-                    player2Hand = player2Hand.filter(t => t.id !== selectedTile.tile.id);
+                    player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
                 }
-                selectedTile.handElement.remove();
+                // Remove tile from hand's display
+                if (handElementToRemove && handElementToRemove.parentNode) {
+                    handElementToRemove.remove();
+                }
+
+                const lastPlacedKey = lastPlacedTileKey;
+                const playerOfTurn = currentPlayer;
+
                 selectedTile = null;
                 currentlySelectedTileCanvas = null;
 
-                if (currentPlayer === 1) {
+                // Update player hand display
+                if (playerOfTurn === 1) {
                     displayPlayerHand(1, player1Hand, player1HandDisplay);
                 } else {
                     displayPlayerHand(2, player2Hand, player2HandDisplay);
                 }
-                updatePlacementHighlights(); // Clear highlights
-                processSuccessfulPlacement(lastPlacedTileKey, currentPlayer);
+                // updatePlacementHighlights(); // Not needed here, processSuccessfulPlacement and subsequent redraws handle it.
+                processSuccessfulPlacement(lastPlacedKey, playerOfTurn);
+                return true;
             } else {
-                console.log("Invalid placement.");
+                // Invalid placement. isPlacementValid (called by placeTileOnBoard) logs details.
+                // selectedTile remains selected. The main click handler will use this 'false' to deselect.
+                return false;
             }
         }
     }
@@ -2883,158 +2936,338 @@ function animateView() {
 
     // --- Canvas Click Handling ---
     gameCanvas.addEventListener('click', (event) => {
+        if (longPressJustHappened) {
+            longPressJustHappened = false; // Reset flag
+            console.log("Click event ignored due to recent long press.");
+            return;
+        }
+
         const rect = gameCanvas.getBoundingClientRect();
-        // Calculate scaling factors
         const scaleX = gameCanvas.width / rect.width;
         const scaleY = gameCanvas.height / rect.height;
-
-        // Adjust click coordinates for scaling
         const pixelX = (event.clientX - rect.left) * scaleX;
         const pixelY = (event.clientY - rect.top) * scaleY;
-
         const { q, r } = pixelToHexGrid(pixelX, pixelY);
 
         console.log(`Canvas raw click at (${event.clientX - rect.left}, ${event.clientY - rect.top}), scaled to (${pixelX.toFixed(2)}, ${pixelY.toFixed(2)}), converted to hex grid (q=${q}, r=${r})`);
 
         if (isRemovingTiles) {
-            // --- Handle Tile Removal Click ---
             const tileKey = `${q},${r}`;
-            const clickedTile = boardState[tileKey];
-
-            if (clickedTile && currentSurroundedTilesForRemoval.some(st => st.id === clickedTile.id)) {
-                // Valid tile selected for removal
-
-                // Vibrate on mobile if API is available (MOVED HERE)
+            const clickedTileOnBoard = boardState[tileKey];
+            if (clickedTileOnBoard && currentSurroundedTilesForRemoval.some(st => st.id === clickedTileOnBoard.id)) {
                 if (navigator.maxTouchPoints > 0 && typeof navigator.vibrate === 'function') {
-                    navigator.vibrate(100); // Vibrate for 100ms
-                    console.log("Device vibrated on tile tap for removal."); // Updated log message
+                    navigator.vibrate(100);
+                    console.log("Device vibrated on tile tap for removal.");
                 }
-
-                removeTileFromBoardAndReturnToHand(clickedTile);
+                removeTileFromBoardAndReturnToHand(clickedTileOnBoard);
             } else {
                 console.log("Invalid selection. Click on a highlighted (surrounded) tile to remove it.");
+                showToast("Click on a highlighted tile to remove it.");
             }
         } else {
-            // --- Handle Tile Placement or Move Click ---
+            // --- Normal tile interaction (Not in removal mode) ---
             const gameMode = currentPlayer === 1 ? player1GameMode : player2GameMode;
-
             const tileKey = `${q},${r}`;
-            const clickedBoardTile = boardState[tileKey];
-            // const gameMode = currentPlayer === 1 ? player1GameMode : player2GameMode; // Removed duplicate declaration
+            const clickedTileData = boardState[tileKey]; // Data of the tile on board at click location (q,r), if any.
 
             if (!selectedTile) {
-                // NO TILE CURRENTLY SELECTED
-                if (gameMode === "moving" && clickedBoardTile && clickedBoardTile.playerId === currentPlayer) {
-                    selectTileFromBoard(clickedBoardTile, q, r);
-                } else if (clickedBoardTile && clickedBoardTile.playerId !== currentPlayer) {
+                // NO TILE IS CURRENTLY SELECTED
+                if (gameMode === "moving" && clickedTileData && clickedTileData.playerId === currentPlayer) {
+                    // In "moving" mode, clicking own tile on board selects it.
+                    selectTileFromBoard(clickedTileData, q, r);
+                } else if (clickedTileData && clickedTileData.playerId !== currentPlayer) {
                     console.log("Cannot select opponent's tile.");
+                    showToast("Cannot select opponent's tile.");
                 } else {
-                    console.log("Please select a tile from your hand first, or one of your tiles on the board if in 'With Moving' mode.");
-                }
-                return;
-            }
-
-            // A TILE IS CURRENTLY SELECTED (selectedTile exists)
-            if (selectedTile.originalPlayerId !== currentPlayer) {
-                console.log("Error: Selected tile does not match current player. Clearing selection.");
-                clearSelectionAndHighlights(); // Safety clear
-                return;
-            }
-
-            if (clickedBoardTile) {
-                // CLICKED ON AN EXISTING BOARD TILE
-                if (selectedTile.isBoardTile && clickedBoardTile.id === selectedTile.tile.id) {
-                    // Clicked on the SAME board tile that is ALREADY selected for moving.
-                    // Check if its orientation has changed from when it was initially selected.
-                    if (selectedTile.tile.orientation !== selectedTile.originalOrientation) {
-                        // Orientation has changed, so treat this as an attempt to "move" (finalize rotation).
-                        console.log("Re-clicked selected board tile's current spot WITH rotation. Attempting move.");
-                        handleCellClick(q, r);
-                    } else {
-                        // Orientation has NOT changed. Treat this as a deselection.
-                        console.log("Re-clicked selected board tile's current spot WITHOUT rotation. Deselecting tile.");
-                        clearSelectionAndHighlights();
-                    }
-                } else if (clickedBoardTile.playerId === currentPlayer && gameMode === "moving") {
-                    // Clicked on a DIFFERENT one of THE CURRENT PLAYER'S tiles on the board (and in "moving" mode)
-                    // -> Deselect current, select this new one.
-                    console.log(`Switching board selection from ${selectedTile.tile.id} to ${clickedBoardTile.id}`);
-                    clearSelectionAndHighlights(false); // Clear previous without full board redraw yet
-                    selectTileFromBoard(clickedBoardTile, q, r);
-                } else if (clickedBoardTile.playerId !== currentPlayer) {
-                    // Clicked on an OPPONENT'S tile on the board.
-                    // This is not a valid move target for the selected tile, nor a new selection.
-                    // It should act like clicking an invalid empty spot: deselect current.
-                    console.log("Clicked on an opponent's tile. Deselecting current tile.");
-                    clearSelectionAndHighlights();
-                } else {
-                    // Clicked on one of the current player's tiles, but NOT in "moving" mode OR
-                    // it's the currently selected hand tile trying to be placed on an owned board tile (invalid).
-                    // This is an invalid action. Deselect current.
-                    console.log("Invalid action: Clicked on an owned board tile under conditions that don't allow selection or placement. Deselecting.");
-                    clearSelectionAndHighlights();
+                    // Clicked empty spot or non-selectable board tile when nothing is selected from hand.
+                    console.log("Please select a tile from your hand, or one of your tiles on the board if in 'With Moving' mode.");
+                    // No toast here, as it's a general "do something" prompt.
                 }
             } else {
-                // CLICKED ON AN EMPTY BOARD SPOT (q,r)
-                // If a tile is selected (either from hand or board), try to place/move it.
-                handleCellClick(q, r);
-                // If handleCellClick results in invalid placement/move, selectedTile will still be set.
-                // If it was valid, selectedTile will be null.
-                // If it was invalid, and we want to deselect on invalid click, we'd do it here:
-                // However, current handleCellClick shows "Invalid move. Tile remains selected..."
-                // To implement "deselect on invalid click", we'd need to change that or check validity before handleCellClick.
-                // For now, let's stick to the current behavior of retaining selection on invalid move attempt.
-                // The requirement is: "clicking on another tile on the board or in the hand deselects the current tile"
-                // "Clicking empty space/invalid spot" leading to deselection is a common UX, but let's defer if not explicitly requested for empty spots.
-                // Re-reading: "Change so that clicking on another tile on the board or in the hand deselects the current tile."
-                // This doesn't explicitly state clicking an empty invalid spot deselects.
-                // However, "Similarly, if a tile in hand is currently selected, allow the user to tap an already-placed tile and have it be selected for potential moving"
-                // This was handled above by the `clickedBoardTile.playerId === currentPlayer && gameMode === "moving"` condition.
+                // A TILE IS CURRENTLY SELECTED (selectedTile exists)
+                if (selectedTile.originalPlayerId !== currentPlayer) {
+                    console.error("Error: Selected tile's player ID does not match current player. Clearing selection.");
+                    clearSelectionAndHighlights();
+                    return; // Safety break
+                }
+
+                if (selectedTile.isBoardTile) {
+                    // --- A BOARD TILE IS CURRENTLY SELECTED ---
+                    // Current mode must be "moving" if a board tile is selected.
+                    if (q === selectedTile.tile.x && r === selectedTile.tile.y) {
+                        // Player clicked ON the ALREADY SELECTED board tile: ROTATE IT.
+                        selectedTile.tile.rotate();
+                        playerHasRotatedTileThisGame[currentPlayer] = true;
+                        console.log(`Board tile ${selectedTile.tile.id} rotated on board. New orientation: ${selectedTile.tile.orientation}`);
+                        updateMoveHighlights(selectedTile.tile, selectedTile.maxMoveDistance);
+                        showToast("Tile rotated. Tap again to rotate, or tap valid spot to move/finalize.");
+                    } else if (clickedTileData && clickedTileData.playerId === currentPlayer && gameMode === "moving") {
+                        // Player clicked on ANOTHER of their own tiles on the board (and in "moving" mode)
+                        // -> Deselect current board tile, select this new one.
+                        console.log(`Switching board selection from ${selectedTile.tile.id} to ${clickedTileData.id}`);
+                        clearSelectionAndHighlights(false); // Clear previous without full board redraw yet
+                        selectTileFromBoard(clickedTileData, q, r); // Select the new board tile
+                    } else {
+                        // Player clicked SOMEWHERE ELSE on the board (empty spot, opponent tile, or own tile not in moving mode for selection switch)
+                        // This could be to move the selected board tile, or an invalid spot leading to deselection.
+                        const moveAttemptValid = handleCellClick(q, r); // Tries to move selectedTile.tile to (q,r)
+                        if (!moveAttemptValid) {
+                            // Move was invalid. Deselect.
+                            console.log("Invalid move for selected board tile. Deselecting tile.");
+                            showToast("Invalid move or spot. Tile deselected.");
+                            clearSelectionAndHighlights();
+                        }
+                        // If moveAttemptValid is true, selectedTile is already cleared by handleCellClick/moveTileOnBoard.
+                    }
+                } else {
+                    // --- A HAND TILE IS CURRENTLY SELECTED ---
+                    if (clickedTileData) {
+                        // Clicked on an EXISTING TILE ON THE BOARD while a HAND tile is selected.
+                        if (gameMode === "moving" && clickedTileData.playerId === currentPlayer) {
+                            // In "moving" mode, and clicked one of player's own tiles on board.
+                            // -> This means: DESELECT current HAND tile, and SELECT this BOARD tile.
+                            console.log(`Switching from selected hand tile ${selectedTile.tile.id} to board tile ${clickedTileData.id}`);
+                            clearSelectionAndHighlights(false); // Clear hand tile selection visuals but don't full redraw board yet.
+                            selectTileFromBoard(clickedTileData, q, r); // Select the clicked board tile.
+                        } else {
+                            // Clicked on an opponent's tile, or player's own tile but not in "moving" mode (or some other edge case).
+                            // This spot is effectively "occupied" or "invalid" for placing the current hand tile. Deselect hand tile.
+                            console.log("Invalid placement: Spot occupied or not selectable for current action. Deselecting hand tile.");
+                            showToast("Cannot place tile here. Hand tile deselected.");
+                            clearSelectionAndHighlights();
+                        }
+                    } else {
+                        // Clicked on an EMPTY SPOT ON THE BOARD while a HAND tile is selected.
+                        // Attempt to place the hand tile.
+                        const placementAttemptValid = handleCellClick(q, r); // Tries to place selectedTile.tile at (q,r)
+                        if (!placementAttemptValid) {
+                            // Placement was invalid (e.g., no match, enclosed space for basic, disconnects board). Deselect.
+                            console.log("Invalid placement for hand tile. Deselecting tile.");
+                            showToast("Invalid placement. Hand tile deselected.");
+                            clearSelectionAndHighlights();
+                        }
+                        // If placementAttemptValid is true, selectedTile is cleared by handleCellClick/placeTileOnBoard.
+                    }
+                }
             }
         }
     });
+
+    // --- Long Press Handling ---
+    function handleLongPressPlay(q, r) {
+        console.log(`Long press detected on selected board tile at (${q}, ${r}). Attempting to finalize placement.`);
+        if (!selectedTile || !selectedTile.isBoardTile || selectedTile.tile.x !== q || selectedTile.tile.y !== r) {
+            console.log("Long press conditions not met (no selected board tile at this location).");
+            return;
+        }
+
+        // Attempt to "play" or "finalize" the tile in its current position and orientation.
+        // This uses moveTileOnBoard with 0-distance to re-validate and finalize.
+        const finalizedSuccessfully = moveTileOnBoard(selectedTile.tile, q, r, q, r, selectedTile.maxMoveDistance);
+
+        if (finalizedSuccessfully) {
+            // moveTileOnBoard already handles clearing selectedTile, scoring, and switching turn.
+            showToast("Tile finalized on the board!");
+        } else {
+            // moveTileOnBoard shows a toast for specific error. We can add a generic one too.
+            showToast("Could not finalize tile here. Check edges.");
+            // Tile remains selected for the player to try another action or rotation.
+            // updateMoveHighlights is already called by moveTileOnBoard on failure.
+        }
+    }
+
+    gameCanvas.addEventListener('mousedown', (event) => {
+        longPressJustHappened = false; // Reset on new press
+        if (event.button !== 0) return; // Only main (left) click
+
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const pixelX = (event.clientX - rect.left) * scaleX;
+        const pixelY = (event.clientY - rect.top) * scaleY;
+        const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+        if (selectedTile && selectedTile.isBoardTile && selectedTile.tile.x === q && selectedTile.tile.y === r) {
+            pressStartTime = Date.now();
+            pressStartCoords = { x: pixelX, y: pixelY };
+
+            if (longPressTimer) clearTimeout(longPressTimer);
+            longPressTimer = setTimeout(() => {
+                console.log("Long press timer fired.");
+                longPressJustHappened = true; // Set flag so click listener ignores this
+                handleLongPressPlay(q, r);
+                longPressTimer = null; // Timer has done its job
+                pressStartCoords = null; // Reset press start coords
+            }, LONG_PRESS_DURATION);
+        }
+    });
+
+    gameCanvas.addEventListener('mouseup', (event) => {
+        if (event.button !== 0) return;
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            console.log("Mouseup: Long press timer cleared before firing (short click).");
+        }
+        pressStartCoords = null; // Reset on mouseup
+        // If longPressJustHappened is true, it means the timer fired, and the click handler will ignore the click.
+        // If longPressTimer was cleared, it means it was a short click, and the click handler will proceed.
+    });
+
+    gameCanvas.addEventListener('mousemove', (event) => {
+        if (longPressTimer && pressStartCoords) {
+            const rect = gameCanvas.getBoundingClientRect();
+            const scaleX = gameCanvas.width / rect.width;
+            const scaleY = gameCanvas.height / rect.height;
+            const currentPixelX = (event.clientX - rect.left) * scaleX;
+            const currentPixelY = (event.clientY - rect.top) * scaleY;
+
+            const deltaX = Math.abs(currentPixelX - pressStartCoords.x);
+            const deltaY = Math.abs(currentPixelY - pressStartCoords.y);
+            const MOVEMENT_THRESHOLD = 10; // pixels
+
+            if (deltaX > MOVEMENT_THRESHOLD || deltaY > MOVEMENT_THRESHOLD) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+                pressStartCoords = null;
+                console.log("Mousemove: Long press cancelled due to movement.");
+            }
+        }
+    });
+
+    gameCanvas.addEventListener('mouseout', (event) => {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            pressStartCoords = null;
+            console.log("Mouseout: Long press cancelled.");
+        }
+    });
+
+    // Touch equivalents
+    gameCanvas.addEventListener('touchstart', (event) => {
+        longPressJustHappened = false;
+        if (event.touches.length > 1) { // Ignore multi-touch
+             if (longPressTimer) clearTimeout(longPressTimer);
+             longPressTimer = null;
+             pressStartCoords = null;
+             return;
+        }
+        const touch = event.touches[0];
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const pixelX = (touch.clientX - rect.left) * scaleX;
+        const pixelY = (touch.clientY - rect.top) * scaleY;
+        const { q, r } = pixelToHexGrid(pixelX, pixelY);
+
+        if (selectedTile && selectedTile.isBoardTile && selectedTile.tile.x === q && selectedTile.tile.y === r) {
+            pressStartTime = Date.now();
+            pressStartCoords = { x: pixelX, y: pixelY };
+
+            if (longPressTimer) clearTimeout(longPressTimer);
+            longPressTimer = setTimeout(() => {
+                console.log("Long press timer fired (touch).");
+                longPressJustHappened = true;
+                handleLongPressPlay(q, r);
+                longPressTimer = null;
+                pressStartCoords = null;
+            }, LONG_PRESS_DURATION);
+        }
+        // event.preventDefault(); // Prevent mouse events from firing after touch, if needed and doesn't break panning
+    }, { passive: false }); // passive: false if preventDefault is used
+
+    gameCanvas.addEventListener('touchend', (event) => {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            console.log("Touchend: Long press timer cleared (short tap).");
+        }
+        pressStartCoords = null;
+        // The click event should still fire after touchend for short taps.
+        // longPressJustHappened flag will handle preventing click action if long press occurred.
+    });
+
+    gameCanvas.addEventListener('touchmove', (event) => {
+        if (longPressTimer && pressStartCoords) {
+            if (event.touches.length > 1) {
+                 clearTimeout(longPressTimer);
+                 longPressTimer = null;
+                 pressStartCoords = null;
+                 return;
+            }
+            const touch = event.touches[0];
+            const rect = gameCanvas.getBoundingClientRect();
+            const scaleX = gameCanvas.width / rect.width;
+            const scaleY = gameCanvas.height / rect.height;
+            const currentPixelX = (touch.clientX - rect.left) * scaleX;
+            const currentPixelY = (touch.clientY - rect.top) * scaleY;
+
+            const deltaX = Math.abs(currentPixelX - pressStartCoords.x);
+            const deltaY = Math.abs(currentPixelY - pressStartCoords.y);
+            const MOVEMENT_THRESHOLD = 10; // pixels
+
+            if (deltaX > MOVEMENT_THRESHOLD || deltaY > MOVEMENT_THRESHOLD) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+                pressStartCoords = null;
+                console.log("Touchmove: Long press cancelled due to movement.");
+            }
+        }
+        // event.preventDefault(); // If scrolling/panning needs to be prevented during potential long press
+    }, { passive: false }); // passive: false if preventDefault is used
+
+    gameCanvas.addEventListener('touchcancel', (event) => {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            pressStartCoords = null;
+            console.log("Touchcancel: Long press cancelled.");
+        }
+    });
+
 
     function clearSelectionAndHighlights(fullRedraw = true) {
         if (selectedTile) {
             if (selectedTile.isBoardTile) {
                 // If previously selected tile was a board tile
-                if (selectedTile.handElement && selectedTile.handElement.parentNode) {
-                    selectedTile.handElement.remove(); // Remove its temp hand canvas
+                if (selectedTile.handElement && selectedTile.handElement.parentNode) { // handElement should be null now for board tiles
+                    selectedTile.handElement.remove(); // Remove its temp hand canvas if it somehow existed
                 }
                 // Revert its orientation to what it was when initially selected from the board
                 // This happens if it's deselected without a move being made.
-                // If a move was made, the tile on boardState already has its (potentially new) orientation.
-                // This addresses the case where it's selected, rotated in hand, then deselected.
                 const boardTileInstance = boardState[`${selectedTile.originalX},${selectedTile.originalY}`];
                 if (boardTileInstance && boardTileInstance.id === selectedTile.tile.id) { // Ensure it's the same tile
-                    boardTileInstance.orientation = selectedTile.originalOrientation;
-                    console.log(`Board tile ${boardTileInstance.id} at (${selectedTile.originalX},${selectedTile.originalY}) reverted to orientation ${boardTileInstance.orientation} on deselection.`);
+                    // Only revert orientation if it's different from the original.
+                    // This prevents unnecessary console logs if it was selected and deselected without rotation.
+                    if (boardTileInstance.orientation !== selectedTile.originalOrientation) {
+                        boardTileInstance.orientation = selectedTile.originalOrientation;
+                        console.log(`Board tile ${boardTileInstance.id} at (${selectedTile.originalX},${selectedTile.originalY}) reverted to orientation ${boardTileInstance.orientation} on deselection.`);
+                    }
                 }
             } else if (!selectedTile.isBoardTile && selectedTile.handElement) {
                 // If it was a regular hand tile (not a board tile), redraw it unselected.
                 const prevCtx = selectedTile.handElement.getContext('2d');
                 prevCtx.clearRect(0, 0, selectedTile.handElement.width, selectedTile.handElement.height);
                 const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
-                // We need the original tile object from the hand to draw it correctly (especially its orientation)
-                // selectedTile.tile might have been rotated.
-                // Let's find it in the hand again.
                 const playerHand = selectedTile.originalPlayerId === 1 ? player1Hand : player2Hand;
                 const originalHandTile = playerHand.find(t => t.id === selectedTile.tile.id);
                 if (originalHandTile) {
                      drawHexTile(prevCtx, selectedTile.handElement.width / 2, selectedTile.handElement.height / 2, originalHandTile, zoomForHandTile, false, false);
                 } else {
-                    // Fallback if not found (should not happen often)
                     drawHexTile(prevCtx, selectedTile.handElement.width / 2, selectedTile.handElement.height / 2, selectedTile.tile, zoomForHandTile, false, false);
                 }
             }
         }
         selectedTile = null;
-        currentlySelectedTileCanvas = null;
+        currentlySelectedTileCanvas = null; // This was primarily for hand tile canvas, ensure it's cleared.
         mouseHoverQ = null; // Clear mouse hover state as well
         mouseHoverR = null;
 
         if (fullRedraw) {
             redrawBoardOnCanvas(); // Clear any board highlights (green/yellow/blue spots, full previews)
+                                   // This will also redraw the board tiles without specific selection highlights
+                                   // if drawHexTile is correctly updated later for board selection.
         }
         // If not fullRedraw, the caller (e.g., when switching selection) will handle subsequent highlight updates.
     }
@@ -3053,42 +3286,17 @@ function animateView() {
         // "A tile can move 0 spots (rotating in place)"
         // So even if blankEdges is 0, we should still select it to allow rotation.
 
-        // Create a temporary canvas element for the hand representation
-        const tempHandCanvas = document.createElement('canvas');
-        const handTileSideLength = HAND_TILE_BASE_SIDE_LENGTH;
-        const handHexWidth = 2 * handTileSideLength;
-        const handHexHeight = Math.sqrt(3) * handTileSideLength;
-        const canvasPadding = 5 * 2;
-        tempHandCanvas.width = handHexWidth + canvasPadding;
-        tempHandCanvas.height = handHexHeight + canvasPadding;
-        tempHandCanvas.style.cursor = 'pointer';
-        tempHandCanvas.style.margin = '2px';
-        tempHandCanvas.dataset.tileId = tile.id; // Store tile ID
-
-        // Deselect any currently selected tile (from hand or board) and remove its temporary hand representation if it exists
+        // Deselect any currently selected tile (from hand or board)
         if (selectedTile) {
-            if (selectedTile.isBoardTile && selectedTile.handElement && selectedTile.handElement.parentNode) {
-                // If previously selected tile was a board tile, remove its temp hand canvas
-                selectedTile.handElement.remove();
-            } else if (!selectedTile.isBoardTile && selectedTile.handElement) {
-                // If it was a hand tile, redraw it without selection highlight
-                const prevCtx = selectedTile.handElement.getContext('2d');
-                prevCtx.clearRect(0, 0, selectedTile.handElement.width, selectedTile.handElement.height);
-                const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
-                drawHexTile(prevCtx, selectedTile.handElement.width / 2, selectedTile.handElement.height / 2, selectedTile.tile, zoomForHandTile, false, false);
-            }
+            // If a board tile was previously selected, its 'handElement' (temp canvas) would be removed by clearSelectionAndHighlights.
+            // If a hand tile was selected, it would be redrawn without highlight by clearSelectionAndHighlights.
+            clearSelectionAndHighlights(false); // Clear previous selection, but don't full redraw board yet.
+                                                // updateMoveHighlights below will do it.
         }
-        // Clear currentlySelectedTileCanvas if it's not the one we're about to create for the new board tile selection
-        // This is mostly to ensure that if a regular hand tile was selected, its canvas is no longer considered 'currentlySelectedTileCanvas'
-        // after we select a board tile.
-        if (currentlySelectedTileCanvas && currentlySelectedTileCanvas !== tempHandCanvas) {
-             // No redraw needed here as it should have been handled by the 'else if' above or will be overwritten.
-        }
-
 
         selectedTile = {
             tile: tile, // This is the actual tile object from boardState
-            handElement: tempHandCanvas, // The temporary canvas for hand display and rotation
+            handElement: null, // No longer using a handElement for board-selected tiles
             originalPlayerId: tile.playerId,
             isBoardTile: true,
             originalX: q,
@@ -3096,44 +3304,14 @@ function animateView() {
             originalOrientation: tile.orientation, // Store original orientation
             maxMoveDistance: blankEdges
         };
-        currentlySelectedTileCanvas = tempHandCanvas; // So rotation highlights this temp canvas
+        // currentlySelectedTileCanvas = null; // No longer using this for board selections directly
 
-        // Draw the selected board tile onto its temporary hand canvas WITH selection highlight
-        const tileCtx = tempHandCanvas.getContext('2d');
-        const cx = tempHandCanvas.width / 2;
-        const cy = tempHandCanvas.height / 2;
-        const zoomForHandTile = HAND_TILE_BASE_SIDE_LENGTH / BASE_HEX_SIDE_LENGTH;
-        drawHexTile(tileCtx, cx, cy, tile, zoomForHandTile, false, true); // Draw with selection highlight
+        // The tile on the board will be highlighted by updateMoveHighlights.
+        // Rotation will be handled by clicking the tile on the board itself.
 
-        // Visually add this temporary canvas to the player's hand display (e.g., at the beginning)
-        const handDisplay = currentPlayer === 1 ? player1HandDisplay : player2HandDisplay;
-        if (handDisplay.firstChild) {
-            handDisplay.insertBefore(tempHandCanvas, handDisplay.firstChild);
-        } else {
-            handDisplay.appendChild(tempHandCanvas);
-        }
-        // Add click listener to this temp canvas for rotation
-        tempHandCanvas.addEventListener('click', () => {
-            if (selectedTile && selectedTile.isBoardTile && selectedTile.tile.id === tile.id) {
-                selectedTile.tile.rotate();
-                playerHasRotatedTileThisGame[currentPlayer] = true;
-                console.log(`Board tile ${selectedTile.tile.id} rotated. New orientation: ${selectedTile.tile.orientation}`);
-                // Redraw on temp hand canvas
-                tileCtx.clearRect(0, 0, tempHandCanvas.width, tempHandCanvas.height);
-                drawHexTile(tileCtx, cx, cy, selectedTile.tile, zoomForHandTile, false, true); // Redraw selected
-                updateMoveHighlights(selectedTile.tile, selectedTile.maxMoveDistance); // Update board highlights
-            }
-        });
-
-
-        console.log(`Selected tile ${tile.id} from board. Max move: ${blankEdges} spots. Click to rotate, or click board to move.`);
-        // updateMoveHighlights(tile, blankEdges); // This function needs to be created
-        // updatePlacementHighlights(); // For now, this will clear placement highlights. We need updateMoveHighlights.
-                                     // Or, if updateMoveHighlights doesn't exist yet, call redrawBoardOnCanvas()
-                                     // and then draw the move highlights.
-        // redrawBoardOnCanvas(); // Clear previous highlights
-        updateMoveHighlights(tile, blankEdges); // Call the new function
-        showToast("Selected tile from board. Tap hand tile to rotate, tap board to move.");
+        console.log(`Selected tile ${tile.id} from board at (${q},${r}). Max move: ${blankEdges} spots. Tap selected tile on board to rotate, or click valid spot to move.`);
+        updateMoveHighlights(tile, blankEdges); // This will draw the board and highlights including the selected tile.
+        showToast("Selected tile from board. Tap it to rotate, or tap a valid spot to move.");
     }
 
 
