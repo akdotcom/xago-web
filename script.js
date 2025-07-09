@@ -3485,53 +3485,57 @@ function animateView() {
                     drawPlacementPreview(q, r, tempMovedTile, 'green');
                 } else {
                     // Check if valid with any other orientation for "yellow"
+                    // --- Modified Yellow Check to mirror updatePlacementHighlights strategy ---
                     let canPlaceOtherOrientation = false;
                     let validPreviewOrientation = -1;
-                    // tileToMove (which is selectedTile.tile) should maintain its currentOrientation from the hand.
-                    // We check other orientations using a temporary tile.
+
+                    const actualOrientationBeforeYellowCheck = tileToMove.orientation; // Save the tile's true current orientation
 
                     for (let i = 0; i < 6; i++) {
-                        if (i === currentOrientation) continue; // Already checked this one
+                        if (i === actualOrientationBeforeYellowCheck) continue;
 
-                        // Create a new temporary tile for this specific orientation check
-                        // Create a temporary tile for this specific orientation check, mirroring tileForEval structure
-                        const tileForYellowEval = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
-                        tileForYellowEval.orientation = i; // The orientation being tested
-                        tileForYellowEval.x = q;
-                        tileForYellowEval.y = r;
+                        tileToMove.orientation = i; // Temporarily change the actual selected tile's orientation for this check
 
-                        const tempBoardStateEvalYellow = deepCopyBoardState(boardState);
-                        delete tempBoardStateEvalYellow[`${originalQ},${originalR}`];
-                        tempBoardStateEvalYellow[`${q},${r}`] = tileForYellowEval; // Place the yellow-check tile
+                        const isThisOrientationValid = (() => {
+                            const tempBoardStateEval = deepCopyBoardState(boardState);
+                            delete tempBoardStateEval[`${originalQ},${originalR}`];
 
-                        let touchesYellow = (Object.keys(tempBoardStateEvalYellow).length === 1 && tempBoardStateEvalYellow[`${q},${r}`]?.id === tileForYellowEval.id);
-                        let matchesYellow = true;
-                        if (Object.keys(tempBoardStateEvalYellow).length > 1) {
-                           for (const neighborInfo of getNeighbors(q, r)) {
-                                const neighbor = tempBoardStateEvalYellow[`${neighborInfo.nx},${neighborInfo.ny}`];
-                                if (neighbor && neighbor.id !== tileForYellowEval.id) {
-                                    touchesYellow = true;
-                                    if (tileForYellowEval.getOrientedEdges()[neighborInfo.edgeIndexOnNewTile] !== neighbor.getOrientedEdges()[neighborInfo.edgeIndexOnNeighborTile]) {
-                                        matchesYellow = false; break;
+                            const tileForThisCheck = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
+                            tileForThisCheck.orientation = i; // Reflects the 'i' we are testing (which is tileToMove.orientation)
+                            tileForThisCheck.x = q;
+                            tileForThisCheck.y = r;
+                            tempBoardStateEval[`${q},${r}`] = tileForThisCheck;
+
+                            let touches = (Object.keys(tempBoardStateEval).length === 1 && tempBoardStateEval[`${q},${r}`]?.id === tileForThisCheck.id);
+                            let matches = true;
+                            if (Object.keys(tempBoardStateEval).length > 1) {
+                                for (const neighborInfo of getNeighbors(q, r)) {
+                                    const neighbor = tempBoardStateEval[`${neighborInfo.nx},${neighborInfo.ny}`];
+                                    if (neighbor && neighbor.id !== tileForThisCheck.id) {
+                                        touches = true;
+                                        if (tileForThisCheck.getOrientedEdges()[neighborInfo.edgeIndexOnNewTile] !== neighbor.getOrientedEdges()[neighborInfo.edgeIndexOnNeighborTile]) {
+                                            matches = false; break;
+                                        }
                                     }
                                 }
                             }
+                            if (!touches && Object.keys(tempBoardStateEval).length > 1) return false;
+                            if (!matches) return false;
+                            if (!isBoardConnected(tempBoardStateEval)) return false;
+                            return true;
+                        })();
+
+                        if (isThisOrientationValid) {
+                            canPlaceOtherOrientation = true;
+                            validPreviewOrientation = i;
+                            // No need to restore tileToMove.orientation here, will be done after loop or if break occurs.
+                            break;
                         }
-                        const connectedYellow = isBoardConnected(tempBoardStateEvalYellow);
-
-                        if (!touchesYellow && Object.keys(tempBoardStateEvalYellow).length > 1) continue;
-                        if (!matchesYellow) continue;
-                        if (!connectedYellow) continue;
-
-                        canPlaceOtherOrientation = true;
-                        validPreviewOrientation = i;
-                        break;
                     }
-                    tileToMove.orientation = originalTileOrientationForYellowCheck; // Restore selected tile's actual orientation
+
+                    tileToMove.orientation = actualOrientationBeforeYellowCheck; // IMPORTANT: Restore original orientation in all cases
 
                     if (canPlaceOtherOrientation) {
-                        // For yellow spots, pass a temporary tile with the valid orientation to draw.
-                        // The actual tileToMove (selectedTile.tile) keeps its current orientation.
                         const tempTileForYellowPreview = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
                         tempTileForYellowPreview.orientation = validPreviewOrientation;
                         drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
