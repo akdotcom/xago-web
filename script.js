@@ -26,6 +26,34 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     const playerHandsDisplay = document.getElementById('player-hands');
 
+// --- Cookie Helper Functions ---
+function setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "")  + expires + "; path=/; SameSite=Lax";
+    // console.log(`Cookie set: ${name}=${value}`); // Optional: for debugging
+}
+
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for(let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) {
+            const value = c.substring(nameEQ.length, c.length);
+            // console.log(`Cookie found: ${name}=${value}`); // Optional: for debugging
+            return value;
+        }
+    }
+    // console.log(`Cookie not found: ${name}`); // Optional: for debugging
+    return null;
+}
+
 
     // View management variables
     let currentOffsetX = 0;
@@ -1103,49 +1131,70 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         invalidateOutsideCellCache(); // Invalidate at the beginning of any initialization/reset
         console.log(`Attempting to initialize game... Reset flag: ${isReset}`);
         let loadedState = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameStateParam = urlParams.get('gameState');
 
-        if (!isReset) { // Only attempt to load from URL if not a reset
-            const urlParams = new URLSearchParams(window.location.search);
-            const gameStateParam = urlParams.get('gameState');
+        // Initialize game settings variables with hardcoded defaults first
+        let currentWorkingGameMode = "basic";
+        let currentWorkingOpponentType = "greedy";
 
-            if (gameStateParam) {
-                console.log("Found gameState parameter in URL. Attempting to load.");
-                loadedState = deserializeGameStateFromString(decodeURIComponent(gameStateParam));
-                if (loadedState) {
-                    console.log("Successfully deserialized game state from URL.");
-                    // Apply the loaded state
-                    boardState = loadedState.boardState;
-                    player1Hand = loadedState.player1Hand;
-                    player2Hand = loadedState.player2Hand;
-                    currentPlayer = loadedState.currentPlayer;
-                    player1Score = loadedState.player1Score;
-                    player2Score = loadedState.player2Score;
-                    opponentType = loadedState.opponentType;
-            player1GameMode = loadedState.player1GameMode || "basic"; // Load P1 game mode (this is now the game-wide mode)
-            player1MadeFirstMove = loadedState.player1MadeFirstMove || false; // Load P1 first move status
-            // player2GameMode is no longer loaded independently, it will reflect player1GameMode
-            player2MadeFirstMove = loadedState.player2MadeFirstMove || false; // Load P2 first move status (still relevant for AI/Human P2 UI)
-                    isRemovingTiles = loadedState.isRemovingTiles;
-                    currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
-                    lastPlacedTileKey = loadedState.lastPlacedTileKey;
-                    // Note: selectedTile is intentionally not restored from URL to avoid complex UI state.
-                    // User will need to re-select a tile if they were in the middle of a move.
-                    selectedTile = null;
-                    aiEvaluatingDetails = null; // Reset this on any load
-                    console.log("Game state loaded from URL.");
-                } else {
-                    console.warn("Failed to deserialize game state from URL, or state was null. Starting a new game.");
-                    // Fall through to default initialization
-                }
-            }
-        } else {
-            console.log("Resetting game: Skipping URL parameter check.");
+        // Try to load from cookies to override hardcoded defaults
+        const preferredModeFromCookie = getCookie('preferredGameMode');
+        if (preferredModeFromCookie) {
+            currentWorkingGameMode = preferredModeFromCookie;
+            console.log(`Loaded preferred game mode from cookie: ${currentWorkingGameMode}`);
+        }
+        const preferredOpponentFromCookie = getCookie('preferredOpponentType');
+        if (preferredOpponentFromCookie) {
+            currentWorkingOpponentType = preferredOpponentFromCookie;
+            console.log(`Loaded preferred opponent type from cookie: ${currentWorkingOpponentType}`);
         }
 
-        if (!loadedState || isReset) { // If no state loaded from URL OR if it's a reset, initialize a new game
-            console.log("No valid game state in URL or loading failed. Initializing a new game.");
+        // Assign to global game variables after potential cookie load
+        player1GameMode = currentWorkingGameMode;
+        opponentType = currentWorkingOpponentType;
+
+        // Now, try to load from URL parameters if not a reset
+        if (!isReset && gameStateParam) {
+            console.log("Found gameState parameter in URL. Attempting to load.");
+            loadedState = deserializeGameStateFromString(decodeURIComponent(gameStateParam));
+            if (loadedState) {
+                console.log("Successfully deserialized game state from URL. URL settings will override cookie/defaults.");
+                // Apply the loaded state
+                boardState = loadedState.boardState;
+                player1Hand = loadedState.player1Hand;
+                player2Hand = loadedState.player2Hand;
+                currentPlayer = loadedState.currentPlayer;
+                player1Score = loadedState.player1Score;
+                player2Score = loadedState.player2Score;
+                // IMPORTANT: URL parameters override cookie/default settings
+                player1GameMode = loadedState.player1GameMode || player1GameMode; // Use loaded if present, else keep current (from cookie/default)
+                opponentType = loadedState.opponentType || opponentType;          // Use loaded if present, else keep current
+                player1MadeFirstMove = loadedState.player1MadeFirstMove || false;
+                player2MadeFirstMove = loadedState.player2MadeFirstMove || false;
+                isRemovingTiles = loadedState.isRemovingTiles;
+                currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
+                lastPlacedTileKey = loadedState.lastPlacedTileKey;
+                selectedTile = null;
+                aiEvaluatingDetails = null;
+                console.log(`Game state loaded from URL. Mode: ${player1GameMode}, Opponent: ${opponentType}`);
+            } else {
+                console.warn("Failed to deserialize game state from URL. Using cookie-derived or hardcoded defaults.");
+                // player1GameMode and opponentType remain as set from cookies or hardcoded defaults
+            }
+        } else if (isReset) {
+            console.log("Resetting game: Using cookie-derived or hardcoded defaults for mode/opponent.");
+            // player1GameMode and opponentType are already set (from cookie or hardcoded default)
+        }
+
+
+        if (!loadedState || isReset) {
+            console.log("Initializing a new game setup (hands, scores etc.). Mode and Opponent Type are now finalized for this game instance.");
+            // This block resets game elements like hands, scores, board.
+            // player1GameMode and opponentType have their definitive values for this game instance by now.
+
             player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
-            player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER);
+            // player1Hand = generateUniqueTilesForPlayer(1, NUM_TILES_PER_PLAYER); // Duplicate line removed
             player2Hand = generateUniqueTilesForPlayer(2, NUM_TILES_PER_PLAYER);
             currentPlayer = 1;
             player1Score = 0;
@@ -1156,12 +1205,18 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
             currentSurroundedTilesForRemoval = [];
             lastPlacedTileKey = null;
             aiEvaluatingDetails = null;
-            opponentType = "greedy"; // Default opponent type for new games
-            player1GameMode = "basic"; // Reset P1 game mode for new games (this is the game-wide mode)
-            player1MadeFirstMove = false; // Reset P1 first move status for new games
-            // player2GameMode is no longer set independently
-            player2MadeFirstMove = false; // Reset P2 first move status for new games
 
+            player1MadeFirstMove = false; // Always reset these for a new game or reset
+            player2MadeFirstMove = false;
+
+            // If this is a truly new game (not from URL) or a reset,
+            // the current player1GameMode and opponentType (derived from cookies or defaults)
+            // should be saved back to cookies, as they represent the settings for *this new game*.
+            if (!gameStateParam || isReset) { // Check !gameStateParam to ensure we are not in a shared game link scenario
+                console.log(`Saving current settings to cookie for future new games: Mode=${player1GameMode}, Opponent=${opponentType}`);
+                setCookie('preferredGameMode', player1GameMode, 30);
+                setCookie('preferredOpponentType', opponentType, 30);
+            }
 
             // Initialize toast notification state variables
             isFirstTurn = true; // Tracks if the *very first tile of the game* has been placed
@@ -2965,6 +3020,7 @@ function animateView() {
             player1GameMode = event.target.value;
             // player2GameMode = player1GameMode; // Ensure P2 mode mirrors P1, if variable is kept
             console.log(`Game mode (set by Player 1) changed to: ${player1GameMode}`);
+            setCookie('preferredGameMode', player1GameMode, 30); // Save preference
             updateURLWithGameState(); // Persist change
         }
     }
@@ -2980,6 +3036,7 @@ function animateView() {
     function handleOpponentTypeChange(event) {
         opponentType = event.target.value;
         console.log(`Opponent type changed to: ${opponentType}`);
+        setCookie('preferredOpponentType', opponentType, 30); // Save preference
 
         // Player 2 mode selector no longer exists, so no need to disable it.
         // The game mode is solely determined by player1GameMode.
