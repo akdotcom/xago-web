@@ -834,9 +834,183 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         // The current plan description implies updates to Minimax AIs first.
         // Let's assume Greedy 1 change for moves is out of scope for this specific plan item unless clarified.
 
-        if (bestMoves.length > 0) {
+        // --- START OF GREEDY 1 MOVE LOGIC ADDITION ---
+        if (gameMode === "moving" && Object.keys(boardState).length > 0) {
+            if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Evaluating tile moves from board. PlayerID:", currentPlayerId);
+
+            var playerTilesOnBoard_g1 = [];
+            for (var key_bt_g1 in boardState) {
+                if (boardState.hasOwnProperty(key_bt_g1)) {
+                    var boardTile_g1 = boardState[key_bt_g1];
+                    if (boardTile_g1.playerId === currentPlayerId) {
+                        playerTilesOnBoard_g1.push(boardTile_g1);
+                    }
+                }
+            }
+
+            if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Found " + playerTilesOnBoard_g1.length + " tiles on board for player " + currentPlayerId);
+
+            for (var i_ptb_g1 = 0; i_ptb_g1 < playerTilesOnBoard_g1.length; i_ptb_g1++) {
+                var tile_to_move_g1 = playerTilesOnBoard_g1[i_ptb_g1];
+                var originalBoardOrientation_g1 = tile_to_move_g1.orientation;
+                var maxMoveDistance_g1 = tile_to_move_g1.getOrientedEdges().filter(function(edge) { return edge === 0; }).length;
+
+                if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Considering moving tile " + tile_to_move_g1.id + " from (" + tile_to_move_g1.x + "," + tile_to_move_g1.y + "), maxDist: " + maxMoveDistance_g1);
+
+                var uniqueOrientations_g1_move = getUniqueOrientations(tile_to_move_g1);
+
+                for (var i_uom_g1 = 0; i_uom_g1 < uniqueOrientations_g1_move.length; i_uom_g1++) {
+                    var o_move_g1 = uniqueOrientations_g1_move[i_uom_g1];
+
+                    var tempTileForValidation_g1 = new HexTile(tile_to_move_g1.id, tile_to_move_g1.playerId, [].concat(tile_to_move_g1.edges));
+                    tempTileForValidation_g1.orientation = o_move_g1;
+
+
+                    // Iterate over possible destination spots
+                    var searchRadius_g1 = maxMoveDistance_g1 + 1;
+                    for (var q_dest_g1 = tile_to_move_g1.x - searchRadius_g1; q_dest_g1 <= tile_to_move_g1.x + searchRadius_g1; q_dest_g1++) {
+                        for (var r_dest_g1 = tile_to_move_g1.y - searchRadius_g1; r_dest_g1 <= tile_to_move_g1.y + searchRadius_g1; r_dest_g1++) {
+                            var dist_g1 = (Math.abs(tile_to_move_g1.x - q_dest_g1) + Math.abs(tile_to_move_g1.x + tile_to_move_g1.y - q_dest_g1 - r_dest_g1) + Math.abs(tile_to_move_g1.y - r_dest_g1)) / 2;
+
+                            if (dist_g1 > maxMoveDistance_g1) continue;
+                            if (dist_g1 === 0 && o_move_g1 === originalBoardOrientation_g1) continue;
+
+                            var targetKey_move_g1 = "" + q_dest_g1 + "," + r_dest_g1;
+                            var existingTileAtTarget_g1 = boardState[targetKey_move_g1];
+                            if (existingTileAtTarget_g1 && existingTileAtTarget_g1.id !== tile_to_move_g1.id) continue;
+
+                            // Create a temporary board state for validation
+                            var tempBoardState_move_g1 = deepCopyBoardState(boardState);
+                            delete tempBoardState_move_g1["" + tile_to_move_g1.x + "," + tile_to_move_g1.y];
+
+                            // Update the temporary tile instance with new position for validation
+                            tempTileForValidation_g1.x = q_dest_g1;
+                            tempTileForValidation_g1.y = r_dest_g1;
+                            tempBoardState_move_g1[targetKey_move_g1] = tempTileForValidation_g1;
+
+                            var touchesExistingTile_move_g1 = false;
+                            var edgesMatch_move_g1 = true;
+                            var neighbors_move_dest_g1 = getNeighbors(q_dest_g1, r_dest_g1);
+
+                            if (Object.keys(tempBoardState_move_g1).length === 1 && tempBoardState_move_g1[targetKey_move_g1].id === tile_to_move_g1.id) {
+                                touchesExistingTile_move_g1 = true;
+                            } else if (Object.keys(tempBoardState_move_g1).length > 1) {
+                                for (var k_nmd_g1 = 0; k_nmd_g1 < neighbors_move_dest_g1.length; k_nmd_g1++) {
+                                    var neighborInfo_md_g1 = neighbors_move_dest_g1[k_nmd_g1];
+                                    var neighbor_md_g1 = tempBoardState_move_g1["" + neighborInfo_md_g1.nx + "," + neighborInfo_md_g1.ny];
+                                    if (neighbor_md_g1 && neighbor_md_g1.id !== tile_to_move_g1.id) {
+                                        touchesExistingTile_move_g1 = true;
+                                        var newOrientedEdges_md_g1 = tempTileForValidation_g1.getOrientedEdges();
+                                        var neighborOrientedEdges_md_g1 = neighbor_md_g1.getOrientedEdges();
+                                        if (newOrientedEdges_md_g1[neighborInfo_md_g1.edgeIndexOnNewTile] !== neighborOrientedEdges_md_g1[neighborInfo_md_g1.edgeIndexOnNeighborTile]) {
+                                            edgesMatch_move_g1 = false; break;
+                                        }
+                                    }
+                                }
+                            } else {
+                                touchesExistingTile_move_g1 = true;
+                            }
+
+                            var isConnected_move_g1 = isBoardConnected(tempBoardState_move_g1);
+
+                            if ((touchesExistingTile_move_g1 || Object.keys(tempBoardState_move_g1).length <= 1) && edgesMatch_move_g1 && isConnected_move_g1) {
+                                if (effectiveDebug) {
+                                    console.log("[Worker DEBUG] Greedy 1: Valid MOVE evaluated: Tile " + tile_to_move_g1.id +
+                                                " from (" + tile_to_move_g1.x + "," + tile_to_move_g1.y + ") to (" + q_dest_g1 + "," + r_dest_g1 +
+                                                ") ori " + o_move_g1);
+                                }
+                                self.postMessage({
+                                    task: 'aiEvaluatingMove',
+                                    moveData: {
+                                        tile: { id: tile_to_move_g1.id, playerId: tile_to_move_g1.playerId, edges: [].concat(tile_to_move_g1.edges), orientation: o_move_g1 },
+                                        x: q_dest_g1,
+                                        y: r_dest_g1,
+                                        originalX: tile_to_move_g1.x,
+                                        originalY: tile_to_move_g1.y,
+                                        type: 'move'
+                                    }
+                                });
+
+                                // Simulate the move on a fresh copy for scoring
+                                var scoringBoardState_g1 = deepCopyBoardState(boardState);
+                                delete scoringBoardState_g1["" + tile_to_move_g1.x + "," + tile_to_move_g1.y];
+                                var movedTileForScoring_g1 = new HexTile(tile_to_move_g1.id, tile_to_move_g1.playerId, [].concat(tile_to_move_g1.edges));
+                                movedTileForScoring_g1.orientation = o_move_g1;
+                                movedTileForScoring_g1.x = q_dest_g1;
+                                movedTileForScoring_g1.y = r_dest_g1;
+                                scoringBoardState_g1[targetKey_move_g1] = movedTileForScoring_g1;
+
+                                var removalResult_g1_move = simulateRemovalCycle(scoringBoardState_g1, currentPlayerId, effectiveDebug);
+                                var boardAfterSimRemovals_g1_move = removalResult_g1_move.boardState;
+                                var scores_g1_move = calculateScoresForBoard(boardAfterSimRemovals_g1_move);
+                                var scoreDiff_g1_move = (currentPlayerId === 2 ? scores_g1_move.player2Score - scores_g1_move.player1Score : scores_g1_move.player1Score - scores_g1_move.player2Score);
+
+                                if (scoreDiff_g1_move > bestScoreDiff) {
+                                    bestScoreDiff = scoreDiff_g1_move;
+                                    bestMoves = [{
+                                        type: 'move',
+                                        tileId: tile_to_move_g1.id,
+                                        orientation: o_move_g1,
+                                        x: q_dest_g1, y: r_dest_g1,
+                                        originalX: tile_to_move_g1.x,
+                                        originalY: tile_to_move_g1.y,
+                                        score: scoreDiff_g1_move
+                                    }];
+                                } else if (scoreDiff_g1_move === bestScoreDiff) {
+                                    bestMoves.push({
+                                        type: 'move',
+                                        tileId: tile_to_move_g1.id,
+                                        orientation: o_move_g1,
+                                        x: q_dest_g1, y: r_dest_g1,
+                                        originalX: tile_to_move_g1.x,
+                                        originalY: tile_to_move_g1.y,
+                                        score: scoreDiff_g1_move
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                // No need to restore tile_to_move_g1.orientation as we used tempTileForValidation_g1 for modifications within orientation loop
+            }
+        }
+        // --- END OF GREEDY 1 MOVE LOGIC ADDITION ---
+
+
+        // If hand is empty and it's "moving" mode, Greedy 1 *must* choose a 'move' type if available.
+        // If hand is not empty, it can choose between 'place' and 'move'.
+        if (player2Hand.length === 0 && gameMode === "moving") {
+            var moveActions = bestMoves.filter(function(m) { return m.type === 'move'; });
+            if (moveActions.length > 0) {
+                // If only move actions are available (because hand is empty), pick one of those.
+                // The bestScoreDiff and bestMoves should already reflect the best among moves if only moves were considered.
+                // If bestMoves contains both place and move, and hand is empty, this filters to moves.
+                // We need to ensure bestScoreDiff was appropriately updated if only moves were possible.
+                // The logic above iterates through place then move, so bestScoreDiff and bestMoves will contain the best overall.
+                // Here, we are just filtering to ensure a 'move' type is picked if hand is empty.
+                var bestMoveScoreAmongMoves = -Infinity;
+                var bestMoveActions = [];
+                for(var im=0; im<moveActions.length; im++){
+                    if(moveActions[im].score > bestMoveScoreAmongMoves){
+                        bestMoveScoreAmongMoves = moveActions[im].score;
+                        bestMoveActions = [moveActions[im]];
+                    } else if (moveActions[im].score === bestMoveScoreAmongMoves){
+                        bestMoveActions.push(moveActions[im]);
+                    }
+                }
+                if(bestMoveActions.length > 0){
+                    bestMove = bestMoveActions[Math.floor(Math.random() * bestMoveActions.length)];
+                } else {
+                    bestMove = null; // No valid moves found
+                }
+            } else {
+                bestMove = null; // No 'place' moves possible (hand empty), and no 'move' actions found.
+            }
+        } else if (bestMoves.length > 0) {
             bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
+
+
     }
     return bestMove;
 });
@@ -1112,15 +1286,23 @@ function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effect
                             touchesExistingTile_move = true; // Or handle as error if this state is impossible for a move
                         }
 
-                        var isConnected_move = isBoardConnected(tempBoardState_move); // isBoardConnected is assumed to be available in worker
+                        var isConnected_move = isBoardConnected(tempBoardState_move);
 
-                        if (localDebug && (!touchesExistingTile_move && Object.keys(tempBoardState_move).length > 1)) console.log("[Worker DEBUG] Move invalid for " + tile_to_move.id + " to (" + q_dest + "," + r_dest + ") ori " + o_move + ": does not touch existing tile.");
-                        if (localDebug && !edgesMatch_move) console.log("[Worker DEBUG] Move invalid for " + tile_to_move.id + " to (" + q_dest + "," + r_dest + ") ori " + o_move + ": edge mismatch.");
-                        if (localDebug && !isConnected_move) console.log("[Worker DEBUG] Move invalid for " + tile_to_move.id + " to (" + q_dest + "," + r_dest + ") ori " + o_move + ": board disconnected.");
+                        if (localDebug) {
+                            console.log("[Worker DEBUG] getAllPossibleMoves: Validating move for tile " + tile_to_move.id +
+                                        " to (" + q_dest + "," + r_dest + ") ori " + o_move +
+                                        " | Original: (" + tile_to_move.x + "," + tile_to_move.y + ") ori " + originalBoardOrientation +
+                                        " | Dist: " + dist + "/" + maxMoveDistance);
+                            console.log("[Worker DEBUG] getAllPossibleMoves: Validation results: " +
+                                        "touchesExistingTile: " + touchesExistingTile_move +
+                                        ", edgesMatch: " + edgesMatch_move +
+                                        ", isConnected: " + isConnected_move +
+                                        ", tempBoardSize: " + Object.keys(tempBoardState_move).length);
+                        }
 
 
                         if ((touchesExistingTile_move || Object.keys(tempBoardState_move).length <= 1) && edgesMatch_move && isConnected_move) {
-                            if (localDebug) console.log("[Worker DEBUG] Adding valid MOVE: Tile " + tile_to_move.id + " from (" + tile_to_move.x + "," + tile_to_move.y + ") to (" + q_dest + "," + r_dest + ") ori " + o_move);
+                            if (localDebug) console.log("[Worker DEBUG] getAllPossibleMoves: Adding valid MOVE: Tile " + tile_to_move.id + " from (" + tile_to_move.x + "," + tile_to_move.y + ") to (" + q_dest + "," + r_dest + ") ori " + o_move);
                             possibleMoves.push({
                                 type: 'move',
                                 tile: {id: tile_to_move.id, playerId: tile_to_move.playerId, edges: [].concat(tile_to_move.edges)}, // Send copy of edges
