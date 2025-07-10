@@ -1641,7 +1641,7 @@ function getCookie(name) {
                     displayPlayerHand(2, player2Hand, player2HandDisplay);
                 }
                 // updatePlacementHighlights(); // Not needed here, processSuccessfulPlacement and subsequent redraws handle it.
-                processSuccessfulPlacement(lastPlacedKey, playerOfTurn);
+                processSuccessfulPlacement(lastPlacedKey, playerOfTurn, null, null, false); // false indicates it was a new placement, not a move
                 return true;
             } else {
                 // Invalid placement. isPlacementValid (called by placeTileOnBoard) logs details.
@@ -1742,12 +1742,12 @@ function getCookie(name) {
 
         console.log(`Tile ${tileToMove.id} successfully moved to (${newX},${newY}). Orientation: ${tileToMove.orientation}`);
         redrawBoardOnCanvas();
-        processSuccessfulPlacement(lastPlacedTileKey, currentPlayer); // Reuse scoring and turn logic
+        processSuccessfulPlacement(lastPlacedTileKey, currentPlayer, oldX, oldY, true); // Pass old coords and true for wasMove
         return true;
     }
 
     // New function to process successful placement and subsequent actions
-function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
+function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, oldY = null, wasMove = false) {
     const { scoreDelta, matchedPairs, scoringPlayerId } = calculateScoresForBoard(boardState, placedTileKey);
 
     if (scoreDelta > 0 && scoringPlayerId === playerOfTurn) {
@@ -1786,7 +1786,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
                     if (p1ScoreDisplayFloater) p1ScoreDisplayFloater.textContent = player1Score;
                     if (p2ScoreDisplayFloater) p2ScoreDisplayFloater.textContent = player2Score;
 
-                    checkForSurroundedTilesAndProceed();
+                    checkForSurroundedTilesAndProceed(placedTileKey, oldX, oldY, wasMove);
                     updateViewParameters();
                     animateView();
                 });
@@ -1795,7 +1795,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
 
     } else {
         // No score change from this placement
-        checkForSurroundedTilesAndProceed();
+        checkForSurroundedTilesAndProceed(placedTileKey, oldX, oldY, wasMove);
         updateViewParameters();
         animateView();
     }
@@ -1852,17 +1852,28 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
     }
 
     // --- Game Logic: Validation, Turns, End, Scoring ---
-        // This function will be called from handleCellClick after a tile is placed.
-        function checkForSurroundedTilesAndProceed() {
-            const surroundedTiles = getSurroundedTiles(boardState);
+        // This function will be called from processSuccessfulPlacement after a tile is placed or moved.
+        // It now receives information about the placed/moved tile to optimize surround checks.
+        function checkForSurroundedTilesAndProceed(placedTileKey, oldX, oldY, wasMove) {
+            let surroundedTiles;
+            const placedTile = boardState[placedTileKey];
+
+            if (placedTile) { // Ensure the placed tile exists
+                const candidateTilesToCheck = getPotentiallyAffectedTilesForSurroundCheck(boardState, placedTile, oldX, oldY, wasMove);
+                surroundedTiles = getNewlySurroundedTiles(boardState, candidateTilesToCheck);
+                console.log(`Optimized surround check: ${candidateTilesToCheck.length} candidates, found ${surroundedTiles.length} surrounded.`);
+            } else {
+                console.warn("checkForSurroundedTilesAndProceed: placedTile not found at key", placedTileKey, "Falling back to full scan.");
+                surroundedTiles = getSurroundedTiles(boardState); // Fallback to full scan if something is wrong
+            }
+
             if (surroundedTiles.length > 0) {
-            // isRemovingTiles = true; // This will be set true inside processTileRemoval
                 processTileRemoval(surroundedTiles);
             } else {
-            isRemovingTiles = false;
-            isPulsingGlobal = false; // Ensure pulsing stops if no tiles were surrounded initially
-                calculateAndUpdateTotalScores(); // Update scores after each turn
-                switchTurn(); // Always switch turn, game end is checked at the start of the next turn
+                isRemovingTiles = false;
+                isPulsingGlobal = false;
+                calculateAndUpdateTotalScores();
+                switchTurn();
             }
         }
 
@@ -2176,6 +2187,48 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
         }
         return surroundedTiles;
     }
+
+    // Optimized function to find newly surrounded tiles after a move or placement
+    function getPotentiallyAffectedTilesForSurroundCheck(currentBoardState, changedTile, oldX, oldY, isMove) {
+        const candidates = new Set(); // Use a Set to store tile objects to avoid duplicates
+
+        // 1. The tile that was just placed or moved
+        if (changedTile && changedTile.x !== null && changedTile.y !== null) {
+            const currentTileOnBoard = currentBoardState[`${changedTile.x},${changedTile.y}`];
+            if (currentTileOnBoard) candidates.add(currentTileOnBoard);
+        }
+
+        // 2. Neighbors of the new position of the changedTile
+        if (changedTile && changedTile.x !== null && changedTile.y !== null) {
+            getNeighbors(changedTile.x, changedTile.y).forEach(neighborInfo => {
+                const neighborTile = currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`];
+                if (neighborTile) candidates.add(neighborTile);
+            });
+        }
+
+        // 3. If it was a move, also check neighbors of the old position
+        if (isMove && oldX !== null && oldY !== null) {
+            getNeighbors(oldX, oldY).forEach(neighborInfo => {
+                const neighborTile = currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`];
+                if (neighborTile) candidates.add(neighborTile);
+            });
+        }
+        return Array.from(candidates);
+    }
+
+    function getNewlySurroundedTiles(boardToCheck, tilesToCheck) {
+        const newlySurrounded = [];
+        for (const tile of tilesToCheck) {
+            if (tile.x !== null && tile.y !== null) { // Ensure tile is valid and on board
+                 // Check if it's actually in the boardToCheck, as candidates might include tiles that were just moved
+                if (boardToCheck[`${tile.x},${tile.y}`] && isTileSurrounded(tile.x, tile.y, boardToCheck)) {
+                    newlySurrounded.push(tile);
+                }
+            }
+        }
+        return newlySurrounded;
+    }
+
 
     function processTileRemoval(surroundedTiles) {
         currentSurroundedTilesForRemoval = surroundedTiles; // Store the list globally
