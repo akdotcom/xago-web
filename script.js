@@ -3416,9 +3416,6 @@ function animateView() {
                     // (Unless it's the only tile left, handled above)
                     continue;
                 }
-                if (!edgesMatch) {
-                    continue;
-                }
 
                 // 4. Check connectivity
                 if (!isBoardConnected(tempBoardState)) {
