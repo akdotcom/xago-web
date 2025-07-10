@@ -2071,6 +2071,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
             player2Hand: plainPlayer2Hand, // AI's hand
             opponentType: opponentType,
             currentPlayerId: currentPlayer, // Should be 2
+            gameMode: player2GameMode, // Pass Player 2's (AI's) game mode
             debug: debugFlag // Pass the debug flag
         });
     }
@@ -2108,44 +2109,60 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
     // --- Functions to handle results from AI Web Worker ---
     function handleAiMoveResult(move) {
-        // console.log("[Main] Received AI move result from worker:", move);
+        console.log("[Main] Received AI move result from worker:", JSON.stringify(move)); // Log the full move object
         if (player2HandContainer) player2HandContainer.classList.remove('ai-thinking-pulse');
 
-        if (move && typeof move.tileId !== 'undefined' && typeof move.orientation !== 'undefined') {
-            const tileToPlace = player2Hand.find(t => t.id === move.tileId);
-            if (!tileToPlace) {
-                console.error(`[Main] AI Error: Best move tile (ID: ${move.tileId}) not found in player 2 hand.`);
-                switchTurn(); return;
-            }
-            tileToPlace.orientation = move.orientation; // Use the standardized top-level orientation
+        if (move && typeof move.tileId !== 'undefined' && typeof move.orientation !== 'undefined' && typeof move.x !== 'undefined' && typeof move.y !== 'undefined' && move.type) {
+            if (move.type === 'place') {
+                const tileToPlace = player2Hand.find(t => t.id === move.tileId);
+                if (!tileToPlace) {
+                    console.error(`[Main] AI Error (place): Best move tile (ID: ${move.tileId}) not found in player 2 hand.`);
+                    switchTurn(); return;
+                }
+                tileToPlace.orientation = move.orientation;
+                console.log(`[Main] AI (${opponentType}) attempting to PLACE tile ${tileToPlace.id} (ori: ${tileToPlace.orientation}) at (${move.x}, ${move.y})`);
+                if (placeTileOnBoard(tileToPlace, move.x, move.y)) {
+                    player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
+                    displayPlayerHand(2, player2Hand, player2HandDisplay);
+                    console.log(`[Main] AI (${opponentType}) successfully PLACED tile ${tileToPlace.id}.`);
+                    processSuccessfulPlacement(lastPlacedTileKey, 2);
+                } else {
+                    console.error(`[Main] AI (${opponentType}) failed to PLACE tile ${tileToPlace.id} (ori: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). Worker validation should catch this.`);
+                    switchTurn();
+                }
+            } else if (move.type === 'move') {
+                const tileToMove = boardState[`${move.originalX},${move.originalY}`];
+                if (!tileToMove || tileToMove.id !== move.tileId || tileToMove.playerId !== currentPlayer) {
+                     console.error(`[Main] AI Error (move): Tile to move (ID: ${move.tileId}) not found at original position (${move.originalX},${move.originalY}) or player mismatch.`);
+                     switchTurn(); return;
+                }
+                // The AI worker decided the orientation, so we set it on the tile object from the board.
+                tileToMove.orientation = move.orientation;
 
-            console.log(`[Main] AI (${opponentType}) attempting to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y})`);
-            if (placeTileOnBoard(tileToPlace, move.x, move.y)) {
-                player2Hand = player2Hand.filter(t => t.id !== tileToPlace.id);
-                displayPlayerHand(2, player2Hand, player2HandDisplay);
-                console.log(`[Main] AI (${opponentType}) successfully placed tile ${tileToPlace.id}.`);
+                console.log(`[Main] AI (${opponentType}) attempting to MOVE tile ${tileToMove.id} from (${move.originalX},${move.originalY}) to (${move.x},${move.y}) (new ori: ${move.orientation})`);
 
-                // Call the new centralized function to handle scoring, animations, and game progression
-                // lastPlacedTileKey is updated by placeTileOnBoard, currentPlayer should be 2 for AI
-                processSuccessfulPlacement(lastPlacedTileKey, 2);
+                // Use a simplified move logic here, as AI worker should have validated it.
+                // Or, call a version of moveTileOnBoard that skips some client-side checks if AI is trusted.
+                // For now, let's assume the AI's chosen move is valid and directly apply it.
+                // This bypasses the UI-driven moveTileOnBoard which has its own selection logic.
 
-                // The old logic for checkForSurroundedTilesAndProceed, updateViewParameters, and animateView
-                // is now handled within processSuccessfulPlacement or its subsequent calls.
-                // The specific logic for AI-caused surrounding and delayed removal initiation
-                // that was here:
-                // const surroundedAfterAiMove = getSurroundedTiles(boardState);
-                // if (surroundedAfterAiMove.length > 0) { ... } else { ... }
-                // This will now be handled by checkForSurroundedTilesAndProceed called within processSuccessfulPlacement.
-                // checkForSurroundedTilesAndProceed already contains logic to initiate AI tile removal
-                // if it's AI's turn and tiles are surrounded.
+                delete boardState[`${move.originalX},${move.originalY}`];
+                tileToMove.x = move.x;
+                tileToMove.y = move.y;
+                // tileToMove.orientation is already set from AI's decision
+                boardState[`${move.x},${move.y}`] = tileToMove;
+                lastPlacedTileKey = `${move.x},${move.y}`;
+
+                console.log(`[Main] AI (${opponentType}) successfully MOVED tile ${tileToMove.id}.`);
+                redrawBoardOnCanvas(); // Redraw to show the move
+                processSuccessfulPlacement(lastPlacedTileKey, 2); // Score and continue
             } else {
-                // The error message now correctly reflects the orientation being used.
-                console.error(`[Main] AI (${opponentType}) failed to place tile ${tileToPlace.id} (orientation: ${tileToPlace.orientation}) at (${move.x}, ${move.y}). This should ideally be caught by worker's validation.`);
+                console.error(`[Main] AI Error: Unknown move type received: ${move.type}. Move:`, JSON.stringify(move));
                 switchTurn();
             }
         } else {
-            console.log(`[Main] AI (${opponentType}) could not find any valid move, passed, or move object was malformed. Passing turn. Move received:`, move);
-            calculateAndUpdateTotalScores();
+            console.log(`[Main] AI (${opponentType}) could not find a valid move, passed, or move object was malformed. Passing turn. Move received:`, JSON.stringify(move));
+            calculateAndUpdateTotalScores(); // Ensure scores are up-to-date if AI passes
             switchTurn();
         }
     }
@@ -2810,11 +2827,17 @@ function animateView() {
 
         const player2ModeSelector = document.getElementById('player2-game-mode');
         if (player2ModeSelector) {
+            // Allow Player 2 (AI) to have "With Moving" mode for testing.
+            // The UI toggle for P2 mode will still be disabled if P2 is AI and has moved,
+            // but its internal state player2GameMode can be different.
             if (opponentType !== "human") {
-                player2ModeSelector.value = "basic"; // AI always plays basic for now
-                player2GameMode = "basic";
-                player2ModeSelector.disabled = true;
-                // player2ModeSelector.classList.add('locked-toggle'); // Optional
+                // When AI is selected, P2 mode selector is disabled, but we don't force player2GameMode to basic.
+                // It will retain its value (e.g. "moving" if previously set and P2 was human, or if set by default for testing)
+                // or it can be set via URL params for testing.
+                // For UI consistency, if P2 becomes AI, we can disable the selector.
+                // The actual gameMode used by AI is player2GameMode.
+                player2ModeSelector.disabled = true; // Disable mode choice when AI is active
+                 // console.log(`Player 2 is AI (${opponentType}). Mode selector disabled. Current P2 game mode: ${player2GameMode}`);
             } else {
                 // If switching to human, enable mode selector only if P2 hasn't made a move
                 player2ModeSelector.disabled = player2MadeFirstMove;
