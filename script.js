@@ -2771,11 +2771,8 @@ function animateView() {
             opponentTypeSelector.removeEventListener('change', handleOpponentTypeChange);
             opponentTypeSelector.addEventListener('change', handleOpponentTypeChange);
 
-            // Disable P2 mode selector if P2 is AI
-            if (opponentType !== "human" && player2ModeSelector) {
-                player2ModeSelector.disabled = true;
-                // player2ModeSelector.classList.add('locked-toggle'); // Optionally add class
-            }
+            // Player 2's mode selector is no longer used, so the logic to disable it
+            // if the opponent is AI is also removed. Game mode is controlled by Player 1.
         }
 
         // Display tiles in the hands
