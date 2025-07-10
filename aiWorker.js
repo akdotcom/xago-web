@@ -1481,13 +1481,14 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId, effectiveDebug)
 }
 
 // Added initialMaxDepth to track the starting depth for sending evaluation messages
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug) { // Added effectiveDebug
+// Added gameMode parameter
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug) {
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
     initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth; // Initialize if not provided
 
     if (effectiveDebug) {
-        console.log("[Worker DEBUG] findBestMoveMinimax: Entry. Depth:", depth, "Alpha:", alpha, "Beta:", beta, "Maximizing:", maximizingPlayer, "InitialMaxDepth:", initialMaxDepth, "AI:", aiPlayerId, "Opp:", opponentPlayerId);
+        console.log("[Worker DEBUG] findBestMoveMinimax: Entry. Depth:", depth, "Alpha:", alpha, "Beta:", beta, "Maximizing:", maximizingPlayer, "InitialMaxDepth:", initialMaxDepth, "GameMode:", gameMode, "AI:", aiPlayerId, "Opp:", opponentPlayerId);
         // To avoid excessive logging, let's not log entire board/hands here unless specifically needed for deeper debugging.
     }
 
@@ -1707,8 +1708,8 @@ self.onmessage = _asyncToGenerator(function* (event) {
     var opponentType = data.opponentType;
     var currentPlayerId = data.currentPlayerId;
     var currentSurroundedTilesData = data.currentSurroundedTiles;
-    var gameMode = data.gameMode || "basic"; // Get gameMode, default to "basic"
-    var debugFlag = data.debug || false; // Get the debug flag
+    var gameModeFromData = data.gameMode || "basic"; // Get gameMode, default to "basic"
+    var debugFlagFromData = data.debug || false; // Get the debug flag
 
     var liveBoardState = {};
     for (var key_lbs in boardStateData) {
@@ -1723,7 +1724,7 @@ self.onmessage = _asyncToGenerator(function* (event) {
     }
 
     if (task === 'aiMove') {
-        var bestMove = yield workerPerformAiMove(liveBoardState, player2HandData, player1HandData, opponentType, currentPlayerId, debugFlag);
+        var bestMove = yield workerPerformAiMove(liveBoardState, player2HandData, player1HandData, opponentType, currentPlayerId, gameModeFromData, debugFlagFromData);
         self.postMessage({ task: 'aiMoveResult', move: bestMove });
     } else if (task === 'aiTileRemoval') {
         // Assuming workerPerformAiTileRemoval does not need the debug flag currently. If it did, it would be passed here too.
