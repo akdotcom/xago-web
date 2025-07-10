@@ -130,28 +130,18 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
     var seedMinR = minR - 2;
     var seedMaxR = maxR + 2;
 
-    for (var q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) { // Renamed q to q_seed
-        for (var r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) { // Renamed r to r_seed
+    // Seeding phase: Only add empty cells at the search boundary to the queue.
+    for (var q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) {
+        for (var r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) {
             var cellKey = q_seed + "," + r_seed;
-            if (currentBoardState[cellKey]) continue;
-
+            // Check if the cell is within the broader search boundary for seeding
             var isAtSearchBoundary = (q_seed <= searchMinQ || q_seed >= searchMaxQ || r_seed <= searchMinR || r_seed >= searchMaxR);
-            var isAdjacentToPlacedTile = false;
-            if (!isAtSearchBoundary) {
-                var neighbors_seed = getNeighbors(q_seed, r_seed); // Renamed neighbors to neighbors_seed
-                for (var i_n = 0; i_n < neighbors_seed.length; i_n++) {
-                    if (currentBoardState[neighbors_seed[i_n].nx + "," + neighbors_seed[i_n].ny]) {
-                        isAdjacentToPlacedTile = true;
-                        break;
-                    }
-                }
-            }
 
-            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
-                if (!visitedForBFS.has(cellKey)) {
+            if (isAtSearchBoundary) {
+                if (!currentBoardState[cellKey] && !visitedForBFS.has(cellKey)) {
                     queue.push([q_seed, r_seed]);
                     visitedForBFS.add(cellKey);
-                    outsideEmptyCells.add(cellKey);
+                    // Do NOT add to outsideEmptyCells here; BFS will handle it.
                 }
             }
         }
@@ -162,7 +152,11 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
         var currentCell = queue[head++];
         var currQ = currentCell[0];
         var currR = currentCell[1];
-        var neighbors_bfs = getNeighbors(currQ, currR); // Renamed neighbors to neighbors_bfs
+        var currentKey = currQ + "," + currR;
+
+        outsideEmptyCells.add(currentKey); // Add cell to results when it's processed from queue
+
+        var neighbors_bfs = getNeighbors(currQ, currR);
 
         for (var i_bfs_n = 0; i_bfs_n < neighbors_bfs.length; i_bfs_n++) {
             var neighborInfo = neighbors_bfs[i_bfs_n];
@@ -170,21 +164,26 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
             var nr = neighborInfo.ny;
             var neighborKey = nq + "," + nr;
 
-            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+            // Stay within a slightly expanded search boundary for BFS exploration
+            if (nq < searchMinQ -1 || nq > searchMaxQ + 1 || nr < searchMinR -1 || nr > searchMaxR + 1) {
                 continue;
             }
 
             if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
                 visitedForBFS.add(neighborKey);
                 queue.push([nq, nr]);
-                outsideEmptyCells.add(neighborKey);
+                // Do NOT add to outsideEmptyCells here; it's added when popped from queue.
             }
         }
     }
 
+    // Filter: Resulting cells must be adjacent to at least one placed tile.
     var finalValidPlacementCells = new Set();
-    if (placedTileKeys.length === 0) {
+    if (placedTileKeys.length === 0) { // Should have been handled by the initial check
         if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+         // Update cache before returning for this specific early exit
+        workerCachedOutsideEmptyCells = new Set(finalValidPlacementCells);
+        workerBoardStateSignatureForCache = newBoardStateSignature; // Signature is already set
         return finalValidPlacementCells;
     }
 
@@ -262,116 +261,7 @@ function isSpaceEnclosed(q, r, currentBoardState, effectiveDebug) { // Added eff
     return allNeighborsPresent;
 }
 
-// Function to get all empty cells reachable from the "outside" (worker version)
-function getOutsideEmptyCells(currentBoardState, checkRadius) {
-    checkRadius = checkRadius === undefined ? 20 : checkRadius;
-    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
-    var queue = []; // Stores [q,r] arrays for BFS
-    var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
-
-    var placedTileKeys = Object.keys(currentBoardState);
-
-    if (placedTileKeys.length === 0) {
-        outsideEmptyCells.add("0,0");
-        return outsideEmptyCells;
-    }
-
-    var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
-    placedTileKeys.forEach(function(key) {
-        var tile = currentBoardState[key];
-        minQ = Math.min(minQ, tile.x);
-        maxQ = Math.max(maxQ, tile.x);
-        minR = Math.min(minR, tile.y);
-        maxR = Math.max(maxR, tile.y);
-    });
-
-    var searchMinQ = minQ - checkRadius;
-    var searchMaxQ = maxQ + checkRadius;
-    var searchMinR = minR - checkRadius;
-    var searchMaxR = maxR + checkRadius;
-
-    var seedMinQ = minQ - 2;
-    var seedMaxQ = maxQ + 2;
-    var seedMinR = minR - 2;
-    var seedMaxR = maxR + 2;
-
-    for (var q = seedMinQ; q <= seedMaxQ; q++) {
-        for (var r = seedMinR; r <= seedMaxR; r++) {
-            var cellKey = q + "," + r;
-            if (currentBoardState[cellKey]) continue;
-
-            var isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
-            var isAdjacentToPlacedTile = false;
-            if (!isAtSearchBoundary) {
-                var neighbors = getNeighbors(q, r);
-                for (var i_n = 0; i_n < neighbors.length; i_n++) {
-                    if (currentBoardState[neighbors[i_n].nx + "," + neighbors[i_n].ny]) {
-                        isAdjacentToPlacedTile = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
-                if (!visitedForBFS.has(cellKey)) {
-                    queue.push([q, r]);
-                    visitedForBFS.add(cellKey);
-                    outsideEmptyCells.add(cellKey);
-                }
-            }
-        }
-    }
-
-    var head = 0;
-    while(head < queue.length) {
-        var currentCell = queue[head++];
-        var currQ = currentCell[0];
-        var currR = currentCell[1];
-        var neighbors = getNeighbors(currQ, currR);
-
-        for (var i_bfs_n = 0; i_bfs_n < neighbors.length; i_bfs_n++) {
-            var neighborInfo = neighbors[i_bfs_n];
-            var nq = neighborInfo.nx;
-            var nr = neighborInfo.ny;
-            var neighborKey = nq + "," + nr;
-
-            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
-                continue;
-            }
-
-            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
-                visitedForBFS.add(neighborKey);
-                queue.push([nq, nr]);
-                outsideEmptyCells.add(neighborKey);
-            }
-        }
-    }
-
-    var finalValidPlacementCells = new Set();
-    if (placedTileKeys.length === 0) {
-        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
-        return finalValidPlacementCells;
-    }
-
-    outsideEmptyCells.forEach(function(cellKey) {
-        var parts = cellKey.split(',');
-        var q_f = parseInt(parts[0], 10);
-        var r_f = parseInt(parts[1], 10);
-        var neighbors_f = getNeighbors(q_f, r_f);
-        var isAdjacentToAnyTile = false;
-        for (var i_fn = 0; i_fn < neighbors_f.length; i_fn++) {
-            if (currentBoardState[neighbors_f[i_fn].nx + "," + neighbors_f[i_fn].ny]) {
-                isAdjacentToAnyTile = true;
-                break;
-            }
-        }
-        if (isAdjacentToAnyTile) {
-            finalValidPlacementCells.add(cellKey);
-        }
-    });
-
-    return finalValidPlacementCells;
-}
+// Removed duplicate function getOutsideEmptyCells here
 
 function getSurroundedTiles(currentBoardState) {
     var surroundedTiles = [];
@@ -507,116 +397,7 @@ function deepCopyBoardState(originalBoardState) {
     return newBoardState;
 }
 
-// Function to get all empty cells reachable from the "outside" (worker version)
-function getOutsideEmptyCells(currentBoardState, checkRadius) {
-    checkRadius = checkRadius === undefined ? 20 : checkRadius;
-    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
-    var queue = []; // Stores [q,r] arrays for BFS
-    var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
-
-    var placedTileKeys = Object.keys(currentBoardState);
-
-    if (placedTileKeys.length === 0) {
-        outsideEmptyCells.add("0,0");
-        return outsideEmptyCells;
-    }
-
-    var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
-    placedTileKeys.forEach(function(key) {
-        var tile = currentBoardState[key];
-        minQ = Math.min(minQ, tile.x);
-        maxQ = Math.max(maxQ, tile.x);
-        minR = Math.min(minR, tile.y);
-        maxR = Math.max(maxR, tile.y);
-    });
-
-    var searchMinQ = minQ - checkRadius;
-    var searchMaxQ = maxQ + checkRadius;
-    var searchMinR = minR - checkRadius;
-    var searchMaxR = maxR + checkRadius;
-
-    var seedMinQ = minQ - 2;
-    var seedMaxQ = maxQ + 2;
-    var seedMinR = minR - 2;
-    var seedMaxR = maxR + 2;
-
-    for (var q = seedMinQ; q <= seedMaxQ; q++) {
-        for (var r = seedMinR; r <= seedMaxR; r++) {
-            var cellKey = q + "," + r;
-            if (currentBoardState[cellKey]) continue;
-
-            var isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
-            var isAdjacentToPlacedTile = false;
-            if (!isAtSearchBoundary) {
-                var neighbors = getNeighbors(q, r);
-                for (var i_n = 0; i_n < neighbors.length; i_n++) {
-                    if (currentBoardState[neighbors[i_n].nx + "," + neighbors[i_n].ny]) {
-                        isAdjacentToPlacedTile = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
-                if (!visitedForBFS.has(cellKey)) {
-                    queue.push([q, r]);
-                    visitedForBFS.add(cellKey);
-                    outsideEmptyCells.add(cellKey);
-                }
-            }
-        }
-    }
-
-    var head = 0;
-    while(head < queue.length) {
-        var currentCell = queue[head++];
-        var currQ = currentCell[0];
-        var currR = currentCell[1];
-        var neighbors = getNeighbors(currQ, currR);
-
-        for (var i_bfs_n = 0; i_bfs_n < neighbors.length; i_bfs_n++) {
-            var neighborInfo = neighbors[i_bfs_n];
-            var nq = neighborInfo.nx;
-            var nr = neighborInfo.ny;
-            var neighborKey = nq + "," + nr;
-
-            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
-                continue;
-            }
-
-            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
-                visitedForBFS.add(neighborKey);
-                queue.push([nq, nr]);
-                outsideEmptyCells.add(neighborKey);
-            }
-        }
-    }
-
-    var finalValidPlacementCells = new Set();
-    if (placedTileKeys.length === 0) {
-        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
-        return finalValidPlacementCells;
-    }
-
-    outsideEmptyCells.forEach(function(cellKey) {
-        var parts = cellKey.split(',');
-        var q_f = parseInt(parts[0], 10);
-        var r_f = parseInt(parts[1], 10);
-        var neighbors_f = getNeighbors(q_f, r_f);
-        var isAdjacentToAnyTile = false;
-        for (var i_fn = 0; i_fn < neighbors_f.length; i_fn++) {
-            if (currentBoardState[neighbors_f[i_fn].nx + "," + neighbors_f[i_fn].ny]) {
-                isAdjacentToAnyTile = true;
-                break;
-            }
-        }
-        if (isAdjacentToAnyTile) {
-            finalValidPlacementCells.add(cellKey);
-        }
-    });
-
-    return finalValidPlacementCells;
-}
+// Removed duplicate function getOutsideEmptyCells here
 
 function hydrateHand(handData) {
     return handData.map(function(tileData) {
