@@ -2075,53 +2075,34 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
     const searchMinR = minR - checkRadius;
     const searchMaxR = maxR + checkRadius;
 
-    // Seed the BFS queue with empty cells that are either:
-    // 1. At the very edge of our search boundary (simulating "infinity")
-    // 2. Adjacent to a placed tile (these are the prime candidates for placement)
-    //    Only add if they are within the general vicinity of played tiles to keep search focused.
-
-    // Iterate over a slightly expanded bounding box of placed tiles to find initial empty spots.
-    const seedMinQ = minQ - 2; // Start seeding from empty cells near the tile cluster
+    // Seed the BFS queue with empty cells that are only at the search boundary.
+    const seedMinQ = minQ - 2; // Iterate a slightly larger area for seeding from boundary
     const seedMaxQ = maxQ + 2;
     const seedMinR = minR - 2;
     const seedMaxR = maxR + 2;
 
-    for (let q = seedMinQ; q <= seedMaxQ; q++) {
-        for (let r = seedMinR; r <= seedMaxR; r++) {
-            const cellKey = `${q},${r}`;
-            if (currentBoardState[cellKey]) continue; // Skip if cell is occupied
+    for (let q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) {
+        for (let r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) {
+            const cellKey = `${q_seed},${r_seed}`;
+            const isAtSearchBoundary = (q_seed <= searchMinQ || q_seed >= searchMaxQ || r_seed <= searchMinR || r_seed >= searchMaxR);
 
-            // Check if this empty cell is at the "absolute" search boundary
-            // or if it's adjacent to any placed tile.
-            let isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
-
-            let isAdjacentToPlacedTile = false;
-            if (!isAtSearchBoundary) { // Only check adjacency if not already a boundary cell for efficiency
-                const neighbors = getNeighbors(q, r);
-                for (const neighborInfo of neighbors) {
-                    if (currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
-                        isAdjacentToPlacedTile = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
-                if (!visitedForBFS.has(cellKey)) {
-                    queue.push([q, r]);
+            if (isAtSearchBoundary) { // Only seed from the absolute search boundary
+                if (!currentBoardState[cellKey] && !visitedForBFS.has(cellKey)) { // Ensure cell is empty and not yet visited
+                    queue.push([q_seed, r_seed]);
                     visitedForBFS.add(cellKey);
-                    // We add to outsideEmptyCells here because these initial seeds are, by definition, outside.
-                    // The BFS will then find other empty cells connected to these.
-                    outsideEmptyCells.add(cellKey);
+                    // Do NOT add to outsideEmptyCells here. BFS processing will add it.
                 }
             }
         }
     }
 
-    // Perform BFS to find all empty cells reachable from the initial seeds
+    // Perform BFS to find all empty cells reachable from the initial boundary seeds
     let head = 0;
     while(head < queue.length) {
         const [currQ, currR] = queue[head++];
+        const currentKey = `${currQ},${currR}`;
+        outsideEmptyCells.add(currentKey); // Add cell to results when popped from queue
+
         const neighbors = getNeighbors(currQ, currR);
 
         for (const neighborInfo of neighbors) {
@@ -2137,16 +2118,18 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
             if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
                 visitedForBFS.add(neighborKey);
                 queue.push([nq, nr]);
-                outsideEmptyCells.add(neighborKey); // Any empty cell reached is "outside"
+                // Do NOT add to outsideEmptyCells here. Added when popped.
             }
         }
     }
 
     // Final filter: an "outside empty cell" for placement must be adjacent to an existing tile.
-    // (This is implicitly handled by the seeding if board is not empty, but explicit check is safer).
     const finalValidPlacementCells = new Set();
-    if (placedTileKeys.length === 0) { // Handled at the start, but for safety:
+    if (placedTileKeys.length === 0) { // Should be handled by the initial check.
         if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+        // Update cache before returning for this specific early exit
+        cachedOutsideEmptyCells = new Set(finalValidPlacementCells);
+        boardStateSignatureForCache = newBoardStateSignature;
         return finalValidPlacementCells;
     }
 
