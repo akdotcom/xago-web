@@ -1001,9 +1001,8 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     // For now, defaulting to "basic" for this call as gameMode isn't passed down to findBestMoveMinimax yet.
     // This will be addressed in a subsequent step.
     // var gameModeForCurrentPlayer = "basic"; // Placeholder
-    // Use the gameMode passed into findBestMoveMinimax for the maximizing player (AI).
-    // For the minimizing player (opponent simulation), assume "basic" or pass opponent's game mode if available.
-    var modeForGetAllPossibleMoves = maximizingPlayer ? gameMode : "basic"; // Use AI's gameMode for its turn, basic for opponent
+    // Use the gameMode passed into findBestMoveMinimax. This mode applies to both players.
+    var modeForGetAllPossibleMoves = gameMode; // The game mode is unified.
     if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Depth " + depth + ", Player " + currentPlayerForThisTurn + "): Calling getAllPossibleMoves with mode: " + modeForGetAllPossibleMoves);
     var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
     if (effectiveDebug) {
