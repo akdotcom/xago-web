@@ -55,6 +55,16 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
     let aiEvaluatingDetails = null; // Stores details of the tile AI is currently evaluating
 
+    // Cache for getOutsideEmptyCells
+    let cachedOutsideEmptyCells = null;
+    let boardStateSignatureForCache = "";
+
+    function invalidateOutsideCellCache() {
+        cachedOutsideEmptyCells = null;
+        boardStateSignatureForCache = "";
+        // console.log("Outside cell cache invalidated.");
+    }
+
     // Long press detection variables
     let longPressTimer = null;
     let pressStartTime = 0;
@@ -214,6 +224,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         // Let's make the deletion permanent here, before the animation.
         if (boardState[tileKey]) {
             delete boardState[tileKey];
+            invalidateOutsideCellCache();
             console.log(`Tile ${tileKey} permanently deleted from boardState before animation.`);
         } else {
             console.warn(`Tile ${tileKey} was already removed from boardState before proceedWithTileRemovalAnimation.`);
@@ -1089,6 +1100,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
 
     // --- Game Initialization ---
     function initializeGame(isReset = false) { // Added isReset parameter
+        invalidateOutsideCellCache(); // Invalidate at the beginning of any initialization/reset
         console.log(`Attempting to initialize game... Reset flag: ${isReset}`);
         let loadedState = null;
 
@@ -1670,6 +1682,7 @@ let player2HandDisplay = document.querySelector('#player2-hand .tiles-container'
         tileToMove.y = newY;
         // tileToMove.orientation is already updated if player rotated it via handElement
         boardState[targetKey] = tileToMove;  // Add to new position in actual boardState
+        invalidateOutsideCellCache(); // Board state changed
         lastPlacedTileKey = targetKey;       // Treat moved tile as "last placed" for scoring, etc.
 
         console.log(`Tile ${tileToMove.id} successfully moved to (${newX},${newY}). Orientation: ${tileToMove.orientation}`);
@@ -1736,7 +1749,8 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
 
 
     function placeTileOnBoard(tile, x, y) {
-        if (!isPlacementValid(tile, x, y)) {
+        // When placing a new tile from hand, isNewTilePlacement is true. isDragOver is false.
+        if (!isPlacementValid(tile, x, y, false, true)) {
             return false;
         }
 
@@ -1744,6 +1758,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
         tile.y = y;
         boardState[`${x},${y}`] = tile;
         lastPlacedTileKey = `${x},${y}`; // Update the last placed tile key
+        invalidateOutsideCellCache();
 
         // Visual update will be handled by a dedicated drawing function that iterates boardState
         // and draws all tiles on the canvas. This function will be called after successful placement.
@@ -1796,30 +1811,40 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
             }
         }
 
-    function isPlacementValid(tile, x, y, isDragOver = false) {
+    function isPlacementValid(tile, x, y, isDragOver = false, isNewTilePlacement = true) { // Added isNewTilePlacement
         const targetKey = `${x},${y}`;
         if (boardState[targetKey]) {
-            if (!isDragOver) console.log("This cell is already occupied."); // gameMessageDisplay.textContent = "This cell is already occupied.";
+            if (!isDragOver) console.log("This cell is already occupied.");
             return false; // Cell occupied
         }
 
         const placedTilesCount = Object.keys(boardState).length;
-        const orientedEdges = tile.getOrientedEdges(); // Use current orientation
+        const orientedEdges = tile.getOrientedEdges();
 
         if (placedTilesCount === 0) {
-            // First tile must be placed at (0,0)
             if (x === 0 && y === 0) {
-                if (!isDragOver) console.log("First tile placed at (0,0)."); // gameMessageDisplay.textContent = "First tile placed at (0,0).";
+                if (!isDragOver) console.log("First tile placed at (0,0).");
                 return true;
             } else {
-                if (!isDragOver) console.log("The first tile must be placed at the center (0,0)."); // gameMessageDisplay.textContent = "The first tile must be placed at the center (0,0).";
+                if (!isDragOver) console.log("The first tile must be placed at the center (0,0).");
                 return false;
             }
         }
 
-        // Subsequent tiles must touch at least one existing tile and match edges.
+        // Check if the placement is on an "outside" cell for NEW tiles from hand
+        // This check is NOT performed for moving existing tiles on the board.
+        if (isNewTilePlacement) {
+            const outsideCells = getOutsideEmptyCells(boardState);
+            if (!outsideCells.has(targetKey)) {
+                if (!isDragOver) console.log(`Cannot place new tile at (${x},${y}). It's not an 'outside' cell.`);
+                return false;
+            }
+        }
+        // For moving tiles (isNewTilePlacement = false), they can be moved to "inside" empty spots,
+        // so the above check is skipped. The isSpaceEnclosed check below is also skipped for moves.
+
         let touchesExistingTile = false;
-        const neighbors = getNeighbors(x, y); // Get logical neighbors for a hex grid
+        const neighbors = getNeighbors(x, y);
 
         for (const neighborInfo of neighbors) {
             const {nx, ny, edgeIndexOnNewTile, edgeIndexOnNeighborTile} = neighborInfo;
@@ -1833,24 +1858,30 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn) {
                 const neighborEdgeType = neighborOrientedEdges[edgeIndexOnNeighborTile];
 
                 if (newTileEdgeType !== neighborEdgeType) {
-                    if (!isDragOver) console.log(`Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`); // gameMessageDisplay.textContent = `Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`;
-                    return false; // Edge types do not match
+                    if (!isDragOver) console.log(`Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`);
+                    return false;
                 }
             }
         }
 
         if (!touchesExistingTile) {
-            if (!isDragOver) console.log("Tile must touch an existing tile."); // gameMessageDisplay.textContent = "Tile must touch an existing tile.";
+            if (!isDragOver) console.log("Tile must touch an existing tile.");
             return false;
         }
 
-        // New check: Ensure the target space (x,y) itself is not enclosed
-        if (isSpaceEnclosed(x, y, boardState)) {
-            if (!isDragOver) console.log("Cannot place tile in an enclosed space."); // gameMessageDisplay.textContent = "Cannot place tile in an enclosed space.";
+        // The original isSpaceEnclosed check should only apply to NEW tile placements.
+        // Tiles being MOVED can go into an "inside" spot (which might be enclosed or not,
+        // the key is that it's not restricted by the "outside" rule for hand placements).
+        // The new "outside" rule for hand placements makes this specific `isSpaceEnclosed` check
+        // somewhat redundant for new tiles, as `getOutsideEmptyCells` should already filter out
+        // such fully enclosed single-cell "holes". However, keeping it for new tiles as a safeguard
+        // against any edge cases in `getOutsideEmptyCells` is fine. It should NOT apply to moves.
+        if (isNewTilePlacement && isSpaceEnclosed(x, y, boardState)) {
+            if (!isDragOver) console.log("Cannot place new tile in an enclosed space (isSpaceEnclosed check).");
             return false;
         }
 
-        if (!isDragOver) console.log("Valid placement."); // gameMessageDisplay.textContent = "Valid placement.";
+        if (!isDragOver) console.log("Valid placement.");
         return true;
     }
 
@@ -1932,6 +1963,150 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     // If all 6 neighboring cells are occupied by tiles, the space (q,r) is enclosed.
     return true;
 }
+
+// Function to get all empty cells reachable from the "outside"
+// An "outside" empty cell is one that can be reached from the conceptual
+// "edge" of the board without crossing over any placed tiles.
+// This is used to enforce that new tiles from hand are placed on the periphery.
+function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
+    const newBoardStateSignature = JSON.stringify(currentBoardState);
+    if (newBoardStateSignature === boardStateSignatureForCache && cachedOutsideEmptyCells !== null) {
+        // console.log("Returning cached outside empty cells");
+        return cachedOutsideEmptyCells;
+    }
+    // console.log("Calculating outside empty cells");
+
+    const outsideEmptyCells = new Set(); // Stores 'q,r' strings
+    const queue = []; // Stores [q,r] arrays for BFS
+    const visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
+
+    const placedTileKeys = Object.keys(currentBoardState);
+
+    if (placedTileKeys.length === 0) {
+        // If the board is empty, only (0,0) is a valid placement spot,
+        // and it's considered "outside".
+        outsideEmptyCells.add("0,0");
+        // Update cache before returning
+        cachedOutsideEmptyCells = new Set(outsideEmptyCells); // Store a copy
+        boardStateSignatureForCache = newBoardStateSignature;
+        return outsideEmptyCells;
+    }
+
+    // Determine search bounds based on existing tiles plus a margin (checkRadius)
+    let minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+    placedTileKeys.forEach(key => {
+        const tile = currentBoardState[key];
+        minQ = Math.min(minQ, tile.x);
+        maxQ = Math.max(maxQ, tile.x);
+        minR = Math.min(minR, tile.y);
+        maxR = Math.max(maxR, tile.y);
+    });
+
+    // Define the boundary for starting BFS. These are cells just outside the
+    // current spread of tiles.
+    const searchMinQ = minQ - checkRadius;
+    const searchMaxQ = maxQ + checkRadius;
+    const searchMinR = minR - checkRadius;
+    const searchMaxR = maxR + checkRadius;
+
+    // Seed the BFS queue with empty cells that are either:
+    // 1. At the very edge of our search boundary (simulating "infinity")
+    // 2. Adjacent to a placed tile (these are the prime candidates for placement)
+    //    Only add if they are within the general vicinity of played tiles to keep search focused.
+
+    // Iterate over a slightly expanded bounding box of placed tiles to find initial empty spots.
+    const seedMinQ = minQ - 2; // Start seeding from empty cells near the tile cluster
+    const seedMaxQ = maxQ + 2;
+    const seedMinR = minR - 2;
+    const seedMaxR = maxR + 2;
+
+    for (let q = seedMinQ; q <= seedMaxQ; q++) {
+        for (let r = seedMinR; r <= seedMaxR; r++) {
+            const cellKey = `${q},${r}`;
+            if (currentBoardState[cellKey]) continue; // Skip if cell is occupied
+
+            // Check if this empty cell is at the "absolute" search boundary
+            // or if it's adjacent to any placed tile.
+            let isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
+
+            let isAdjacentToPlacedTile = false;
+            if (!isAtSearchBoundary) { // Only check adjacency if not already a boundary cell for efficiency
+                const neighbors = getNeighbors(q, r);
+                for (const neighborInfo of neighbors) {
+                    if (currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
+                        isAdjacentToPlacedTile = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
+                if (!visitedForBFS.has(cellKey)) {
+                    queue.push([q, r]);
+                    visitedForBFS.add(cellKey);
+                    // We add to outsideEmptyCells here because these initial seeds are, by definition, outside.
+                    // The BFS will then find other empty cells connected to these.
+                    outsideEmptyCells.add(cellKey);
+                }
+            }
+        }
+    }
+
+    // Perform BFS to find all empty cells reachable from the initial seeds
+    let head = 0;
+    while(head < queue.length) {
+        const [currQ, currR] = queue[head++];
+        const neighbors = getNeighbors(currQ, currR);
+
+        for (const neighborInfo of neighbors) {
+            const nq = neighborInfo.nx;
+            const nr = neighborInfo.ny;
+            const neighborKey = `${nq},${nr}`;
+
+            // Constrain BFS exploration to a reasonable area around the played tiles
+            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+                continue;
+            }
+
+            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
+                visitedForBFS.add(neighborKey);
+                queue.push([nq, nr]);
+                outsideEmptyCells.add(neighborKey); // Any empty cell reached is "outside"
+            }
+        }
+    }
+
+    // Final filter: an "outside empty cell" for placement must be adjacent to an existing tile.
+    // (This is implicitly handled by the seeding if board is not empty, but explicit check is safer).
+    const finalValidPlacementCells = new Set();
+    if (placedTileKeys.length === 0) { // Handled at the start, but for safety:
+        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+        return finalValidPlacementCells;
+    }
+
+    outsideEmptyCells.forEach(cellKey => {
+        const [q,r] = cellKey.split(',').map(Number);
+        const neighbors = getNeighbors(q,r);
+        let isAdjacentToAnyTile = false;
+        for (const neighborInfo of neighbors) {
+            if (currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
+                isAdjacentToAnyTile = true;
+                break;
+            }
+        }
+        if (isAdjacentToAnyTile) {
+            finalValidPlacementCells.add(cellKey);
+        }
+    });
+
+    // console.log("Outside empty cells (candidates for placement):", [...finalValidPlacementCells]);
+
+    // Update cache before returning
+    cachedOutsideEmptyCells = new Set(finalValidPlacementCells); // Store a copy
+    boardStateSignatureForCache = newBoardStateSignature;
+    return finalValidPlacementCells;
+}
+
 
     function getSurroundedTiles(currentBoardState) {
         const surroundedTiles = [];

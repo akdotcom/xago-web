@@ -1,5 +1,15 @@
 // aiWorker.js
 
+// Cache for getOutsideEmptyCells in worker
+var workerCachedOutsideEmptyCells = null;
+var workerBoardStateSignatureForCache = "";
+
+function invalidateWorkerOutsideCellCache() {
+    workerCachedOutsideEmptyCells = null;
+    workerBoardStateSignatureForCache = "";
+    // console.log("[Worker] Outside cell cache invalidated.");
+}
+
 // --- Tile Representation ---
 // Edge types: 0 for blank, 1 for triangle
 // Edges are ordered clockwise starting from the top edge.
@@ -77,6 +87,129 @@ var NUM_TILES_PER_PLAYER = 14;
 
 // --- Game Logic Helper Functions (needed by AI) ---
 
+// Function to get all empty cells reachable from the "outside" (worker version)
+function getOutsideEmptyCells(currentBoardState, checkRadius) {
+    checkRadius = checkRadius === undefined ? 20 : checkRadius;
+
+    var newBoardStateSignature = JSON.stringify(currentBoardState);
+    if (newBoardStateSignature === workerBoardStateSignatureForCache && workerCachedOutsideEmptyCells !== null) {
+        // console.log("[Worker] Returning cached outside empty cells");
+        return workerCachedOutsideEmptyCells;
+    }
+    // console.log("[Worker] Calculating outside empty cells");
+
+    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
+    var queue = []; // Stores [q,r] arrays for BFS
+    var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
+
+    var placedTileKeys = Object.keys(currentBoardState);
+
+    if (placedTileKeys.length === 0) {
+        outsideEmptyCells.add("0,0");
+        workerCachedOutsideEmptyCells = new Set(outsideEmptyCells);
+        workerBoardStateSignatureForCache = newBoardStateSignature;
+        return outsideEmptyCells;
+    }
+
+    var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+    placedTileKeys.forEach(function(key) {
+        var tile = currentBoardState[key];
+        minQ = Math.min(minQ, tile.x);
+        maxQ = Math.max(maxQ, tile.x);
+        minR = Math.min(minR, tile.y);
+        maxR = Math.max(maxR, tile.y);
+    });
+
+    var searchMinQ = minQ - checkRadius;
+    var searchMaxQ = maxQ + checkRadius;
+    var searchMinR = minR - checkRadius;
+    var searchMaxR = maxR + checkRadius;
+
+    var seedMinQ = minQ - 2;
+    var seedMaxQ = maxQ + 2;
+    var seedMinR = minR - 2;
+    var seedMaxR = maxR + 2;
+
+    for (var q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) { // Renamed q to q_seed
+        for (var r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) { // Renamed r to r_seed
+            var cellKey = q_seed + "," + r_seed;
+            if (currentBoardState[cellKey]) continue;
+
+            var isAtSearchBoundary = (q_seed <= searchMinQ || q_seed >= searchMaxQ || r_seed <= searchMinR || r_seed >= searchMaxR);
+            var isAdjacentToPlacedTile = false;
+            if (!isAtSearchBoundary) {
+                var neighbors_seed = getNeighbors(q_seed, r_seed); // Renamed neighbors to neighbors_seed
+                for (var i_n = 0; i_n < neighbors_seed.length; i_n++) {
+                    if (currentBoardState[neighbors_seed[i_n].nx + "," + neighbors_seed[i_n].ny]) {
+                        isAdjacentToPlacedTile = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
+                if (!visitedForBFS.has(cellKey)) {
+                    queue.push([q_seed, r_seed]);
+                    visitedForBFS.add(cellKey);
+                    outsideEmptyCells.add(cellKey);
+                }
+            }
+        }
+    }
+
+    var head = 0;
+    while(head < queue.length) {
+        var currentCell = queue[head++];
+        var currQ = currentCell[0];
+        var currR = currentCell[1];
+        var neighbors_bfs = getNeighbors(currQ, currR); // Renamed neighbors to neighbors_bfs
+
+        for (var i_bfs_n = 0; i_bfs_n < neighbors_bfs.length; i_bfs_n++) {
+            var neighborInfo = neighbors_bfs[i_bfs_n];
+            var nq = neighborInfo.nx;
+            var nr = neighborInfo.ny;
+            var neighborKey = nq + "," + nr;
+
+            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+                continue;
+            }
+
+            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
+                visitedForBFS.add(neighborKey);
+                queue.push([nq, nr]);
+                outsideEmptyCells.add(neighborKey);
+            }
+        }
+    }
+
+    var finalValidPlacementCells = new Set();
+    if (placedTileKeys.length === 0) {
+        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+        return finalValidPlacementCells;
+    }
+
+    outsideEmptyCells.forEach(function(cellKey) {
+        var parts = cellKey.split(',');
+        var q_f = parseInt(parts[0], 10);
+        var r_f = parseInt(parts[1], 10);
+        var neighbors_f = getNeighbors(q_f, r_f);
+        var isAdjacentToAnyTile = false;
+        for (var i_fn = 0; i_fn < neighbors_f.length; i_fn++) {
+            if (currentBoardState[neighbors_f[i_fn].nx + "," + neighbors_f[i_fn].ny]) {
+                isAdjacentToAnyTile = true;
+                break;
+            }
+        }
+        if (isAdjacentToAnyTile) {
+            finalValidPlacementCells.add(cellKey);
+        }
+    });
+
+    workerCachedOutsideEmptyCells = new Set(finalValidPlacementCells);
+    workerBoardStateSignatureForCache = newBoardStateSignature;
+    return finalValidPlacementCells;
+}
+
 function getNeighbors(q, r) {
     var axialDirections = [
         { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 },
@@ -129,6 +262,117 @@ function isSpaceEnclosed(q, r, currentBoardState, effectiveDebug) { // Added eff
     return allNeighborsPresent;
 }
 
+// Function to get all empty cells reachable from the "outside" (worker version)
+function getOutsideEmptyCells(currentBoardState, checkRadius) {
+    checkRadius = checkRadius === undefined ? 20 : checkRadius;
+    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
+    var queue = []; // Stores [q,r] arrays for BFS
+    var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
+
+    var placedTileKeys = Object.keys(currentBoardState);
+
+    if (placedTileKeys.length === 0) {
+        outsideEmptyCells.add("0,0");
+        return outsideEmptyCells;
+    }
+
+    var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+    placedTileKeys.forEach(function(key) {
+        var tile = currentBoardState[key];
+        minQ = Math.min(minQ, tile.x);
+        maxQ = Math.max(maxQ, tile.x);
+        minR = Math.min(minR, tile.y);
+        maxR = Math.max(maxR, tile.y);
+    });
+
+    var searchMinQ = minQ - checkRadius;
+    var searchMaxQ = maxQ + checkRadius;
+    var searchMinR = minR - checkRadius;
+    var searchMaxR = maxR + checkRadius;
+
+    var seedMinQ = minQ - 2;
+    var seedMaxQ = maxQ + 2;
+    var seedMinR = minR - 2;
+    var seedMaxR = maxR + 2;
+
+    for (var q = seedMinQ; q <= seedMaxQ; q++) {
+        for (var r = seedMinR; r <= seedMaxR; r++) {
+            var cellKey = q + "," + r;
+            if (currentBoardState[cellKey]) continue;
+
+            var isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
+            var isAdjacentToPlacedTile = false;
+            if (!isAtSearchBoundary) {
+                var neighbors = getNeighbors(q, r);
+                for (var i_n = 0; i_n < neighbors.length; i_n++) {
+                    if (currentBoardState[neighbors[i_n].nx + "," + neighbors[i_n].ny]) {
+                        isAdjacentToPlacedTile = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
+                if (!visitedForBFS.has(cellKey)) {
+                    queue.push([q, r]);
+                    visitedForBFS.add(cellKey);
+                    outsideEmptyCells.add(cellKey);
+                }
+            }
+        }
+    }
+
+    var head = 0;
+    while(head < queue.length) {
+        var currentCell = queue[head++];
+        var currQ = currentCell[0];
+        var currR = currentCell[1];
+        var neighbors = getNeighbors(currQ, currR);
+
+        for (var i_bfs_n = 0; i_bfs_n < neighbors.length; i_bfs_n++) {
+            var neighborInfo = neighbors[i_bfs_n];
+            var nq = neighborInfo.nx;
+            var nr = neighborInfo.ny;
+            var neighborKey = nq + "," + nr;
+
+            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+                continue;
+            }
+
+            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
+                visitedForBFS.add(neighborKey);
+                queue.push([nq, nr]);
+                outsideEmptyCells.add(neighborKey);
+            }
+        }
+    }
+
+    var finalValidPlacementCells = new Set();
+    if (placedTileKeys.length === 0) {
+        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+        return finalValidPlacementCells;
+    }
+
+    outsideEmptyCells.forEach(function(cellKey) {
+        var parts = cellKey.split(',');
+        var q_f = parseInt(parts[0], 10);
+        var r_f = parseInt(parts[1], 10);
+        var neighbors_f = getNeighbors(q_f, r_f);
+        var isAdjacentToAnyTile = false;
+        for (var i_fn = 0; i_fn < neighbors_f.length; i_fn++) {
+            if (currentBoardState[neighbors_f[i_fn].nx + "," + neighbors_f[i_fn].ny]) {
+                isAdjacentToAnyTile = true;
+                break;
+            }
+        }
+        if (isAdjacentToAnyTile) {
+            finalValidPlacementCells.add(cellKey);
+        }
+    });
+
+    return finalValidPlacementCells;
+}
+
 function getSurroundedTiles(currentBoardState) {
     var surroundedTiles = [];
     for (var key in currentBoardState) {
@@ -146,10 +390,13 @@ function getSurroundedTiles(currentBoardState) {
 
 function isPlacementValid(tile, x, y, currentBoardState, isDragOver, effectiveDebug) { // Added effectiveDebug
     isDragOver = isDragOver === undefined ? false : isDragOver; // Keep for compatibility if called without effectiveDebug
-    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false; // Use effectiveDebug if passed
+    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false;
+    // Added isNewTilePlacement parameter, defaulting to true if not provided for backward compatibility (though explicit is better)
+    var isNewTilePlacement = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : true;
+
 
     if (localDebug) {
-        console.log("[Worker DEBUG] isPlacementValid: Checking tile " + tile.id + " at (" + x + "," + y + ") ori: " + tile.orientation);
+        console.log("[Worker DEBUG] isPlacementValid: Checking tile " + tile.id + " at (" + x + "," + y + ") ori: " + tile.orientation + ", isNewTilePlacement: " + isNewTilePlacement);
     }
 
     var targetKey = "" + x + "," + y;
@@ -167,6 +414,15 @@ function isPlacementValid(tile, x, y, currentBoardState, isDragOver, effectiveDe
         return firstMoveValid;
     }
 
+    // New "outside" check for new tile placements
+    if (isNewTilePlacement) {
+        var outsideCells = getOutsideEmptyCells(currentBoardState); // Assuming getOutsideEmptyCells is available in worker
+        if (!outsideCells.has(targetKey)) {
+            if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - new tile placement at (" + x + "," + y + ") is not an 'outside' cell.");
+            return false;
+        }
+    }
+
     var touchesExistingTile = false;
     var neighbors = getNeighbors(x, y);
     for (var i = 0; i < neighbors.length; i++) {
@@ -175,7 +431,7 @@ function isPlacementValid(tile, x, y, currentBoardState, isDragOver, effectiveDe
         var neighborTile = currentBoardState[neighborKey];
         if (neighborTile) {
             touchesExistingTile = true;
-            var neighborOrientedEdges = neighborTile.getOrientedEdges(); // Ensure neighbor tile is hydrated if necessary, but should be from boardState
+            var neighborOrientedEdges = neighborTile.getOrientedEdges();
             var newTileEdgeType = orientedEdges[neighborInfo.edgeIndexOnNewTile];
             var neighborEdgeType = neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile];
             if (newTileEdgeType !== neighborEdgeType) {
@@ -190,10 +446,14 @@ function isPlacementValid(tile, x, y, currentBoardState, isDragOver, effectiveDe
         return false;
     }
 
-    var spaceIsEnclosed = isSpaceEnclosed(x, y, currentBoardState, localDebug); // Pass localDebug
-    if (spaceIsEnclosed) {
-        if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - space (" + x + "," + y + ") is enclosed. Result from isSpaceEnclosed: " + spaceIsEnclosed);
-        return false;
+    // isSpaceEnclosed check should only apply to new tile placements.
+    // Tiles being moved can go into enclosed empty spots.
+    if (isNewTilePlacement) {
+        var spaceIsEnclosed = isSpaceEnclosed(x, y, currentBoardState, localDebug);
+        if (spaceIsEnclosed) {
+            if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Fail - new tile at (" + x + "," + y + ") would be in an enclosed space. Result from isSpaceEnclosed: " + spaceIsEnclosed);
+            return false;
+        }
     }
 
     if (localDebug) console.log("[Worker DEBUG] isPlacementValid: Success - tile " + tile.id + " at (" + x + "," + y + ") is a valid placement.");
@@ -245,6 +505,117 @@ function deepCopyBoardState(originalBoardState) {
         }
     }
     return newBoardState;
+}
+
+// Function to get all empty cells reachable from the "outside" (worker version)
+function getOutsideEmptyCells(currentBoardState, checkRadius) {
+    checkRadius = checkRadius === undefined ? 20 : checkRadius;
+    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
+    var queue = []; // Stores [q,r] arrays for BFS
+    var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
+
+    var placedTileKeys = Object.keys(currentBoardState);
+
+    if (placedTileKeys.length === 0) {
+        outsideEmptyCells.add("0,0");
+        return outsideEmptyCells;
+    }
+
+    var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
+    placedTileKeys.forEach(function(key) {
+        var tile = currentBoardState[key];
+        minQ = Math.min(minQ, tile.x);
+        maxQ = Math.max(maxQ, tile.x);
+        minR = Math.min(minR, tile.y);
+        maxR = Math.max(maxR, tile.y);
+    });
+
+    var searchMinQ = minQ - checkRadius;
+    var searchMaxQ = maxQ + checkRadius;
+    var searchMinR = minR - checkRadius;
+    var searchMaxR = maxR + checkRadius;
+
+    var seedMinQ = minQ - 2;
+    var seedMaxQ = maxQ + 2;
+    var seedMinR = minR - 2;
+    var seedMaxR = maxR + 2;
+
+    for (var q = seedMinQ; q <= seedMaxQ; q++) {
+        for (var r = seedMinR; r <= seedMaxR; r++) {
+            var cellKey = q + "," + r;
+            if (currentBoardState[cellKey]) continue;
+
+            var isAtSearchBoundary = (q <= searchMinQ || q >= searchMaxQ || r <= searchMinR || r >= searchMaxR);
+            var isAdjacentToPlacedTile = false;
+            if (!isAtSearchBoundary) {
+                var neighbors = getNeighbors(q, r);
+                for (var i_n = 0; i_n < neighbors.length; i_n++) {
+                    if (currentBoardState[neighbors[i_n].nx + "," + neighbors[i_n].ny]) {
+                        isAdjacentToPlacedTile = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isAtSearchBoundary || isAdjacentToPlacedTile) {
+                if (!visitedForBFS.has(cellKey)) {
+                    queue.push([q, r]);
+                    visitedForBFS.add(cellKey);
+                    outsideEmptyCells.add(cellKey);
+                }
+            }
+        }
+    }
+
+    var head = 0;
+    while(head < queue.length) {
+        var currentCell = queue[head++];
+        var currQ = currentCell[0];
+        var currR = currentCell[1];
+        var neighbors = getNeighbors(currQ, currR);
+
+        for (var i_bfs_n = 0; i_bfs_n < neighbors.length; i_bfs_n++) {
+            var neighborInfo = neighbors[i_bfs_n];
+            var nq = neighborInfo.nx;
+            var nr = neighborInfo.ny;
+            var neighborKey = nq + "," + nr;
+
+            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+                continue;
+            }
+
+            if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
+                visitedForBFS.add(neighborKey);
+                queue.push([nq, nr]);
+                outsideEmptyCells.add(neighborKey);
+            }
+        }
+    }
+
+    var finalValidPlacementCells = new Set();
+    if (placedTileKeys.length === 0) {
+        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
+        return finalValidPlacementCells;
+    }
+
+    outsideEmptyCells.forEach(function(cellKey) {
+        var parts = cellKey.split(',');
+        var q_f = parseInt(parts[0], 10);
+        var r_f = parseInt(parts[1], 10);
+        var neighbors_f = getNeighbors(q_f, r_f);
+        var isAdjacentToAnyTile = false;
+        for (var i_fn = 0; i_fn < neighbors_f.length; i_fn++) {
+            if (currentBoardState[neighbors_f[i_fn].nx + "," + neighbors_f[i_fn].ny]) {
+                isAdjacentToAnyTile = true;
+                break;
+            }
+        }
+        if (isAdjacentToAnyTile) {
+            finalValidPlacementCells.add(cellKey);
+        }
+    });
+
+    return finalValidPlacementCells;
 }
 
 function hydrateHand(handData) {
@@ -389,43 +760,28 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
             for (var i_uo = 0; i_uo < uniqueOrientations.length; i_uo++) {
                 var o = uniqueOrientations[i_uo];
                 tile.orientation = o;
-                var placementSpots = [];
+                var placementSpots = []; // This will now be populated from getOutsideEmptyCells
                 if (Object.keys(boardState).length === 0) {
-                    placementSpots.push({ x: 0, y: 0 });
+                    // Handled by getOutsideEmptyCells returning {"0,0"}
+                    var outsideCells_g1_empty = getOutsideEmptyCells(boardState); // Should be {"0,0"}
+                    outsideCells_g1_empty.forEach(function(cellKey){
+                        var parts = cellKey.split(',');
+                        placementSpots.push({ x: parseInt(parts[0],10), y: parseInt(parts[1],10) });
+                    });
                 } else {
-                    var checkedSpots = {}; // Use object to simulate Set
-                    for (var key_bs in boardState) {
-                        if (boardState.hasOwnProperty(key_bs)) {
-                            var existingTile = boardState[key_bs];
-                            var neighbors = getNeighbors(existingTile.x, existingTile.y);
-                            for (var i_n = 0; i_n < neighbors.length; i_n++) {
-                                var neighborInfo = neighbors[i_n];
-                                var spotKey = "" + neighborInfo.nx + "," + neighborInfo.ny;
-                                if (!boardState[spotKey] && !checkedSpots.hasOwnProperty(spotKey)) {
-                                    placementSpots.push({ x: neighborInfo.nx, y: neighborInfo.ny });
-                                    checkedSpots[spotKey] = true;
-                                }
-                            }
-                        }
-                    }
-                    if (placementSpots.length === 0 && Object.keys(boardState).length < 5) {
-                        var scanRadius = 3;
-                        for (var q_scan = -scanRadius; q_scan <= scanRadius; q_scan++) {
-                            for (var r_scan = -scanRadius; r_scan <= scanRadius; r_scan++) {
-                                if ((Math.abs(q_scan) + Math.abs(r_scan) + Math.abs(q_scan + r_scan)) / 2 > scanRadius) continue;
-                                var spotKey_sr = "" + q_scan + "," + r_scan;
-                                if (!boardState[spotKey_sr] && !checkedSpots.hasOwnProperty(spotKey_sr)) {
-                                    placementSpots.push({ x: q_scan, y: r_scan });
-                                    checkedSpots[spotKey_sr] = true;
-                                }
-                            }
-                        }
-                    }
+                    var outsideCells_g1 = getOutsideEmptyCells(boardState);
+                    outsideCells_g1.forEach(function(cellKey){
+                        var parts = cellKey.split(',');
+                        placementSpots.push({ x: parseInt(parts[0],10), y: parseInt(parts[1],10) });
+                    });
                 }
+
                 for (var i_ps = 0; i_ps < placementSpots.length; i_ps++) {
                     var pos = placementSpots[i_ps];
-
-                    if (isPlacementValid(tile, pos.x, pos.y, boardState, true, effectiveDebug)) { // Pass effectiveDebug
+                    // isPlacementValid will check edge matching etc.
+                    // The spot `pos` is already guaranteed to be an "outside" spot.
+                    // This is a new tile placement, so isNewTilePlacement is true.
+                    if (isPlacementValid(tile, pos.x, pos.y, boardState, true, effectiveDebug, true)) {
                         // For Greedy 1, send evaluation message here, *after* validation
                         self.postMessage({
                             task: 'aiEvaluatingMove',
@@ -504,40 +860,30 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
 
         var possiblePlacements_rand = [];
         if (Object.keys(boardState).length === 0) {
-            if (isPlacementValid(tileToPlay, 0, 0, boardState, true, debug)) {
+            // For an empty board, (0,0) is the only valid spot.
+            // isPlacementValid already handles the (0,0) check for the first tile.
+            // getOutsideEmptyCells also returns {"0,0"} for an empty board.
+            if (isPlacementValid(tileToPlay, 0, 0, boardState, true, debug, true)) { // Added isNewTilePlacement = true
                  possiblePlacements_rand.push({ type: 'place', x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
             }
         } else {
-            var checkedSpots_rand = {};
-            for (var key_bs_rand in boardState) {
-                if (boardState.hasOwnProperty(key_bs_rand)) {
-                    var existingTile_rand = boardState[key_bs_rand];
-                    var neighbors_rand = getNeighbors(existingTile_rand.x, existingTile_rand.y);
-                    for (var i_n_rand = 0; i_n_rand < neighbors_rand.length; i_n_rand++) {
-                        var neighborInfo_rand = neighbors_rand[i_n_rand];
-                        var spotKey_rand = "" + neighborInfo_rand.nx + "," + neighborInfo_rand.ny;
-                        if (!boardState[spotKey_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_rand)) {
-                             if (isPlacementValid(tileToPlay, neighborInfo_rand.nx, neighborInfo_rand.ny, boardState, true, debug)) {
-                                possiblePlacements_rand.push({ type: 'place', x: neighborInfo_rand.nx, y: neighborInfo_rand.ny, tile: tileToPlay, orientation: tileToPlay.orientation });
-                            }
-                            checkedSpots_rand[spotKey_rand] = true;
-                        }
-                    }
-                }
-            }
-             if (possiblePlacements_rand.length === 0 && Object.keys(boardState).length < 10 ) {
-                var scanRadius_rand = 3;
-                 for (var q_scan_rand = -scanRadius_rand; q_scan_rand <= scanRadius_rand; q_scan_rand++) {
-                    for (var r_scan_rand = -scanRadius_rand; r_scan_rand <= scanRadius_rand; r_scan_rand++) {
-                        if ((Math.abs(q_scan_rand) + Math.abs(r_scan_rand) + Math.abs(q_scan_rand + r_scan_rand)) / 2 > scanRadius_rand) continue;
-                        var spotKey_sr_rand = "" + q_scan_rand + "," + r_scan_rand;
-                        if (!boardState[spotKey_sr_rand] && !checkedSpots_rand.hasOwnProperty(spotKey_sr_rand)) {
-                            if (isPlacementValid(tileToPlay, q_scan_rand, r_scan_rand, boardState, true, debug)) {
-                                possiblePlacements_rand.push({ type: 'place', x: q_scan_rand, y: r_scan_rand, tile: tileToPlay, orientation: tileToPlay.orientation });
-                            }
-                            checkedSpots_rand[spotKey_sr_rand] = true;
-                        }
-                    }
+            // Get all valid "outside" empty cells
+            var outsideCells = getOutsideEmptyCells(boardState);
+            // Convert Set to array for iteration
+            var outsideCellsArray = [];
+            outsideCells.forEach(function(cellKey) {
+                var parts = cellKey.split(',');
+                outsideCellsArray.push({ x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) });
+            });
+
+            for (var i_oc = 0; i_oc < outsideCellsArray.length; i_oc++) {
+                var cell = outsideCellsArray[i_oc];
+                // Check if the randomly selected tile (with its random orientation)
+                // can be validly placed at this "outside" spot.
+                // isPlacementValid will check for edge matches and other rules.
+                // The "outside" check is implicitly handled by iterating `outsideCellsArray`.
+                if (isPlacementValid(tileToPlay, cell.x, cell.y, boardState, true, debug, true)) { // Added isNewTilePlacement = true
+                    possiblePlacements_rand.push({ type: 'place', x: cell.x, y: cell.y, tile: tileToPlay, orientation: tileToPlay.orientation });
                 }
             }
         }
@@ -657,55 +1003,37 @@ function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effect
             tile_to_place.orientation = o_place;
 
             if (initialBoardIsEmpty) {
-                if (isPlacementValid(tile_to_place, 0, 0, currentBoardState, true, localDebug)) {
+                // If board is empty, (0,0) is the only potential spot.
+                // getOutsideEmptyCells handles this by returning {"0,0"}.
+                // isPlacementValid (called below) will confirm if the tile can be placed there.
+            }
+
+            // Get all valid "outside" empty cells.
+            // These are the only cells where a new tile from hand can be placed.
+            var outsidePlacementCells = getOutsideEmptyCells(currentBoardState);
+            var outsideCellsArray_g = [];
+            outsidePlacementCells.forEach(function(cellKey) {
+                var parts = cellKey.split(',');
+                outsideCellsArray_g.push({ x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) });
+            });
+
+            for (var i_ops = 0; i_ops < outsideCellsArray_g.length; i_ops++) {
+                var spotCoords_p = outsideCellsArray_g[i_ops];
+                // Check if the current tile_to_place (with orientation o_place)
+                // is valid at this "outside" spot. isPlacementValid will check
+                // for matching edges, etc. The "is it an outside spot" criteria
+                // is already met by iterating `outsideCellsArray_g`.
+                // The `isSpaceEnclosed` check within `isPlacementValid` will also be
+                // implicitly satisfied because these are outside cells.
+                // This is a new tile placement, so isNewTilePlacement is true.
+                if (isPlacementValid(tile_to_place, spotCoords_p.x, spotCoords_p.y, currentBoardState, true, localDebug, true)) {
                     possibleMoves.push({
-                        type: 'place', // Indicate action type
-                        tile: {id: tile_to_place.id, playerId: tile_to_place.playerId, edges: [].concat(tile_to_place.edges)}, // Send copy of edges
+                        type: 'place',
+                        tile: {id: tile_to_place.id, playerId: tile_to_place.playerId, edges: [].concat(tile_to_place.edges)},
                         orientation: o_place,
-                        x: 0, y: 0,
+                        x: spotCoords_p.x, y: spotCoords_p.y,
                         playerId: playerId
                     });
-                }
-            } else {
-                var placementSpotsObj = {};
-                for (var key_bsm in currentBoardState) {
-                    if (currentBoardState.hasOwnProperty(key_bsm)) {
-                        var existingTile_place = currentBoardState[key_bsm];
-                        var neighbors_place = getNeighbors(existingTile_place.x, existingTile_place.y);
-                        for (var i_np = 0; i_np < neighbors_place.length; i_np++) {
-                            var neighborInfo_place = neighbors_place[i_np];
-                            var spotKey_place = "" + neighborInfo_place.nx + "," + neighborInfo_place.ny;
-                            if (!currentBoardState[spotKey_place] && !placementSpotsObj.hasOwnProperty(spotKey_place)) {
-                                placementSpotsObj[spotKey_place] = { x: neighborInfo_place.nx, y: neighborInfo_place.ny };
-                            }
-                        }
-                    }
-                }
-                if (Object.keys(placementSpotsObj).length === 0 && Object.keys(currentBoardState).length < 5 && Object.keys(currentBoardState).length > 0) {
-                    var scanRadius_place = 3;
-                    for (var q_p = -scanRadius_place; q_p <= scanRadius_place; q_p++) {
-                        for (var r_p = -scanRadius_place; r_p <= scanRadius_place; r_p++) {
-                            if ((Math.abs(q_p) + Math.abs(r_p) + Math.abs(q_p + r_p)) / 2 > scanRadius_place) continue;
-                            var spotKey_sr_place = "" + q_p + "," + r_p;
-                            if (!currentBoardState[spotKey_sr_place] && !placementSpotsObj.hasOwnProperty(spotKey_sr_place)) {
-                                 placementSpotsObj[spotKey_sr_place] = { x: q_p, y: r_p };
-                            }
-                        }
-                    }
-                }
-                for (var spotStrKey_p in placementSpotsObj) {
-                    if (placementSpotsObj.hasOwnProperty(spotStrKey_p)) {
-                        var spotCoords_p = placementSpotsObj[spotStrKey_p];
-                        if (isPlacementValid(tile_to_place, spotCoords_p.x, spotCoords_p.y, currentBoardState, true, localDebug)) {
-                            possibleMoves.push({
-                                type: 'place',
-                                tile: {id: tile_to_place.id, playerId: tile_to_place.playerId, edges: [].concat(tile_to_place.edges)},
-                                orientation: o_place,
-                                x: spotCoords_p.x, y: spotCoords_p.y,
-                                playerId: playerId
-                            });
-                        }
-                    }
                 }
             }
         }
@@ -1188,6 +1516,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
 // --- Worker Message Handler ---
 self.onmessage = _asyncToGenerator(function* (event) {
+    invalidateWorkerOutsideCellCache(); // Invalidate cache at the start of any new task
     var data = event.data; // Avoid destructuring here for simplicity
     var task = data.task;
     var boardStateData = data.boardState;
