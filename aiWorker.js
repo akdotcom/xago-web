@@ -1380,10 +1380,26 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             if (currentTurnEval > maxEval) {
                 if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): New best score. Old maxEval:", maxEval, "New:", currentTurnEval);
                 maxEval = currentTurnEval;
-                bestMoves = [{ tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation}, x: move.x, y: move.y, score: maxEval }];
+                bestMoves = [{
+                    type: move.type,
+                    tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation},
+                    x: move.x,
+                    y: move.y,
+                    originalX: move.originalX,
+                    originalY: move.originalY,
+                    score: maxEval
+                }];
             } else if (currentTurnEval === maxEval) {
                 if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Equal best score. Score:", currentTurnEval);
-                bestMoves.push({ tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation}, x: move.x, y: move.y, score: maxEval });
+                bestMoves.push({
+                    type: move.type,
+                    tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation},
+                    x: move.x,
+                    y: move.y,
+                    originalX: move.originalX,
+                    originalY: move.originalY,
+                    score: maxEval
+                });
             }
             var oldAlpha = alpha;
             alpha = Math.max(alpha, currentTurnEval);
