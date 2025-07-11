@@ -75,7 +75,6 @@ function getCookie(name) {
     let currentSurroundedTilesForRemoval = []; // Stores tiles that can be removed by the current player
     let opponentType = "greedy"; // Default to Greedy 1 opponent
     let player1GameMode = "basic"; // Player 1's game mode (this is now the game-wide mode)
-    // let player2GameMode = "basic"; // Player 2's game mode - REMOVED or synchronized
     let player1MadeFirstMove = false; // Tracks if Player 1 has made their first move
     let player2MadeFirstMove = false; // Tracks if Player 2 has made their first move (still relevant for UI, e.g. disabling opponent type selector if P2 human moved)
     let mouseHoverQ = null;
@@ -1172,6 +1171,7 @@ function getCookie(name) {
                 opponentType = loadedState.opponentType || opponentType;          // Use loaded if present, else keep current
                 player1MadeFirstMove = loadedState.player1MadeFirstMove || false;
                 player2MadeFirstMove = loadedState.player2MadeFirstMove || false;
+                // player2GameMode is no longer used
                 isRemovingTiles = loadedState.isRemovingTiles;
                 currentSurroundedTilesForRemoval = loadedState.currentSurroundedTilesForRemoval;
                 lastPlacedTileKey = loadedState.lastPlacedTileKey;
@@ -1836,12 +1836,10 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
             }
         } else if (currentPlayer === 2 && !player2MadeFirstMove) {
             player2MadeFirstMove = true;
-            console.log("Player 2 has made their first move. Game mode toggle will be locked.");
-            const p2ModeToggle = document.getElementById('player2-game-mode');
-            if (p2ModeToggle) {
-                p2ModeToggle.disabled = true;
-                p2ModeToggle.classList.add('locked-toggle'); // For potential specific styling
-            }
+            // Player 2 mode toggle is removed, so no need to lock it.
+            // console.log("Player 2 has made their first move. Opponent type selector might be locked if it's human P2.");
+            // The opponentTypeSelector locking is handled by its own 'disabled' state if P2 is human and has moved.
+            // This 'player2MadeFirstMove' flag is still useful for that.
         }
 
         redrawBoardOnCanvas(); // Redraw the entire board with the new tile
@@ -2925,10 +2923,10 @@ function animateView() {
         const preservedOpponentType = opponentTypeSelector ? opponentTypeSelector.value : "greedy";
 
         // Reset Player 1 specific states before full game re-initialization
-        player1GameMode = "basic";
         player1MadeFirstMove = false;
-        player2GameMode = "basic";
+    // player1GameMode will be handled by initializeGame based on cookies/defaults
         player2MadeFirstMove = false;
+    // player2GameMode has been removed.
 
 
         initializeGame(true); // Pass true to indicate a reset (this calls renderPlayerHands)
@@ -2939,21 +2937,23 @@ function animateView() {
         }
         opponentType = preservedOpponentType; // Update internal variable
 
-        // Ensure Player 1's mode toggle is reset in the DOM (should be handled by renderPlayerHands)
-        // but an explicit check/set here can be a safeguard.
+        // Ensure Player 1's mode toggle is reset in the DOM.
+        // initializeGame() -> renderPlayerHands() already sets the value based on player1GameMode (cookie or default)
+        // and handles the disabled state based on player1MadeFirstMove (which is false here).
         const p1ModeToggle = document.getElementById('player1-game-mode');
         if (p1ModeToggle) {
-            p1ModeToggle.value = "basic";
+            // Value is set correctly by renderPlayerHands.
+            // We just ensure it's enabled and not locked.
             p1ModeToggle.disabled = false;
             p1ModeToggle.classList.remove('locked-toggle');
         }
-        const p2ModeToggle = document.getElementById('player2-game-mode');
-        if (p2ModeToggle) {
-            p2ModeToggle.value = "basic";
-            p2ModeToggle.disabled = false;
-            p2ModeToggle.classList.remove('locked-toggle');
-        }
-        console.log(`Game reset. Opponent type preserved as: ${opponentType}. Player 1 and Player 2 modes reset to Basic.`);
+        // const p2ModeToggle = document.getElementById('player2-game-mode'); // Removed
+        // if (p2ModeToggle) { // Removed
+        //     p2ModeToggle.value = "basic"; // Removed
+        //     p2ModeToggle.disabled = false; // Removed
+        //     p2ModeToggle.classList.remove('locked-toggle'); // Removed
+        // } // Removed
+        console.log(`Game reset. Opponent type preserved as: ${opponentType}. Player 1 game mode reset (based on cookie or default).`);
     });
 
     // --- Player Hand Rendering ---
@@ -2983,7 +2983,7 @@ function animateView() {
         const hand2Div = document.createElement('div');
         hand2Div.id = 'player2-hand';
         hand2Div.classList.add('player-hand');
-        // Add Player 2 mode selector and opponent type selector
+        // Add Player 2 opponent type selector (mode selector removed)
         hand2Div.innerHTML = `
             <div class="player2-hand-header">
                 <h2>Player 2</h2>
@@ -3033,8 +3033,7 @@ function animateView() {
             player1ModeSelector.addEventListener('change', handlePlayer1ModeChange);
         }
 
-        // Player 2's game mode selector is removed. Player 2's mode is determined by Player 1.
-        // The variable player2GameMode will be either removed or always mirror player1GameMode.
+        // Player 2's game mode selector has been removed. Player 2's mode is determined by Player 1.
 
         // Setup Player 2's opponent type selector
         opponentTypeSelector = document.getElementById('opponent-type');
@@ -3068,13 +3067,15 @@ function animateView() {
         }
     }
 
-    // function handlePlayer2ModeChange(event) { // This function is no longer needed
-    //     if (!player2MadeFirstMove && opponentType === "human") {
-    //         player2GameMode = event.target.value;
-    //         console.log(`Player 2 game mode changed to: ${player2GameMode}`);
-    //         updateURLWithGameState(); // Persist change
-    //     }
-    // }
+    /* // This function is no longer needed as player2GameMode is removed.
+    function handlePlayer2ModeChange(event) {
+        if (!player2MadeFirstMove && opponentType === "human") {
+            // player2GameMode = event.target.value; // player2GameMode removed
+            // console.log(`Player 2 game mode changed to: ${player2GameMode}`);
+            updateURLWithGameState(); // Persist change
+        }
+    }
+    */
 
     function handleOpponentTypeChange(event) {
         opponentType = event.target.value;
@@ -3228,7 +3229,7 @@ function animateView() {
             }
         } else {
             // --- Normal tile interaction (Not in removal mode) ---
-            const gameMode = currentPlayer === 1 ? player1GameMode : player2GameMode;
+            const gameMode = player1GameMode; // Game mode is unified
             const tileKey = `${q},${r}`;
             const clickedTileData = boardState[tileKey]; // Data of the tile on board at click location (q,r), if any.
 
@@ -4063,7 +4064,6 @@ function animateView() {
             opponentType: opponentType,
             player1GameMode: player1GameMode, // Persist Player 1's game mode (now the game-wide mode)
             player1MadeFirstMove: player1MadeFirstMove, // Persist Player 1's first move status
-            // player2GameMode: player2GameMode, // No longer serializing player2GameMode
             player2MadeFirstMove: player2MadeFirstMove, // Persist Player 2's first move status (may still be useful for UI)
             isRemovingTiles: isRemovingTiles,
             currentSurroundedTilesForRemoval: currentSurroundedTilesForRemoval.map(tile => ({ id: tile.id, playerId: tile.playerId, edges: tile.edges, orientation: tile.orientation, x: tile.x, y: tile.y })),
@@ -4121,7 +4121,6 @@ function animateView() {
                 opponentType: savedState.opponentType || "greedy",
                 player1GameMode: savedState.player1GameMode || "basic", // Restore P1 game mode (game-wide mode)
                 player1MadeFirstMove: savedState.player1MadeFirstMove || false, // Restore P1 first move status
-                // player2GameMode is no longer restored independently
                 player2MadeFirstMove: savedState.player2MadeFirstMove || false, // Restore P2 first move status
                 isRemovingTiles: savedState.isRemovingTiles || false,
                 currentSurroundedTilesForRemoval: savedState.currentSurroundedTilesForRemoval ? savedState.currentSurroundedTilesForRemoval.map(rehydrateTile) : [],
