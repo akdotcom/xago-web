@@ -81,6 +81,7 @@ function getCookie(name) {
     let mouseHoverR = null;
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
     let aiEvaluatingDetails = null; // Stores details of the tile AI is currently evaluating
+    let lastMovedTileOriginalPosition = null; // Stores {q, r, playerId} of the last moved tile's origin
 
     // Cache for getOutsideEmptyCells
     let cachedOutsideEmptyCells = null;
@@ -439,6 +440,30 @@ function getCookie(name) {
 
         // The purple border drawing logic has been removed.
         // Only the translucent tile will be shown as the AI evaluation highlight.
+    }
+
+    // --- Draw Shaded Spot for Moved Tile ---
+    if (player1GameMode === "moving" && lastMovedTileOriginalPosition &&
+        lastMovedTileOriginalPosition.playerId !== currentPlayer && !selectedTile) {
+        // Draw shade if:
+        // 1. Game is in "moving" mode.
+        // 2. A tile was moved (lastMovedTileOriginalPosition is set).
+        // 3. It's the *next* player's turn (current player is not the one who moved the tile).
+        // 4. The next player has *not yet* selected a tile for their current turn (!selectedTile).
+        const { q, r } = lastMovedTileOriginalPosition;
+        const shadeScreenX = currentOffsetX + scaledHexSideLength * (3/2 * q);
+        const shadeScreenY = currentOffsetY + scaledHexSideLength * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.PI / 180 * (60 * i);
+            const vx = shadeScreenX + scaledHexSideLength * Math.cos(angle);
+            const vy = shadeScreenY + scaledHexSideLength * Math.sin(angle);
+            if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(100, 100, 100, 0.35)'; // Semi-transparent gray
+        ctx.fill();
     }
 
     // --- Draw Score Animations ---
@@ -1495,6 +1520,13 @@ function getCookie(name) {
             return;
         }
 
+        // Clear moved tile shadow if the current player is selecting a tile and they were not the one who moved.
+        if (lastMovedTileOriginalPosition && lastMovedTileOriginalPosition.playerId !== currentPlayer) {
+            lastMovedTileOriginalPosition = null;
+            console.log("Cleared moved tile shadow because next player selected a tile from hand.");
+            // No need to redraw here, as subsequent actions (updatePlacementHighlights) will trigger redraw.
+        }
+
         // If a board tile was previously selected, remove its temporary hand representation
         if (selectedTile && selectedTile.isBoardTile && selectedTile.handElement && selectedTile.handElement.parentNode) {
             selectedTile.handElement.remove();
@@ -1739,8 +1771,9 @@ function getCookie(name) {
         boardState[targetKey] = tileToMove;  // Add to new position in actual boardState
         invalidateOutsideCellCache(); // Board state changed
         lastPlacedTileKey = targetKey;       // Treat moved tile as "last placed" for scoring, etc.
+        lastMovedTileOriginalPosition = { q: oldX, r: oldY, playerId: tileToMove.playerId }; // Store original position and player
 
-        console.log(`Tile ${tileToMove.id} successfully moved to (${newX},${newY}). Orientation: ${tileToMove.orientation}`);
+        console.log(`Tile ${tileToMove.id} successfully moved to (${newX},${newY}). Orientation: ${tileToMove.orientation}. Original spot stored for shading.`);
         redrawBoardOnCanvas();
         processSuccessfulPlacement(lastPlacedTileKey, currentPlayer, oldX, oldY, true); // Pass old coords and true for wasMove
         return true;
@@ -1813,6 +1846,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
         tile.y = y;
         boardState[`${x},${y}`] = tile;
         lastPlacedTileKey = `${x},${y}`; // Update the last placed tile key
+        lastMovedTileOriginalPosition = null; // Clear moved tile shadow when a new tile is placed
         invalidateOutsideCellCache();
 
         // Visual update will be handled by a dedicated drawing function that iterates boardState
@@ -2423,10 +2457,12 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
                 // tileToMove.orientation is already set from AI's decision
                 boardState[`${move.x},${move.y}`] = tileToMove;
                 lastPlacedTileKey = `${move.x},${move.y}`;
+                // Set lastMovedTileOriginalPosition for AI moves
+                lastMovedTileOriginalPosition = { q: move.originalX, r: move.originalY, playerId: tileToMove.playerId };
 
-                console.log(`[Main] AI (${opponentType}) successfully MOVED tile ${tileToMove.id}.`);
+                console.log(`[Main] AI (${opponentType}) successfully MOVED tile ${tileToMove.id}. Original spot stored for shading.`);
                 redrawBoardOnCanvas(); // Redraw to show the move
-                processSuccessfulPlacement(lastPlacedTileKey, 2); // Score and continue
+                processSuccessfulPlacement(lastPlacedTileKey, 2, move.originalX, move.originalY, true); // Pass move details
             } else {
                 console.error(`[Main] AI Error: Unknown move type received: ${move.type}. Move:`, JSON.stringify(move));
                 switchTurn();
@@ -3540,6 +3576,13 @@ function animateView() {
         if (tile.playerId !== currentPlayer) {
             console.log("Cannot select opponent's tile.");
             return;
+        }
+
+        // Clear moved tile shadow if the current player is selecting a tile from board and they were not the one who moved.
+        if (lastMovedTileOriginalPosition && lastMovedTileOriginalPosition.playerId !== currentPlayer) {
+            lastMovedTileOriginalPosition = null;
+            console.log("Cleared moved tile shadow because next player selected a tile from board.");
+            // No need to redraw here, as updateMoveHighlights will trigger redraw.
         }
 
         // Calculate max move distance (number of blank edges)
