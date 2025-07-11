@@ -2068,40 +2068,47 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
         maxR = Math.max(maxR, tile.y);
     });
 
-    // Define the boundary for starting BFS. These are cells just outside the
-    // current spread of tiles.
-    const searchMinQ = minQ - checkRadius;
-    const searchMaxQ = maxQ + checkRadius;
-    const searchMinR = minR - checkRadius;
-    const searchMaxR = maxR + checkRadius;
+    // Define the perimeter for seeding the BFS. These are cells just around the current tile cluster.
+    const perimeterMinQ = minQ - 1;
+    const perimeterMaxQ = maxQ + 1;
+    const perimeterMinR = minR - 1;
+    const perimeterMaxR = maxR + 1;
 
-    // Seed the BFS queue with empty cells that are only at the search boundary.
-    const seedMinQ = minQ - 2; // Iterate a slightly larger area for seeding from boundary
-    const seedMaxQ = maxQ + 2;
-    const seedMinR = minR - 2;
-    const seedMaxR = maxR + 2;
-
-    for (let q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) {
-        for (let r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) {
-            const cellKey = `${q_seed},${r_seed}`;
-            const isAtSearchBoundary = (q_seed <= searchMinQ || q_seed >= searchMaxQ || r_seed <= searchMinR || r_seed >= searchMaxR);
-
-            if (isAtSearchBoundary) { // Only seed from the absolute search boundary
+    // Seed the BFS queue with empty cells on this perimeter.
+    for (let q_seed = perimeterMinQ; q_seed <= perimeterMaxQ; q_seed++) {
+        for (let r_seed = perimeterMinR; r_seed <= perimeterMaxR; r_seed++) {
+            // Only consider cells that are actually ON the perimeter border
+            if (q_seed === perimeterMinQ || q_seed === perimeterMaxQ || r_seed === perimeterMinR || r_seed === perimeterMaxR) {
+                const cellKey = `${q_seed},${r_seed}`;
                 if (!currentBoardState[cellKey] && !visitedForBFS.has(cellKey)) { // Ensure cell is empty and not yet visited
                     queue.push([q_seed, r_seed]);
                     visitedForBFS.add(cellKey);
-                    // Do NOT add to outsideEmptyCells here. BFS processing will add it.
                 }
             }
         }
     }
+
+    // If the queue is empty after attempting to seed from the perimeter (e.g., a single tile completely blocked by a very small checkRadius limit, though unlikely with current checkRadius),
+    // it might indicate an issue or an edge case like a completely filled board within the checkRadius.
+    // For robustness, if queue is empty and there are tiles, it might be worth adding direct neighbors of placed tiles if they are empty.
+    // However, the current BFS exploration limit should handle this. If no seeds, BFS won't run.
 
     // Perform BFS to find all empty cells reachable from the initial boundary seeds
     let head = 0;
     while(head < queue.length) {
         const [currQ, currR] = queue[head++];
         const currentKey = `${currQ},${currR}`;
-        outsideEmptyCells.add(currentKey); // Add cell to results when popped from queue
+        // Add cell to results when popped from queue, AND if it's within the wider search/exploration boundary
+        // The search/exploration boundary is defined by checkRadius
+        const searchMinQ_bfs = minQ - checkRadius;
+        const searchMaxQ_bfs = maxQ + checkRadius;
+        const searchMinR_bfs = minR - checkRadius;
+        const searchMaxR_bfs = maxR + checkRadius;
+
+        if (currQ >= searchMinQ_bfs && currQ <= searchMaxQ_bfs && currR >= searchMinR_bfs && currR <= searchMaxR_bfs) {
+            outsideEmptyCells.add(currentKey);
+        }
+
 
         const neighbors = getNeighbors(currQ, currR);
 
@@ -2110,15 +2117,15 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
             const nr = neighborInfo.ny;
             const neighborKey = `${nq},${nr}`;
 
-            // Constrain BFS exploration to a reasonable area around the played tiles
-            if (nq < searchMinQ - 1 || nq > searchMaxQ + 1 || nr < searchMinR - 1 || nr > searchMaxR + 1) {
+            // Constrain BFS exploration to the reasonable area defined by checkRadius.
+            // This uses the same searchMin/MaxQ/R_bfs as above for consistency.
+            if (nq < searchMinQ_bfs || nq > searchMaxQ_bfs || nr < searchMinR_bfs || nr > searchMaxR_bfs) {
                 continue;
             }
 
             if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
                 visitedForBFS.add(neighborKey);
                 queue.push([nq, nr]);
-                // Do NOT add to outsideEmptyCells here. Added when popped.
             }
         }
     }
