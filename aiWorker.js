@@ -89,28 +89,28 @@ var NUM_TILES_PER_PLAYER = 14;
 
 // Function to get all empty cells reachable from the "outside" (worker version)
 function getOutsideEmptyCells(currentBoardState, checkRadius) {
-    checkRadius = checkRadius === undefined ? 20 : checkRadius;
+    // Default checkRadius to a reasonable value if not provided.
+    // This radius defines how far out the BFS will search for "outside" space.
+    checkRadius = checkRadius === undefined ? 5 : checkRadius; // Reduced default, but behavior changes
 
     var newBoardStateSignature = JSON.stringify(currentBoardState);
     if (newBoardStateSignature === workerBoardStateSignatureForCache && workerCachedOutsideEmptyCells !== null) {
-        // console.log("[Worker] Returning cached outside empty cells");
         return workerCachedOutsideEmptyCells;
     }
-    // console.log("[Worker] Calculating outside empty cells");
 
-    var outsideEmptyCells = new Set(); // Stores 'q,r' strings
+    var placedTileKeys = Object.keys(currentBoardState);
+    if (placedTileKeys.length === 0) {
+        var singleCellSet = new Set(["0,0"]);
+        workerCachedOutsideEmptyCells = singleCellSet;
+        workerBoardStateSignatureForCache = newBoardStateSignature;
+        return singleCellSet;
+    }
+
+    var allReachableEmptyCells = new Set(); // Stores 'q,r' strings of empty cells reachable from "outside"
     var queue = []; // Stores [q,r] arrays for BFS
     var visitedForBFS = new Set(); // Stores 'q,r' strings for BFS visitation tracking
 
-    var placedTileKeys = Object.keys(currentBoardState);
-
-    if (placedTileKeys.length === 0) {
-        outsideEmptyCells.add("0,0");
-        workerCachedOutsideEmptyCells = new Set(outsideEmptyCells);
-        workerBoardStateSignatureForCache = newBoardStateSignature;
-        return outsideEmptyCells;
-    }
-
+    // Determine the bounding box of placed tiles.
     var minQ = Infinity, maxQ = -Infinity, minR = Infinity, maxR = -Infinity;
     placedTileKeys.forEach(function(key) {
         var tile = currentBoardState[key];
@@ -120,33 +120,42 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
         maxR = Math.max(maxR, tile.y);
     });
 
-    var searchMinQ = minQ - checkRadius;
-    var searchMaxQ = maxQ + checkRadius;
-    var searchMinR = minR - checkRadius;
-    var searchMaxR = maxR + checkRadius;
+    // Define a search area slightly larger than the bounding box of placed tiles.
+    // The BFS will start from the edges of this search area.
+    var searchBoundaryMinQ = minQ - checkRadius;
+    var searchBoundaryMaxQ = maxQ + checkRadius;
+    var searchBoundaryMinR = minR - checkRadius;
+    var searchBoundaryMaxR = maxR + checkRadius;
 
-    var seedMinQ = minQ - 2;
-    var seedMaxQ = maxQ + 2;
-    var seedMinR = minR - 2;
-    var seedMaxR = maxR + 2;
-
-    // Seeding phase: Only add empty cells at the search boundary to the queue.
-    for (var q_seed = seedMinQ; q_seed <= seedMaxQ; q_seed++) {
-        for (var r_seed = seedMinR; r_seed <= seedMaxR; r_seed++) {
-            var cellKey = q_seed + "," + r_seed;
-            // Check if the cell is within the broader search boundary for seeding
-            var isAtSearchBoundary = (q_seed <= searchMinQ || q_seed >= searchMaxQ || r_seed <= searchMinR || r_seed >= searchMaxR);
-
-            if (isAtSearchBoundary) {
+    // Seed the BFS queue with empty cells on the perimeter of this search area.
+    for (var q_seed = searchBoundaryMinQ; q_seed <= searchBoundaryMaxQ; q_seed++) {
+        for (var r_seed = searchBoundaryMinR; r_seed <= searchBoundaryMaxR; r_seed++) {
+            if (q_seed === searchBoundaryMinQ || q_seed === searchBoundaryMaxQ || r_seed === searchBoundaryMinR || r_seed === searchBoundaryMaxR) {
+                var cellKey = q_seed + "," + r_seed;
                 if (!currentBoardState[cellKey] && !visitedForBFS.has(cellKey)) {
                     queue.push([q_seed, r_seed]);
                     visitedForBFS.add(cellKey);
-                    // Do NOT add to outsideEmptyCells here; BFS will handle it.
                 }
             }
         }
     }
 
+    // If the queue is still empty (e.g., all boundary cells were occupied, or checkRadius is too small),
+    // we need a fallback. A simple one: add (minQ - 1, minR -1) if empty, as a guaranteed outside starting point.
+    // This situation is less likely with a reasonable checkRadius.
+    if (queue.length === 0) {
+        var fallbackSeedQ = minQ - 1; // Arbitrary point outside the current cluster
+        var fallbackSeedR = minR - 1;
+        var fallbackKey = fallbackSeedQ + "," + fallbackSeedR;
+        if (!currentBoardState[fallbackKey] && !visitedForBFS.has(fallbackKey)){
+            queue.push([fallbackSeedQ, fallbackSeedR]);
+            visitedForBFS.add(fallbackKey);
+            // console.log("[Worker] getOutsideEmptyCells: Used fallback BFS seed at " + fallbackKey);
+        }
+    }
+
+
+    // Perform BFS to find all empty cells reachable from the perimeter seeds.
     var head = 0;
     while(head < queue.length) {
         var currentCell = queue[head++];
@@ -154,40 +163,31 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
         var currR = currentCell[1];
         var currentKey = currQ + "," + currR;
 
-        outsideEmptyCells.add(currentKey); // Add cell to results when it's processed from queue
+        allReachableEmptyCells.add(currentKey); // This cell is reachable from "outside"
 
         var neighbors_bfs = getNeighbors(currQ, currR);
-
         for (var i_bfs_n = 0; i_bfs_n < neighbors_bfs.length; i_bfs_n++) {
             var neighborInfo = neighbors_bfs[i_bfs_n];
             var nq = neighborInfo.nx;
             var nr = neighborInfo.ny;
             var neighborKey = nq + "," + nr;
 
-            // Stay within a slightly expanded search boundary for BFS exploration
-            if (nq < searchMinQ -1 || nq > searchMaxQ + 1 || nr < searchMinR -1 || nr > searchMaxR + 1) {
+            // Ensure BFS explores within a slightly expanded boundary to catch all relevant cells,
+            // but not indefinitely.
+            if (nq < searchBoundaryMinQ - 1 || nq > searchBoundaryMaxQ + 1 || nr < searchBoundaryMinR - 1 || nr > searchBoundaryMaxR + 1) {
                 continue;
             }
 
             if (!currentBoardState[neighborKey] && !visitedForBFS.has(neighborKey)) {
                 visitedForBFS.add(neighborKey);
                 queue.push([nq, nr]);
-                // Do NOT add to outsideEmptyCells here; it's added when popped from queue.
             }
         }
     }
 
-    // Filter: Resulting cells must be adjacent to at least one placed tile.
+    // Filter: From all reachable empty cells, keep only those adjacent to at least one placed tile.
     var finalValidPlacementCells = new Set();
-    if (placedTileKeys.length === 0) { // Should have been handled by the initial check
-        if (outsideEmptyCells.has("0,0")) finalValidPlacementCells.add("0,0");
-         // Update cache before returning for this specific early exit
-        workerCachedOutsideEmptyCells = new Set(finalValidPlacementCells);
-        workerBoardStateSignatureForCache = newBoardStateSignature; // Signature is already set
-        return finalValidPlacementCells;
-    }
-
-    outsideEmptyCells.forEach(function(cellKey) {
+    allReachableEmptyCells.forEach(function(cellKey) {
         var parts = cellKey.split(',');
         var q_f = parseInt(parts[0], 10);
         var r_f = parseInt(parts[1], 10);
@@ -204,8 +204,15 @@ function getOutsideEmptyCells(currentBoardState, checkRadius) {
         }
     });
 
+    // If after all this, finalValidPlacementCells is empty, but the board is not empty,
+    // it might mean the AI is trapped (e.g. single tile completely surrounded by other player's tiles,
+    // and no other place to go). This is a valid game state.
+    // However, if there ARE potential spots but the logic missed them, that's a bug.
+    // The current logic should be more robust.
+
     workerCachedOutsideEmptyCells = new Set(finalValidPlacementCells);
     workerBoardStateSignatureForCache = newBoardStateSignature;
+    // console.log("[Worker] Calculated outside empty cells:", [...finalValidPlacementCells]);
     return finalValidPlacementCells;
 }
 
