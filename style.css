@@ -512,7 +512,8 @@ footer {
 .toast {
     visibility: hidden; /* Use visibility to manage state for animations */
     min-width: 250px;
-    margin-left: -125px;
+    /* margin-left: -125px; */ /* Removed for transform-based centering */
+    transform: translateX(-50%); /* Added for robust centering */
     background-color: #333;
     color: #fff;
     text-align: center;
