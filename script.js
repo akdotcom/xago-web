@@ -3182,13 +3182,33 @@ function animateView() {
             // to something sensible if they were changed, or let updateViewParameters handle it.
             // Let's set a default size and let updateViewParameters adjust the view.
             // The original canvas HTML is <canvas id="game-canvas" width="600" height="500"></canvas>
-            gameCanvas.width = 600; // Default backing store
-            gameCanvas.height = 500; // Default backing store
+            
+            // Get player hand width
+            const playerHandElement = document.querySelector('.player-hand');
+            if (playerHandElement) {
+                const playerHandWidth = playerHandElement.getBoundingClientRect().width;
 
-            gameCanvas.style.width = ''; // Reset to let CSS control (or set to gameCanvas.width + 'px')
-            gameCanvas.style.height = ''; // Reset to let CSS control (or set to gameCanvas.height + 'px')
+                gameboardArea.style.width = `${playerHandWidth}px`;
+                gameCanvas.width = playerHandWidth; // Set backing store width
+                gameCanvas.style.width = `${playerHandWidth}px`; // Set display width
+                
+                // Set height to a portion of viewport height, allowing aspect ratio to change
+                const landscapeCanvasHeight = Math.max(500, window.innerHeight * 0.6); // 60% of viewport height
+                gameCanvas.height = landscapeCanvasHeight; // Set backing store height
+                gameCanvas.style.height = `${landscapeCanvasHeight}px`; // Set display height
+                
+            } else {
+                // Fallback to a default fixed size if player hand not found
+                // This maintains some predictability if the DOM isn't as expected.
+                const defaultLandscapeWidth = 600;
+                const defaultLandscapeHeight = 500;
+                gameCanvas.width = defaultLandscapeWidth; 
+                gameCanvas.height = defaultLandscapeHeight;
+                gameCanvas.style.width = `${defaultLandscapeWidth}px`; 
+                gameCanvas.style.height = `${defaultLandscapeHeight}px`;
+            }
 
-            gameCanvas.style.margin = "20px auto"; // Restore original margin from CSS
+            gameCanvas.style.margin = "20px auto"; // Apply margin for centering
             gameboardArea.style.marginTop = ""; // Reset container margin
         }
 
