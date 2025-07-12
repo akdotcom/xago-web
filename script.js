@@ -3319,7 +3319,7 @@ function animateView() {
                         playerHasRotatedTileThisGame[currentPlayer] = true;
                         console.log(`Board tile ${selectedTile.tile.id} rotated on board. New orientation: ${selectedTile.tile.orientation}`);
                         updateMoveHighlights(selectedTile.tile, selectedTile.maxMoveDistance);
-                        showToast("Tile rotated. Tap again to rotate, or tap valid spot to move/finalize.");
+                        // showToast("Tile rotated. Tap again to rotate, or tap valid spot to move/finalize.");
                     } else if (clickedTileData && clickedTileData.playerId === currentPlayer && gameMode === "moving") {
                         // Player clicked on ANOTHER of their own tiles on the board (and in "moving" mode)
                         // -> Deselect current board tile, select this new one.
@@ -3333,7 +3333,7 @@ function animateView() {
                         if (!moveAttemptValid) {
                             // Move was invalid. Deselect.
                             console.log("Invalid move for selected board tile. Deselecting tile.");
-                            showToast("Invalid move or spot. Tile deselected.");
+                            // showToast("Invalid move or spot. Tile deselected.");
                             clearSelectionAndHighlights();
                         }
                         // If moveAttemptValid is true, selectedTile is already cleared by handleCellClick/moveTileOnBoard.
@@ -3352,7 +3352,7 @@ function animateView() {
                             // Clicked on an opponent's tile, or player's own tile but not in "moving" mode (or some other edge case).
                             // This spot is effectively "occupied" or "invalid" for placing the current hand tile. Deselect hand tile.
                             console.log("Invalid placement: Spot occupied or not selectable for current action. Deselecting hand tile.");
-                            showToast("Cannot place tile here. Hand tile deselected.");
+                            // showToast("Cannot place tile here. Hand tile deselected.");
                             clearSelectionAndHighlights();
                         }
                     } else {
@@ -3362,7 +3362,7 @@ function animateView() {
                         if (!placementAttemptValid) {
                             // Placement was invalid (e.g., no match, enclosed space for basic, disconnects board). Deselect.
                             console.log("Invalid placement for hand tile. Deselecting tile.");
-                            showToast("Invalid placement. Hand tile deselected.");
+                            // showToast("Invalid placement. Hand tile deselected.");
                             clearSelectionAndHighlights();
                         }
                         // If placementAttemptValid is true, selectedTile is cleared by handleCellClick/placeTileOnBoard.
@@ -3386,10 +3386,10 @@ function animateView() {
 
         if (finalizedSuccessfully) {
             // moveTileOnBoard already handles clearing selectedTile, scoring, and switching turn.
-            showToast("Tile finalized on the board!");
+            showToast("Tile moved zero spaces");
         } else {
             // moveTileOnBoard shows a toast for specific error. We can add a generic one too.
-            showToast("Could not finalize tile here. Check edges.");
+            showToast("Tile must be rotated to place here.");
             // Tile remains selected for the player to try another action or rotation.
             // updateMoveHighlights is already called by moveTileOnBoard on failure.
         }
@@ -3637,7 +3637,7 @@ function animateView() {
 
         console.log(`Selected tile ${tile.id} from board at (${q},${r}). Max move: ${blankEdges} spots. Tap selected tile on board to rotate, or click valid spot to move.`);
         updateMoveHighlights(tile, blankEdges); // This will draw the board and highlights including the selected tile.
-        showToast("Selected tile from board. Tap it to rotate, or tap a valid spot to move.");
+        showToast("Tap to rotate. Press and hold to move zero spaces.");
     }
 
 
