@@ -3667,12 +3667,12 @@ function animateView() {
         drawPlacementPreview(originalTileX, originalTileY, tileToMove, 'rgba(128, 0, 128, 0.5)'); // Purple for origin
 
         // Temporarily remove the tile from the main boardState for validation
-        delete boardState[originalTileKey];
-        invalidateOutsideCellCache(); // Cache is invalid while tile is 'lifted'
+        const boardStateWithoutMovingTile = deepCopyBoardState(boardState);
+        delete boardStateWithoutMovingTile[originalTileKey];
 
         // Check initial connectivity: Is the board (without tileToMove) connected?
         // This is important for the optimized connectivity check later.
-        const isBoardConnectedWithoutMovingTile = isBoardConnected(boardState);
+        const isBoardConnectedWithoutMovingTile = isBoardConnected(boardStateWithoutMovingTile);
 
         const checkRadius = maxDistance + 2;
         let qMin = originalTileX - checkRadius, qMax = originalTileX + checkRadius;
@@ -3686,7 +3686,7 @@ function animateView() {
                 const targetKey = `${q},${r}`;
 
                 // Skip if target is occupied by another tile
-                if (boardState[targetKey] && targetKey !== originalTileKey) { // boardState here is without tileToMove
+                if (boardStateWithoutMovingTile[targetKey]) {
                     continue;
                 }
 
@@ -3713,21 +3713,22 @@ function animateView() {
                     tempTestTile.x = targetQ;
                     tempTestTile.y = targetR;
 
-                    // Temporarily add this tempTestTile to the boardState (which is already missing the original tile)
+                    // Use a copy of the board state for validation to avoid modifying the live one
+                    const tempBoardStateForValidation = deepCopyBoardState(boardStateWithoutMovingTile);
                     const tempTargetKey = `${targetQ},${targetR}`;
-                    boardState[tempTargetKey] = tempTestTile; // Add to board for validation
+                    tempBoardStateForValidation[tempTargetKey] = tempTestTile; // Add to board for validation
 
                     let touchesExistingTile = false;
                     let edgesMatch = true;
                     let validationResult = false;
                     const neighbors = getNeighbors(targetQ, targetR);
-                    const currentNumTilesOnBoard = Object.keys(boardState).length;
+                    const currentNumTilesOnBoard = Object.keys(tempBoardStateForValidation).length;
 
-                    if (currentNumTilesOnBoard === 1 && boardState[tempTargetKey]?.id === tempTestTile.id) { // Only tempTestTile is on the board
+                    if (currentNumTilesOnBoard === 1 && tempBoardStateForValidation[tempTargetKey]?.id === tempTestTile.id) { // Only tempTestTile is on the board
                         touchesExistingTile = true; // Valid by definition
                     } else if (currentNumTilesOnBoard > 1) {
                         for (const neighborInfo of neighbors) {
-                            const neighbor = boardState[`${neighborInfo.nx},${neighborInfo.ny}`];
+                            const neighbor = tempBoardStateForValidation[`${neighborInfo.nx},${neighborInfo.ny}`];
                             if (neighbor && neighbor.id !== tempTestTile.id) { // Ensure neighbor is not the tile itself
                                 touchesExistingTile = true;
                                 const newTileOrientedEdges = tempTestTile.getOrientedEdges();
@@ -3754,7 +3755,7 @@ function animateView() {
                             isMoveConnected = true;
                         } else {
                             // Board was disconnected by removing tileToMove. Must do a full check.
-                            isMoveConnected = isBoardConnected(boardState);
+                            isMoveConnected = isBoardConnected(tempBoardStateForValidation);
                         }
                     }
 
@@ -3768,11 +3769,6 @@ function animateView() {
                     } else {
                         validationResult = true;
                     }
-
-                    // Clean up: remove tempTestTile from its temporary validation spot in boardState
-                    delete boardState[tempTargetKey];
-                    // originalTileData (tileToMove) remains untouched by this function.
-                    // Its x, y, orientation are not changed here.
 
                     return validationResult;
                 };
@@ -3811,22 +3807,7 @@ function animateView() {
             }
         }
 
-        // Restore tileToMove to its original position and orientation IN THE MAIN boardState
-        // This is crucial because the main boardState was missing it during the validation loop.
-        // tileToMove itself (selectedTile.tile) should have its correct, player-intended orientation.
-        // originalTileX, originalTileY are its coordinates before this highlighting process started.
-        // originalTileOrientation was its orientation at the START of this updateMoveHighlights call.
-        // If the player rotated the tile, tileToMove.orientation will be different from originalTileOrientation by now.
-        // We need to restore the tile to boardState with its CURRENT player-intended orientation.
-        boardState[originalTileKey] = tileToMove; // tileToMove already has the correct current x,y,ori.
-                                                  // Its x,y were set to originalTileX,Y before loop,
-                                                  // and its orientation is selectedTile.tile.orientation.
-        // Let's be explicit:
-        tileToMove.x = originalTileX; // Ensure it's back at its starting spot in the object
-        tileToMove.y = originalTileY;
-        // tileToMove.orientation is already the one the player set (e.g. via rotation).
-        // So, boardState[originalTileKey] = tileToMove; is correct.
-        invalidateOutsideCellCache(); // Make sure cache is valid again
+        // No need to restore tileToMove to the main boardState as we used a copy for validation.
     }
 
 
