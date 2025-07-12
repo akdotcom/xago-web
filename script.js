@@ -2067,10 +2067,6 @@ function isSpaceEnclosed(q, r, currentBoardState) {
     return true;
 }
 
-// Function to get all empty cells reachable from the "outside"
-// An "outside" empty cell is one that can be reached from the conceptual
-// "edge" of the board without crossing over any placed tiles.
-// This is used to enforce that new tiles from hand are placed on the periphery.
 function getOutsideEmptyCells(currentBoardState) {
     const newBoardStateSignature = JSON.stringify(currentBoardState);
     if (newBoardStateSignature === boardStateSignatureForCache && cachedOutsideEmptyCells !== null) {
@@ -2085,7 +2081,10 @@ function getOutsideEmptyCells(currentBoardState) {
         return singleCellSet;
     }
 
-    // 1. Find the tile furthest from the origin.
+    const outsideEmptyCells = new Set();
+    const queue = [];
+
+    // Find the tile furthest from the origin to start the seed search
     let furthestTile = null;
     let maxDist = -1;
     for (const key of placedTileKeys) {
@@ -2097,11 +2096,10 @@ function getOutsideEmptyCells(currentBoardState) {
         }
     }
 
-    // 2. Seed the first "outside empty cell".
+    // Among the empty neighbors of the furthest tile, find the one that is also furthest from the origin
     let seedCell = null;
-    const neighborsOfFurthest = getNeighbors(furthestTile.x, furthestTile.y);
     let maxSeedDist = -1;
-
+    const neighborsOfFurthest = getNeighbors(furthestTile.x, furthestTile.y);
     for (const neighborInfo of neighborsOfFurthest) {
         const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
         if (!currentBoardState[neighborKey]) {
@@ -2114,67 +2112,39 @@ function getOutsideEmptyCells(currentBoardState) {
     }
 
     if (!seedCell) {
-        // Fallback: if the furthest tile is somehow surrounded by other tiles,
-        // which is unlikely but possible, we just need any empty neighbor.
-        for (const neighborInfo of neighborsOfFurthest) {
-            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-            if (!currentBoardState[neighborKey]) {
-                seedCell = { q: neighborInfo.nx, r: neighborInfo.ny };
-                break;
-            }
-        }
-        if (!seedCell) {
-             // If still no seed cell, the board might be pathologically dense.
-             // As a last resort, fall back to the old method's seeding logic for this case.
-             // This part is a safety net and shouldn't be hit in normal gameplay.
-             console.warn("Could not find a seed cell around the furthest tile. Falling back to a broader search for a seed.");
-             for (const key of placedTileKeys) {
-                 const tile = currentBoardState[key];
-                 const neighbors = getNeighbors(tile.x, tile.y);
-                 for (const neighborInfo of neighbors) {
-                     if (!currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`]) {
-                         seedCell = { q: neighborInfo.nx, r: neighborInfo.ny };
-                         break;
-                     }
-                 }
-                 if (seedCell) break;
-             }
-             if (!seedCell) {
-                 console.error("Catastrophic failure in getOutsideEmptyCells: No empty cells found adjacent to any tile.");
-                 return new Set(); // Should not happen if there's any valid move.
-             }
-        }
+        console.error("Catastrophic failure in getOutsideEmptyCells: No empty cells found adjacent to any tile.");
+        return new Set();
     }
 
-
-    // 3. Walk through empty cells bordering the seed cell.
-    const outsideEmptyCells = new Set();
-    const queue = [seedCell];
-    const visited = new Set([`${seedCell.q},${seedCell.r}`]);
+    const seedKey = `${seedCell.q},${seedCell.r}`;
+    outsideEmptyCells.add(seedKey);
+    queue.push(seedCell);
 
     let head = 0;
-    while(head < queue.length) {
+    while (head < queue.length) {
         const { q, r } = queue[head++];
-        const currentKey = `${q},${r}`;
 
-        // An empty cell is a valid placement spot if it's adjacent to at least one tile.
-        let isAdjacentToTile = false;
         const neighbors = getNeighbors(q, r);
         for (const neighborInfo of neighbors) {
             const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-            if (currentBoardState[neighborKey]) {
-                isAdjacentToTile = true;
-            } else {
-                // If neighbor is also empty and not visited, add to queue for exploration.
-                if (!visited.has(neighborKey)) {
-                    visited.add(neighborKey);
-                    queue.push({ q: neighborInfo.nx, r: neighborInfo.ny });
+            if (currentBoardState[neighborKey] || outsideEmptyCells.has(neighborKey)) {
+                continue;
+            }
+
+            // Check if the new empty neighbor is adjacent to any placed tile
+            let isAdjacentToPlacedTile = false;
+            const neighborsOfNeighbor = getNeighbors(neighborInfo.nx, neighborInfo.ny);
+            for (const n of neighborsOfNeighbor) {
+                if (currentBoardState[`${n.nx},${n.ny}`]) {
+                    isAdjacentToPlacedTile = true;
+                    break;
                 }
             }
-        }
 
-        if (isAdjacentToTile) {
-            outsideEmptyCells.add(currentKey);
+            if (isAdjacentToPlacedTile) {
+                outsideEmptyCells.add(neighborKey);
+                queue.push({ q: neighborInfo.nx, r: neighborInfo.ny });
+            }
         }
     }
 
