@@ -1838,7 +1838,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
         animateView();
     }
     updateURLWithGameState(); // Update URL after a tile placement is fully processed
-        }
+}
 
 
     function placeTileOnBoard(tile, x, y) {
@@ -2901,9 +2901,6 @@ function animateView() {
     // Also continue if there are active score animations.
     if (needsRedraw || isPulsingGlobal || activeScoreAnimations.length > 0) {
         redrawBoardOnCanvas(); // Redraw with new current values (this now includes pulsing logic if active)
-        if (selectedTile && !isRemovingTiles) { // If a tile is selected (and not removing), placement highlights also need to be updated
-            updatePlacementHighlights();
-        }
         // If isRemovingTiles is true, redrawBoardOnCanvas already handles the pulsing highlight.
         // No need for updatePlacementHighlights() in that specific case for the removal pulsing itself.
         animationFrameId = requestAnimationFrame(animateView); // Continue animation
@@ -2912,9 +2909,6 @@ function animateView() {
         // Final redraw to ensure exact target values are rendered if needed,
         // and that any highlights (placement or removal) are correctly shown or cleared.
         redrawBoardOnCanvas(); // This will draw current board state.
-        if (selectedTile && !isRemovingTiles) {
-            updatePlacementHighlights(); // Refresh placement highlights if a tile is still selected.
-        }
         // If isRemovingTiles was true and just became false, redrawBoardOnCanvas will draw without pulse.
     }
 }
@@ -3780,7 +3774,6 @@ function animateView() {
             if (q !== mouseHoverQ || r !== mouseHoverR) {
                 mouseHoverQ = q;
                 mouseHoverR = r;
-                updatePlacementHighlights(); // Show green/yellow previews
 
                 // Draw full tile preview if hovering over a valid spot
                 const tileToPlace = selectedTile.tile;
@@ -3877,12 +3870,16 @@ function animateView() {
         mouseHoverQ = q;
         mouseHoverR = r;
 
+        if (selectedTile.isBoardTile) {
+            updateMoveHighlights(selectedTile.tile, selectedTile.maxMoveDistance);
+        } else {
+            updatePlacementHighlights();
+        }
+
         const tileToPreview = selectedTile.tile;
         let shouldShowFullPreview = false;
 
         if (selectedTile.isBoardTile) {
-            updateMoveHighlights(tileToPreview, selectedTile.maxMoveDistance); // Redraws board and blue/purple highlights
-
             // Check if (q,r) is a valid move destination for full preview
             const dist = (Math.abs(selectedTile.originalX - q) + Math.abs(selectedTile.originalX + selectedTile.originalY - q - r) + Math.abs(selectedTile.originalY - r)) / 2;
             if (dist <= selectedTile.maxMoveDistance && !(q === selectedTile.originalX && r === selectedTile.originalY)) {
@@ -3914,7 +3911,6 @@ function animateView() {
                 if (selectedTile.maxMoveDistance >= 0) shouldShowFullPreview = true;
             }
         } else { // Standard placement
-            updatePlacementHighlights(); // Redraws board and green/yellow highlights
             if (!boardState[`${q},${r}`]) {
                 const originalOrientation = tileToPreview.orientation;
                 if (isPlacementValid(tileToPreview, q, r, true)) {
