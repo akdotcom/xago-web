@@ -3162,8 +3162,9 @@ function animateView() {
             gameCanvas.width = windowWidth; // Set backing store size
             gameCanvas.style.width = '100%'; // Canvas takes 100% of gameboardArea
 
-            gameCanvas.height = windowHeight * 0.5; // Set backing store size
-            gameCanvas.style.height = '50vh'; // Use vh for 50% viewport height
+            // Set canvas height equal to its width for a 1:1 aspect ratio in portrait mode
+            gameCanvas.height = gameCanvas.width;
+            gameCanvas.style.height = gameCanvas.width + 'px';
 
             gameCanvas.style.margin = "0 auto"; // Remove top/bottom margin, keep auto for horizontal centering
             gameboardArea.style.marginTop = "0"; // Ensure container also has no top margin
