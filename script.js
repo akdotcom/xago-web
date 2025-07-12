@@ -2071,7 +2071,7 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 // An "outside" empty cell is one that can be reached from the conceptual
 // "edge" of the board without crossing over any placed tiles.
 // This is used to enforce that new tiles from hand are placed on the periphery.
-function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
+function getOutsideEmptyCells(currentBoardState, checkRadius = 5) {
     const newBoardStateSignature = JSON.stringify(currentBoardState);
     if (newBoardStateSignature === boardStateSignatureForCache && cachedOutsideEmptyCells !== null) {
         // console.log("Returning cached outside empty cells");
@@ -2132,7 +2132,8 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
 
     // Perform BFS to find all empty cells reachable from the initial boundary seeds
     let head = 0;
-    while(head < queue.length) {
+    const MAX_BFS_STEPS = 2000; // Safety break to prevent infinite loops on massive boards
+    while(head < queue.length && head < MAX_BFS_STEPS) {
         const [currQ, currR] = queue[head++];
         const currentKey = `${currQ},${currR}`;
         // Add cell to results when popped from queue, AND if it's within the wider search/exploration boundary
