@@ -1775,7 +1775,12 @@ function getCookie(name) {
 
         console.log(`Tile ${tileToMove.id} successfully moved to (${newX},${newY}). Orientation: ${tileToMove.orientation}. Original spot stored for shading.`);
         redrawBoardOnCanvas();
+
+    // Defer subsequent processing to allow repaint and make the move feel more immediate
+    setTimeout(() => {
         processSuccessfulPlacement(lastPlacedTileKey, currentPlayer, oldX, oldY, true); // Pass old coords and true for wasMove
+    }, 0);
+
         return true;
     }
 
@@ -2462,9 +2467,17 @@ function getOutsideEmptyCells(currentBoardState, checkRadius = 20) {
 
                 console.log(`[Main] AI (${opponentType}) successfully MOVED tile ${tileToMove.id}. Original spot stored for shading.`);
                 redrawBoardOnCanvas(); // Redraw to show the move
-                processSuccessfulPlacement(lastPlacedTileKey, 2, move.originalX, move.originalY, true); // Pass move details
+
+    // Defer subsequent processing to allow repaint and make the move feel more immediate
+    setTimeout(() => {
+        processSuccessfulPlacement(lastPlacedTileKey, 2, move.originalX, move.originalY, true); // Pass move details
+    }, 0);
+
             } else {
                 console.error(`[Main] AI Error: Unknown move type received: ${move.type}. Move:`, JSON.stringify(move));
+    // If AI move fails unexpectedly, ensure turn switches to prevent game stall
+    // Consider if any cleanup or state reset is needed here before switching.
+    // For now, just switch turn.
                 switchTurn();
             }
         } else {
