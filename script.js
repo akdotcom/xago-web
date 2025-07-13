@@ -111,37 +111,6 @@ function getCookie(name) {
     let isFirstTurn = true; // This seems to track if ANY player has made the first move of the game.
     let playerHasRotatedTileThisGame = {1: false, 2: false};
 
-    // --- Tile Representation ---
-    // Edge types: 0 for blank, 1 for triangle
-    // Edges are ordered clockwise starting from the top edge.
-    class HexTile {
-        constructor(id, playerId, edges = [0, 0, 0, 0, 0, 0]) {
-            this.id = id; // Unique ID for the tile
-            this.playerId = playerId; // 1 or 2
-            this.edges = edges; // Array of 6 values (0 or 1)
-            this.orientation = 0; // 0-5, representing rotation
-            this.x = null; // Board x position
-            this.y = null; // Board y position
-        }
-
-        rotate() {
-            this.orientation = (this.orientation + 1) % 6;
-        }
-
-        // Method to get edges considering current orientation (if rotation is implemented)
-        getOrientedEdges() {
-            const rotatedEdges = [...this.edges];
-            for (let i = 0; i < this.orientation; i++) {
-                rotatedEdges.unshift(rotatedEdges.pop());
-            }
-            return rotatedEdges;
-        }
-
-        // Basic representation for now
-        get getPlayerColor() {
-            return this.playerId === 1 ? 'lightblue' : 'lightcoral';
-        }
-    }
 
     function animateTileReturn(tile, startX, startY, targetHandElement, callback) {
         const tempTileCanvas = document.createElement('canvas');
@@ -610,37 +579,6 @@ function getCookie(name) {
     }
 
 
-    // --- Tile Generation ---
-    // const UNIQUE_TILE_PATTERNS = [  // This is a duplicate, removing
-    //     [0,0,0,0,0,0], // 0 triangles
-    //     [1,0,0,0,0,0], // 1 triangle
-    //     [1,1,0,0,0,0], // 2 triangles, adjacent
-    //     [1,0,1,0,0,0], // 2 triangles, separated by 1
-    //     [1,0,0,1,0,0], // 2 triangles, separated by 2 (opposite)
-    //     [1,1,1,0,0,0], // 3 triangles, block of 3
-    //     [1,1,0,1,0,0], // 3 triangles, pattern 110100
-    //     [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
-    //     [1,0,1,0,1,0], // 3 triangles, alternating
-    //     [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
-    //     [1,1,0,1,1,0], // 4 triangles (complement of 2 blanks separated by 1)
-    //     [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
-    //     [1,1,1,1,1,0], // 5 triangles
-    //     [1,1,1,1,1,1]  // 6 triangles
-    // ];
-
-    function generateUniqueTilesForPlayer(playerId, count) {
-        const tiles = [];
-        if (count !== UNIQUE_TILE_PATTERNS.length) {
-            console.warn(`Requested ${count} tiles, but there are ${UNIQUE_TILE_PATTERNS.length} unique patterns defined. Using unique patterns count.`);
-        }
-
-        UNIQUE_TILE_PATTERNS.forEach((pattern, index) => {
-            // Ensure a copy of the pattern is used for the tile's edges
-            tiles.push(new HexTile(`p${playerId}t${index}`, playerId, [...pattern]));
-        });
-
-        return tiles;
-    }
 
     // --- Game Board Logic ---
     function initializeGameBoard() {
@@ -665,37 +603,6 @@ function getCookie(name) {
     //     return gameBoard.querySelector(`.board-cell[data-x="${x}"][data-y="${y}"]`);
     // }
 
-    // --- Tile Generation ---
-    const UNIQUE_TILE_PATTERNS = [
-        [0,0,0,0,0,0], // 0 triangles
-        [1,0,0,0,0,0], // 1 triangle
-        [1,1,0,0,0,0], // 2 triangles, adjacent
-        [1,0,1,0,0,0], // 2 triangles, separated by 1
-        [1,0,0,1,0,0], // 2 triangles, separated by 2 (opposite)
-        [1,1,1,0,0,0], // 3 triangles, block of 3
-        [1,1,0,1,0,0], // 3 triangles, pattern 110100
-        [1,0,1,1,0,0], // 3 triangles, pattern 101100 (or rotated 110010)
-        [1,0,1,0,1,0], // 3 triangles, alternating
-        [1,1,1,1,0,0], // 4 triangles (complement of 2 blanks adjacent)
-        [1,1,1,0,1,0], // 4 triangles (TTTBTB, formerly TTBTTB)
-        [1,0,1,1,0,1], // 4 triangles (complement of 2 blanks separated by 2, e.g. 110101)
-        [1,1,1,1,1,0], // 5 triangles
-        [1,1,1,1,1,1]  // 6 triangles
-    ];
-
-    function generateUniqueTilesForPlayer(playerId, count) {
-        const tiles = [];
-        if (count !== UNIQUE_TILE_PATTERNS.length) {
-            console.warn(`Requested ${count} tiles, but there are ${UNIQUE_TILE_PATTERNS.length} unique patterns defined. Using unique patterns count.`);
-        }
-
-        UNIQUE_TILE_PATTERNS.forEach((pattern, index) => {
-            // Ensure a copy of the pattern is used for the tile's edges
-            tiles.push(new HexTile(`p${playerId}t${index}`, playerId, [...pattern]));
-        });
-
-        return tiles;
-    }
 
     // --- Game Board Logic ---
     function initializeGameBoard() {
@@ -1988,226 +1895,6 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
         return true;
     }
 
-    // Placeholder for hex grid neighbor logic.
-    // This is CRITICAL and needs to be accurate for a hex grid.
-    // For a square grid, neighbors are simpler (up, down, left, right).
-    // For a hex grid (axial or cube coordinates usually):
-    // Assuming "odd-r" or "even-r" shoves for visual row staggering if using a square grid to simulate hex.
-    // Or, if using true hex coordinates, this is more direct.
-    // For now, let's use a simplified square grid adjacency for demonstration,
-    // understanding this needs to be replaced with proper hex logic.
-    // Edges: 0:Top, 1:TopRight, 2:BottomRight, 3:Bottom, 4:BottomLeft, 5:TopLeft (clockwise)
-    // This function needs to map (q,r) + edge to neighbor (nq,nr) + corresponding edge on neighbor
-    // Uses axial coordinates (q, r) for flat-topped hexagons.
-    // Canonical edge order (matches drawing loop for vertices i to i+1):
-    // 0: Right         (points to neighbor at q+1, r)
-    // 1: Bottom-Right  (points to neighbor at q,   r+1)
-    // 2: Bottom-Left   (points to neighbor at q-1, r+1)
-    // 3: Left          (points to neighbor at q-1, r)
-    // 4: Top-Left      (points to neighbor at q,   r-1)
-    // 5: Top-Right     (points to neighbor at q+1, r-1)
-    // Opposite edges: (i+3)%6
-    function getNeighbors(q, r) {
-        const axialDirections = [
-            // dq, dr define the *neighbor's* offset from current tile (q,r)
-            // edgeIndexOnNewTile is the edge of the *current* tile that points to this neighbor
-            // edgeIndexOnNeighborTile is the corresponding edge on the *neighbor* tile
-            { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }, // Right
-            { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Bottom-Right
-            { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Left
-            { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Left
-            { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Top-Left
-            { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }  // Top-Right
-        ];
-
-        const neighbors = [];
-        for (const dir of axialDirections) {
-            neighbors.push({
-                nx: q + dir.dq, // Using nx, ny for consistency with isPlacementValid which expects these field names
-                ny: r + dir.dr,
-                edgeIndexOnNewTile: dir.edgeIndexOnNewTile,
-                edgeIndexOnNeighborTile: dir.edgeIndexOnNeighborTile
-            });
-        }
-        return neighbors;
-    }
-
-    function isTileSurrounded(q, r, currentBoardState) {
-        const neighbors = getNeighbors(q, r);
-        if (neighbors.length < 6) { // Should always be 6 for a hex tile not on an edge of a finite board
-            return false; // Or handle as an error, but practically means not surrounded
-        }
-
-        for (const neighborInfo of neighbors) {
-            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-            if (!currentBoardState[neighborKey]) {
-                return false; // Found an empty neighboring cell
-            }
-        }
-        return true; // All 6 neighbors are occupied
-    }
-
-// Function to check if an empty space (q,r) is enclosed by tiles
-function isSpaceEnclosed(q, r, currentBoardState) {
-    const neighbors = getNeighbors(q, r); // Get all potential neighbor locations
-
-    // If there are fewer than 6 neighbors (e.g., due to board edges if finite),
-    // it cannot be enclosed in the context of this game's infinite logical grid.
-    // However, our getNeighbors always returns 6 potential locations.
-    // We need to check if all these 6 locations are *occupied* by tiles.
-
-    for (const neighborInfo of neighbors) {
-        const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-        if (!currentBoardState[neighborKey]) {
-            // If any neighbor cell is empty, then the space (q,r) is not enclosed.
-            return false;
-        }
-    }
-    // If all 6 neighboring cells are occupied by tiles, the space (q,r) is enclosed.
-    return true;
-}
-
-function getOutsideEmptyCells(currentBoardState) {
-    const newBoardStateSignature = JSON.stringify(currentBoardState);
-    if (newBoardStateSignature === boardStateSignatureForCache && cachedOutsideEmptyCells !== null) {
-        return cachedOutsideEmptyCells;
-    }
-
-    const placedTileKeys = Object.keys(currentBoardState);
-    if (placedTileKeys.length === 0) {
-        const singleCellSet = new Set(["0,0"]);
-        cachedOutsideEmptyCells = singleCellSet;
-        boardStateSignatureForCache = newBoardStateSignature;
-        return singleCellSet;
-    }
-
-    const outsideEmptyCells = new Set();
-    const queue = [];
-
-    // Find the tile furthest from the origin to start the seed search
-    let furthestTile = null;
-    let maxDist = -1;
-    for (const key of placedTileKeys) {
-        const tile = currentBoardState[key];
-        const dist = Math.sqrt(tile.x * tile.x + tile.y * tile.y);
-        if (dist > maxDist) {
-            maxDist = dist;
-            furthestTile = tile;
-        }
-    }
-
-    // Among the empty neighbors of the furthest tile, find the one that is also furthest from the origin
-    let seedCell = null;
-    let maxSeedDist = -1;
-    const neighborsOfFurthest = getNeighbors(furthestTile.x, furthestTile.y);
-    for (const neighborInfo of neighborsOfFurthest) {
-        const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-        if (!currentBoardState[neighborKey]) {
-            const dist = Math.sqrt(neighborInfo.nx * neighborInfo.nx + neighborInfo.ny * neighborInfo.ny);
-            if (dist > maxSeedDist) {
-                maxSeedDist = dist;
-                seedCell = { q: neighborInfo.nx, r: neighborInfo.ny };
-            }
-        }
-    }
-
-    if (!seedCell) {
-        console.error("Catastrophic failure in getOutsideEmptyCells: No empty cells found adjacent to any tile.");
-        return new Set();
-    }
-
-    const seedKey = `${seedCell.q},${seedCell.r}`;
-    outsideEmptyCells.add(seedKey);
-    queue.push(seedCell);
-
-    let head = 0;
-    while (head < queue.length) {
-        const { q, r } = queue[head++];
-
-        const neighbors = getNeighbors(q, r);
-        for (const neighborInfo of neighbors) {
-            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-            if (currentBoardState[neighborKey] || outsideEmptyCells.has(neighborKey)) {
-                continue;
-            }
-
-            // Check if the new empty neighbor is adjacent to any placed tile
-            let isAdjacentToPlacedTile = false;
-            const neighborsOfNeighbor = getNeighbors(neighborInfo.nx, neighborInfo.ny);
-            for (const n of neighborsOfNeighbor) {
-                if (currentBoardState[`${n.nx},${n.ny}`]) {
-                    isAdjacentToPlacedTile = true;
-                    break;
-                }
-            }
-
-            if (isAdjacentToPlacedTile) {
-                outsideEmptyCells.add(neighborKey);
-                queue.push({ q: neighborInfo.nx, r: neighborInfo.ny });
-            }
-        }
-    }
-
-    cachedOutsideEmptyCells = outsideEmptyCells;
-    boardStateSignatureForCache = newBoardStateSignature;
-    return outsideEmptyCells;
-}
-
-
-    function getSurroundedTiles(currentBoardState) {
-        const surroundedTiles = [];
-        for (const key in currentBoardState) {
-            const tile = currentBoardState[key];
-            // Ensure tile.x and tile.y are not null, though they should be if in boardState
-            if (tile.x !== null && tile.y !== null) {
-                if (isTileSurrounded(tile.x, tile.y, currentBoardState)) {
-                    surroundedTiles.push(tile);
-                }
-            }
-        }
-        return surroundedTiles;
-    }
-
-    // Optimized function to find newly surrounded tiles after a move or placement
-    function getPotentiallyAffectedTilesForSurroundCheck(currentBoardState, changedTile, oldX, oldY, isMove) {
-        const candidates = new Set(); // Use a Set to store tile objects to avoid duplicates
-
-        // 1. The tile that was just placed or moved
-        if (changedTile && changedTile.x !== null && changedTile.y !== null) {
-            const currentTileOnBoard = currentBoardState[`${changedTile.x},${changedTile.y}`];
-            if (currentTileOnBoard) candidates.add(currentTileOnBoard);
-        }
-
-        // 2. Neighbors of the new position of the changedTile
-        if (changedTile && changedTile.x !== null && changedTile.y !== null) {
-            getNeighbors(changedTile.x, changedTile.y).forEach(neighborInfo => {
-                const neighborTile = currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`];
-                if (neighborTile) candidates.add(neighborTile);
-            });
-        }
-
-        // 3. If it was a move, also check neighbors of the old position
-        if (isMove && oldX !== null && oldY !== null) {
-            getNeighbors(oldX, oldY).forEach(neighborInfo => {
-                const neighborTile = currentBoardState[`${neighborInfo.nx},${neighborInfo.ny}`];
-                if (neighborTile) candidates.add(neighborTile);
-            });
-        }
-        return Array.from(candidates);
-    }
-
-    function getNewlySurroundedTiles(boardToCheck, tilesToCheck) {
-        const newlySurrounded = [];
-        for (const tile of tilesToCheck) {
-            if (tile.x !== null && tile.y !== null) { // Ensure tile is valid and on board
-                 // Check if it's actually in the boardToCheck, as candidates might include tiles that were just moved
-                if (boardToCheck[`${tile.x},${tile.y}`] && isTileSurrounded(tile.x, tile.y, boardToCheck)) {
-                    newlySurrounded.push(tile);
-                }
-            }
-        }
-        return newlySurrounded;
-    }
 
 
     function processTileRemoval(surroundedTiles) {
@@ -3997,80 +3684,18 @@ function animateView() {
         return { q: q_round, r: r_round };
     }
 
-    // --- AI Player Logic (Now handled by aiWorker.js) ---
-    // Functions like performAiMove, performAiTileRemoval, findBestMoveMinimax, getAllPossibleMoves,
-    // evaluateBoard, simulateRemovalCycle, and deepCopyBoardState (for AI simulation purposes)
-    // have been moved to aiWorker.js.
-    // The main script will now interact with the worker to get AI decisions.
-
-    // Helper function to deep copy board state for non-AI purposes if still needed,
-    // or this can be removed if only AI used it.
-    // For now, let's assume it might be used by other parts or can be removed later if not.
-    function deepCopyBoardState(originalBoardState) {
-        const newBoardState = {};
-        for (const key in originalBoardState) {
-            const tile = originalBoardState[key];
-            // Ensure tile and its properties are valid before copying
-            if (tile && typeof tile.id !== 'undefined' && typeof tile.playerId !== 'undefined' && Array.isArray(tile.edges)) {
-                const newTile = new HexTile(tile.id, tile.playerId, [...tile.edges]); // Use spread for edges array
-                newTile.orientation = tile.orientation || 0;
-                newTile.x = (typeof tile.x === 'number') ? tile.x : null;
-                newTile.y = (typeof tile.y === 'number') ? tile.y : null;
-                newBoardState[key] = newTile;
-            } else {
-                // console.warn("Skipping invalid tile in deepCopyBoardState for key:", key, tile);
-            }
-        }
-        return newBoardState;
-    }
-
-    function isBoardConnected(currentBoardState) {
-        const tileKeys = Object.keys(currentBoardState);
-        if (tileKeys.length === 0) {
-            return true; // An empty board is connected.
-        }
-        if (tileKeys.length === 1 && currentBoardState[tileKeys[0]]) {
-             return true; // A board with a single tile is connected.
+    function generateUniqueTilesForPlayer(playerId, count) {
+        const tiles = [];
+        if (count !== UNIQUE_TILE_PATTERNS.length) {
+            console.warn(`Requested ${count} tiles, but there are ${UNIQUE_TILE_PATTERNS.length} unique patterns defined. Using unique patterns count.`);
         }
 
+        UNIQUE_TILE_PATTERNS.forEach((pattern, index) => {
+            // Ensure a copy of the pattern is used for the tile's edges
+            tiles.push(new HexTile(`p${playerId}t${index}`, playerId, [...pattern]));
+        });
 
-        const visited = new Set();
-        const queue = [];
-
-        // Start BFS from the first tile found.
-        const firstTileKey = tileKeys.find(key => currentBoardState[key] && typeof currentBoardState[key].x === 'number' && typeof currentBoardState[key].y === 'number');
-        if (!firstTileKey) {
-            // This can happen if boardState contains entries that are not valid tiles (e.g. null/undefined or missing x/y)
-            // Or if it's empty after filtering, which should be caught by tileKeys.length === 0.
-            // console.warn("isBoardConnected: No valid starting tile found in board state:", currentBoardState);
-            return true; // Or false, depending on how strictly we define "connected" for invalid states. True might be safer to not block moves unnecessarily due to bad intermediate state.
-        }
-
-        const startTile = currentBoardState[firstTileKey];
-        queue.push(`${startTile.x},${startTile.y}`);
-        visited.add(`${startTile.x},${startTile.y}`);
-
-        let head = 0;
-        while(head < queue.length) {
-            const currentKey = queue[head++];
-            const currentTile = currentBoardState[currentKey]; // Should exist if key is from queue
-
-            if (!currentTile) continue; // Should not happen if board state is consistent
-
-            const neighbors = getNeighbors(currentTile.x, currentTile.y);
-            for (const neighborInfo of neighbors) {
-                const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
-                if (currentBoardState[neighborKey] && !visited.has(neighborKey)) {
-                    visited.add(neighborKey);
-                    queue.push(neighborKey);
-                }
-            }
-        }
-
-        // Check if all actual tiles in currentBoardState were visited.
-        // tileKeys might include non-tile properties if not careful, so filter.
-        const actualTileCount = tileKeys.filter(key => currentBoardState[key] && typeof currentBoardState[key].x === 'number').length;
-        return visited.size === actualTileCount;
+        return tiles;
     }
 
 
