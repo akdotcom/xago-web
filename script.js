@@ -610,7 +610,7 @@ function getCookie(name) {
         ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
         // Optionally, draw a background or grid lines on the canvas here
         // For example, a simple background:
-        ctx.fillStyle = '#ddd'; // Same as old #game-board background
+        ctx.fillStyle = 'lightblue'; // Same as old #game-board background
         ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
         ctx.strokeStyle = '#aaa'; // Same as old #game-board border
         ctx.strokeRect(0, 0, gameCanvas.width, gameCanvas.height);
@@ -2777,7 +2777,7 @@ function animateView() {
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
 
-        if (windowHeight >= windowWidth) {
+        if (windowHeight >= 3*(windowWidth/2)) {
             // New logic: board full width, 50% window height, no top margin
             gameboardArea.style.width = '100vw'; // Make container full viewport width
             gameboardArea.style.marginLeft = 'calc(-1 * (100vw - 100%) / 2)'; // Adjust margin to break out of parent constraints if necessary
