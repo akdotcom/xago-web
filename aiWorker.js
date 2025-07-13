@@ -1245,22 +1245,19 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     }
 
     var bestMoves = [];
-    // Ensure Object.assign is used for shallow copying tile data before hydrating, if needed for map.
-    var currentMaximizingPlayerHand = maximizingPlayer ? hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); })) : hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); }));
-    var currentMinimizingPlayerHand = maximizingPlayer ? hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); })) : hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); }));
+    // Hydrate hands for this level of the recursion
+    var aiHand = hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); }));
+    var opponentHand = hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); }));
 
     var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
+    var handForCurrentPlayer = maximizingPlayer ? aiHand : opponentHand;
     var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
 
     if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
-    // TODO: Pass the actual gameMode for the current player (aiPlayerId or opponentPlayerId)
-    // For now, defaulting to "basic" for this call as gameMode isn't passed down to findBestMoveMinimax yet.
-    // This will be addressed in a subsequent step.
-    // var gameModeForCurrentPlayer = "basic"; // Placeholder
-    // Use the gameMode passed into findBestMoveMinimax. This mode applies to both players.
-    var modeForGetAllPossibleMoves = gameMode; // The game mode is unified.
+    var modeForGetAllPossibleMoves = gameMode;
     if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Depth " + depth + ", Player " + currentPlayerForThisTurn + "): Calling getAllPossibleMoves with mode: " + modeForGetAllPossibleMoves);
-    var possibleMoves = getAllPossibleMoves(currentBoardState, maximizingPlayer ? currentMaximizingPlayerHand : currentMinimizingPlayerHand, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
+
+    var possibleMoves = getAllPossibleMoves(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
     if (effectiveDebug) {
         console.timeEnd("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
         console.log("[Worker DEBUG] findBestMoveMinimax: (Depth: " + depth + ") Possible moves:", possibleMoves.length);
@@ -1295,8 +1292,8 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             }
 
             var boardAfterMove_sim = deepCopyBoardState(currentBoardState);
-            var handAfterMove_sim = currentMaximizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); }); // Deep copy hand
-            var opponentHandForNext_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); }); // Deep copy hand
+            var handAfterMove_sim = aiHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
+            var opponentHandForNext_sim = opponentHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
 
             if (move.type === 'place') {
                 var tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
@@ -1389,10 +1386,11 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             }
 
             var boardAfterMove_sim_min = deepCopyBoardState(currentBoardState);
-            // Ensure hands are deep copied for simulation
-            var handAfterMove_sim_min = currentMaximizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
-            var nextMaximizingHand_sim = currentMinimizingPlayerHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
-
+            // When minimizing, the roles are swapped for the next recursive call's perspective.
+            // 'handAfterMove_sim_min' will be the opponent's hand in the next frame.
+            // 'nextMaximizingHand_sim' will be the AI's hand in the next frame.
+            var handAfterMove_sim_min = opponentHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
+            var nextMaximizingHand_sim = aiHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
 
             if (move_min.type === 'place') {
                 var tileForSim_min = new HexTile(move_min.tile.id, currentPlayerForThisTurn, [].concat(move_min.tile.edges));
