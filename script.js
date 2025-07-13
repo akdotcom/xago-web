@@ -1358,8 +1358,6 @@ function getCookie(name) {
 
 
     function updatePlacementHighlights() {
-        // This function now only draws the board and the green/yellow spots.
-        // The mouseover full preview is handled separately by the mousemove event.
         if (!selectedTile) {
             redrawBoardOnCanvas();
             return;
@@ -1368,57 +1366,36 @@ function getCookie(name) {
         redrawBoardOnCanvas(); // Redraw existing tiles first
 
         const tileToPlace = selectedTile.tile;
+        const placements = getAllPossiblePlacements(boardState, tileToPlace, currentPlayer);
         const currentSelectedOrientation = tileToPlace.orientation;
 
-        const checkRadius = 8;
-        let qMin = -checkRadius, qMax = checkRadius, rMin = -checkRadius, rMax = checkRadius;
+        const greenSpots = new Set();
+        const yellowSpots = new Map();
 
-        if (Object.keys(boardState).length > 0) {
-            let minPlacedQ = Infinity, maxPlacedQ = -Infinity, minPlacedR = Infinity, maxPlacedR = -Infinity;
-            Object.values(boardState).forEach(tile => {
-                minPlacedQ = Math.min(minPlacedQ, tile.x);
-                maxPlacedQ = Math.max(maxPlacedQ, tile.x);
-                minPlacedR = Math.min(minPlacedR, tile.y);
-                maxPlacedR = Math.max(maxPlacedR, tile.y);
-            });
-            qMin = minPlacedQ - checkRadius / 2;
-            qMax = maxPlacedQ + checkRadius / 2;
-            rMin = minPlacedR - checkRadius / 2;
-            rMax = maxPlacedR + checkRadius / 2;
-        }
-
-        for (let q = Math.floor(qMin); q <= Math.ceil(qMax); q++) {
-            for (let r = Math.floor(rMin); r <= Math.ceil(rMax); r++) {
-                if (boardState[`${q},${r}`]) continue;
-
-                tileToPlace.orientation = currentSelectedOrientation;
-                if (isPlacementValid(tileToPlace, q, r, true)) {
-                    drawPlacementPreview(q, r, tileToPlace, 'green');
-                } else {
-                    let canPlaceOtherOrientation = false;
-                    let validPreviewOrientation = -1;
-                    for (let i = 0; i < 6; i++) {
-                        if (i === currentSelectedOrientation) continue;
-                        tileToPlace.orientation = i;
-                        if (isPlacementValid(tileToPlace, q, r, true)) {
-                            canPlaceOtherOrientation = true;
-                            validPreviewOrientation = i;
-                            break;
-                        }
-                    }
-                    tileToPlace.orientation = currentSelectedOrientation; // Restore
-
-                    if (canPlaceOtherOrientation) {
-                        // For yellow spots, we pass a temporary tile with the valid orientation
-                        // to drawPlacementPreview, but the actual tile in hand remains unchanged.
-                        const tempTileForYellowPreview = new HexTile(tileToPlace.id, tileToPlace.playerId, [...tileToPlace.edges]);
-                        tempTileForYellowPreview.orientation = validPreviewOrientation;
-                        drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
-                    }
+        for (const placement of placements) {
+            const key = `${placement.x},${placement.y}`;
+            if (placement.orientation === currentSelectedOrientation) {
+                greenSpots.add(key);
+            } else {
+                if (!yellowSpots.has(key)) {
+                    yellowSpots.set(key, placement.orientation);
                 }
             }
         }
-        tileToPlace.orientation = currentSelectedOrientation; // Ensure original orientation is set
+
+        for (const key of greenSpots) {
+            const [q, r] = key.split(',').map(Number);
+            drawPlacementPreview(q, r, tileToPlace, 'green');
+        }
+
+        for (const [key, orientation] of yellowSpots.entries()) {
+            if (!greenSpots.has(key)) {
+                const [q, r] = key.split(',').map(Number);
+                const tempTileForYellowPreview = new HexTile(tileToPlace.id, tileToPlace.playerId, [...tileToPlace.edges]);
+                tempTileForYellowPreview.orientation = orientation;
+                drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
+            }
+        }
     }
 
     function selectTileFromHand(tile, tileCanvasElement, playerId, isDragStart = false) {

@@ -314,6 +314,35 @@ function isPlacementValid(tile, x, y, boardState, isDragOver = false, isNewTileP
     return true;
 }
 
+function getAllPossiblePlacements(boardState, tile, playerId) {
+    const possiblePlacements = [];
+    const initialBoardIsEmpty = Object.keys(boardState).length === 0;
+
+    const originalOrientation = tile.orientation;
+    const uniqueOrientations = getUniqueOrientations(tile);
+
+    for (const orientation of uniqueOrientations) {
+        tile.orientation = orientation;
+
+        if (initialBoardIsEmpty) {
+            if (isPlacementValid(tile, 0, 0, boardState, true, true)) {
+                possiblePlacements.push({ x: 0, y: 0, orientation });
+            }
+        } else {
+            const outsideCells = getOutsideEmptyCells(boardState);
+            for (const cellKey of outsideCells) {
+                const [x, y] = cellKey.split(',').map(Number);
+                if (isPlacementValid(tile, x, y, boardState, true, true)) {
+                    possiblePlacements.push({ x, y, orientation });
+                }
+            }
+        }
+    }
+
+    tile.orientation = originalOrientation; // Restore original orientation
+    return possiblePlacements;
+}
+
 function calculateScoresForBoard(currentBoardState, forTileKey = null) {
     let p1Score = 0;
     let p2Score = 0;
