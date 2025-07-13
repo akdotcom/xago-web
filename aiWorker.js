@@ -1,15 +1,6 @@
 // aiWorker.js
 importScripts('gameEngine.js');
 
-// Cache for getOutsideEmptyCells in worker
-var workerCachedOutsideEmptyCells = null;
-var workerBoardStateSignatureForCache = "";
-
-function invalidateWorkerOutsideCellCache() {
-    workerCachedOutsideEmptyCells = null;
-    workerBoardStateSignatureForCache = "";
-    // console.log("[Worker] Outside cell cache invalidated.");
-}
 
 function hydrateHand(handData) {
     return handData.map(function(tileData) {
@@ -723,49 +714,6 @@ function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effect
 // If it's complex, it should be replicated from script.js.
 // For the purpose of this step, I'll assume a simplified version or that it will be provided.
 // Adding a basic isBoardConnected here for compilation, will need to be robust.
-// Copied from script.js for robustness
-function isBoardConnected(currentBoardState) {
-    const tileKeys = Object.keys(currentBoardState);
-    if (tileKeys.length === 0) {
-        return true; // An empty board is connected.
-    }
-    if (tileKeys.length === 1 && currentBoardState[tileKeys[0]]) {
-         return true; // A board with a single tile is connected.
-    }
-
-    const visited = new Set();
-    const queue = [];
-
-    const firstTileKey = tileKeys.find(function(key) { return currentBoardState[key] && typeof currentBoardState[key].x === 'number' && typeof currentBoardState[key].y === 'number'; });
-    if (!firstTileKey) {
-        return true;
-    }
-
-    const startTile = currentBoardState[firstTileKey];
-    queue.push(startTile.x + "," + startTile.y);
-    visited.add(startTile.x + "," + startTile.y);
-
-    let head = 0;
-    while(head < queue.length) {
-        const currentKey = queue[head++];
-        const currentTile = currentBoardState[currentKey];
-
-        if (!currentTile) continue;
-
-        const neighbors = getNeighbors(currentTile.x, currentTile.y);
-        for (var i_n_ic = 0; i_n_ic < neighbors.length; i_n_ic++) {
-            var neighborInfo_ic = neighbors[i_n_ic];
-            const neighborKey = neighborInfo_ic.nx + "," + neighborInfo_ic.ny;
-            if (currentBoardState[neighborKey] && !visited.has(neighborKey)) {
-                visited.add(neighborKey);
-                queue.push(neighborKey);
-            }
-        }
-    }
-
-    const actualTileCount = tileKeys.filter(function(key) { return currentBoardState[key] && typeof currentBoardState[key].x === 'number';}).length;
-    return visited.size === actualTileCount;
-}
 
 
 function evaluateBoard(currentBoardState, playerPerspectiveId) {
