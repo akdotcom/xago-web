@@ -258,52 +258,17 @@ function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effect
     var initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
 
     // 1. Generate moves by placing new tiles from hand
-    var sortedHand_moves = [].concat(hand).sort(function(a,b) { return countTriangles(b) - countTriangles(a); });
-    for (var i_shm = 0; i_shm < sortedHand_moves.length; i_shm++) {
-        var tile_to_place = sortedHand_moves[i_shm]; // Renamed for clarity
-        var originalOrientation_place = tile_to_place.orientation;
-        var uniqueOrientations_place = getUniqueOrientations(tile_to_place);
-
-        for (var i_uop = 0; i_uop < uniqueOrientations_place.length; i_uop++) {
-            var o_place = uniqueOrientations_place[i_uop];
-            tile_to_place.orientation = o_place;
-
-            if (initialBoardIsEmpty) {
-                // If board is empty, (0,0) is the only potential spot.
-                // getOutsideEmptyCells handles this by returning {"0,0"}.
-                // isPlacementValid (called below) will confirm if the tile can be placed there.
-            }
-
-            // Get all valid "outside" empty cells.
-            // These are the only cells where a new tile from hand can be placed.
-            var outsidePlacementCells = getOutsideEmptyCells(currentBoardState);
-            var outsideCellsArray_g = [];
-            outsidePlacementCells.forEach(function(cellKey) {
-                var parts = cellKey.split(',');
-                outsideCellsArray_g.push({ x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) });
+    for (const tile of hand) {
+        const placements = getAllPossiblePlacements(currentBoardState, tile, playerId);
+        for (const placement of placements) {
+            possibleMoves.push({
+                type: 'place',
+                tile: {id: tile.id, playerId: tile.playerId, edges: [...tile.edges]},
+                orientation: placement.orientation,
+                x: placement.x, y: placement.y,
+                playerId: playerId
             });
-
-            for (var i_ops = 0; i_ops < outsideCellsArray_g.length; i_ops++) {
-                var spotCoords_p = outsideCellsArray_g[i_ops];
-                // Check if the current tile_to_place (with orientation o_place)
-                // is valid at this "outside" spot. isPlacementValid will check
-                // for matching edges, etc. The "is it an outside spot" criteria
-                // is already met by iterating `outsideCellsArray_g`.
-                // The `isSpaceEnclosed` check within `isPlacementValid` will also be
-                // implicitly satisfied because these are outside cells.
-                // This is a new tile placement, so isNewTilePlacement is true.
-                if (isPlacementValid(tile_to_place, spotCoords_p.x, spotCoords_p.y, currentBoardState, true, localDebug, true)) {
-                    possibleMoves.push({
-                        type: 'place',
-                        tile: {id: tile_to_place.id, playerId: tile_to_place.playerId, edges: [].concat(tile_to_place.edges)},
-                        orientation: o_place,
-                        x: spotCoords_p.x, y: spotCoords_p.y,
-                        playerId: playerId
-                    });
-                }
-            }
         }
-        tile_to_place.orientation = originalOrientation_place; // Restore orientation
     }
 
     // 2. Generate moves by moving existing tiles on the board (if in "moving" mode)
