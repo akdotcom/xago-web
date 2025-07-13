@@ -40,366 +40,112 @@ function _asyncToGenerator(fn) {
 }
 
 // --- AI Player Logic ---
-// Added gameMode parameter to calculateGreedyMove
-var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, isGreedy2, isGreedy4, gameMode, debug) {
+var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, depth) {
     const effectiveDebug = (typeof debug === 'boolean' ? debug : (typeof debug !== 'undefined' ? Boolean(debug) : false));
 
-    isGreedy4 = isGreedy4 === undefined ? false : isGreedy4;
-    if (effectiveDebug && (isGreedy2 || isGreedy4)) {
-        console.log("[Worker DEBUG] calculateGreedyMove: Entry. PlayerID:", currentPlayerId, "isGreedy2:", isGreedy2, "isGreedy4:", isGreedy4, "GameMode:", gameMode, "EffectiveDebug:", effectiveDebug);
-    }
     yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
 
     var bestMove = null;
 
     self.postMessage({ task: 'aiClearEvaluationHighlight' });
 
-    if (isGreedy4) {
-        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy 4 (" + gameMode + ") calculating move for Player " + currentPlayerId + ".");
-        else console.log("[Worker] AI: Greedy 4 (" + gameMode + ") calculating move for Player " + currentPlayerId + ".");
-        var depth = 3;
-        var statsPruned = { nodesAtHorizon: 0, cutoffs: 0 };
-        // Pass gameMode to findBestMoveMinimax (it's not directly used by findBestMoveMinimax, but by getAllPossibleMoves called within it)
-        // The gameMode parameter in findBestMoveMinimax itself is a placeholder for now.
-        // The crucial part is that getAllPossibleMoves receives the correct gameMode.
-        // We need to ensure findBestMoveMinimax is structured to pass its own player's gameMode to getAllPossibleMoves.
-        // For now, findBestMoveMinimax has a placeholder gameMode. Let's assume it correctly uses the AI's gameMode.
-        var minimaxResultPruned = findBestMoveMinimax(
+    if (depth > 0) { // Minimax-based Greedy (Greedy2, Greedy4)
+        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy (depth " + depth + ", " + gameMode + ") calculating move for Player " + currentPlayerId + ".");
+        else console.log("[Worker] AI: Greedy (depth " + depth + ", " + gameMode + ") calculating move for Player " + currentPlayerId + ".");
+
+        var stats = { nodesAtHorizon: 0, cutoffs: 0 };
+        var minimaxResult = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, statsPruned, depth, gameMode, effectiveDebug // Pass gameMode here
+            depth, -Infinity, Infinity, true, true, stats, depth, gameMode, effectiveDebug
         );
-        var percentageSkipped = 0;
-        var totalLeavesWithoutPruning = 0;
 
-        if (effectiveDebug && statsPruned.nodesAtHorizon > 0) {
-            var statsNoPruning = { nodesAtHorizon: 0, cutoffs: 0 };
-            findBestMoveMinimax(
-                boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-                depth, -Infinity, Infinity, true, false, statsNoPruning, depth, gameMode, false // Pass gameMode here too
-            );
-            totalLeavesWithoutPruning = statsNoPruning.nodesAtHorizon;
-            if (totalLeavesWithoutPruning > 0) {
-                var evaluatedLeavesWithPruning = statsPruned.nodesAtHorizon;
-                percentageSkipped = ((totalLeavesWithoutPruning - evaluatedLeavesWithPruning) / totalLeavesWithoutPruning) * 100;
-            }
-        }
-
-        if (minimaxResultPruned && minimaxResultPruned.moves && minimaxResultPruned.moves.length > 0) {
-            var chosenMinimaxMove = minimaxResultPruned.moves[Math.floor(Math.random() * minimaxResultPruned.moves.length)];
-            bestMove = { // Ensure bestMove structure matches what workerPerformAiMove expects
-                type: chosenMinimaxMove.type, // Pass the type
+        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
+            var chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+            bestMove = {
+                type: chosenMinimaxMove.type,
                 tileId: chosenMinimaxMove.tile.id,
-                orientation: chosenMinimaxMove.tile.orientation,
+                orientation: chosenMinimaxMove.orientation,
                 x: chosenMinimaxMove.x,
                 y: chosenMinimaxMove.y,
                 score: chosenMinimaxMove.score,
-                originalX: chosenMinimaxMove.originalX, // Include if it's a move
-                originalY: chosenMinimaxMove.originalY  // Include if it's a move
-            };
-            console.log("[Worker] Greedy 4 AI Summary: Chose " + bestMove.type + " for tile " + bestMove.tileId + " at (" + bestMove.x + "," + bestMove.y + "), orientation " + bestMove.orientation + ".");
-            console.log("    Score: " + bestMove.score);
-            if (effectiveDebug) {
-                console.log("    Strict Pruning Stats: Nodes at horizon: " + statsPruned.nodesAtHorizon + ", Cutoffs: " + statsPruned.cutoffs);
-                console.log("    Baseline (No Pruning): Total nodes at horizon: " + totalLeavesWithoutPruning);
-                if (totalLeavesWithoutPruning > 0) console.log("    Pruning Efficiency: Skipped approx. " + percentageSkipped.toFixed(1) + "% of horizon nodes.");
-                else console.log("    Pruning Efficiency: Not applicable (no nodes at horizon without pruning).");
-            }
-        } else {
-            console.log("[Worker] Greedy 4 AI: No valid moves found.");
-        }
-        if (effectiveDebug) console.log("[Worker DEBUG] calculateGreedyMove (Greedy 4): Minimax result:", minimaxResultPruned, "Chosen bestMove:", bestMove);
-    } else if (isGreedy2) {
-        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy 2 (" + gameMode + ") calculating move for Player " + currentPlayerId + ".");
-        else console.log("[Worker] AI: Greedy 2 (" + gameMode + ") calculating move for Player " + currentPlayerId + ".");
-        var minimaxResult = findBestMoveMinimax(
-            boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            1, -Infinity, Infinity, true, true, {}, 1, gameMode, effectiveDebug // Pass gameMode here
-        );
-        if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            var chosenMinimaxMoveG2 = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
-            bestMove = {
-                type: chosenMinimaxMoveG2.type,
-                tileId: chosenMinimaxMoveG2.tile.id,
-                orientation: chosenMinimaxMoveG2.tile.orientation,
-                x: chosenMinimaxMoveG2.x,
-                y: chosenMinimaxMoveG2.y,
-                score: chosenMinimaxMoveG2.score,
-                originalX: chosenMinimaxMoveG2.originalX,
-                originalY: chosenMinimaxMoveG2.originalY
+                originalX: chosenMinimaxMove.originalX,
+                originalY: chosenMinimaxMove.originalY
             };
         }
-    } else { // Greedy 1
-        // Greedy 1 currently does not use gameMode for its own move generation logic here.
-        // It only considers placing tiles from hand. If it needs to consider moves,
-        // this section would need significant changes to generate and evaluate move actions.
-        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy 1 (defaulting to place-only) calculating move for Player " + currentPlayerId + ".");
+    } else { // Simple Greedy (Greedy1, depth 0)
+        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy (depth 0) calculating move for Player " + currentPlayerId + ".");
         var bestScoreDiff = -Infinity;
         var bestMoves = [];
-        var sortedHand = [].concat(player2Hand).sort(function(a, b) { return countTriangles(b) - countTriangles(a); });
 
-        for (var i_sh = 0; i_sh < sortedHand.length; i_sh++) {
-            var tile = sortedHand[i_sh];
-            var originalOrientation = tile.orientation;
-            var uniqueOrientations = getUniqueOrientations(tile);
-            for (var i_uo = 0; i_uo < uniqueOrientations.length; i_uo++) {
-                var o = uniqueOrientations[i_uo];
-                tile.orientation = o;
-                var placementSpots = []; // This will now be populated from getOutsideEmptyCells
-                if (Object.keys(boardState).length === 0) {
-                    // Handled by getOutsideEmptyCells returning {"0,0"}
-                    var outsideCells_g1_empty = getOutsideEmptyCells(boardState); // Should be {"0,0"}
-                    outsideCells_g1_empty.forEach(function(cellKey){
-                        var parts = cellKey.split(',');
-                        placementSpots.push({ x: parseInt(parts[0],10), y: parseInt(parts[1],10) });
-                    });
-                } else {
-                    var outsideCells_g1 = getOutsideEmptyCells(boardState);
-                    outsideCells_g1.forEach(function(cellKey){
-                        var parts = cellKey.split(',');
-                        placementSpots.push({ x: parseInt(parts[0],10), y: parseInt(parts[1],10) });
-                    });
+        var possibleMoves = getAllPossibleMoves(boardState, player2Hand, currentPlayerId, gameMode, effectiveDebug);
+
+        for (var i_pm = 0; i_pm < possibleMoves.length; i_pm++) {
+            var move = possibleMoves[i_pm];
+
+            self.postMessage({
+                task: 'aiEvaluatingMove',
+                moveData: {
+                    tile: { id: move.tile.id, playerId: move.playerId, edges: [].concat(move.tile.edges), orientation: move.orientation },
+                    x: move.x,
+                    y: move.y,
+                    type: move.type,
+                    originalX: move.originalX,
+                    originalY: move.originalY
                 }
+            });
 
-                for (var i_ps = 0; i_ps < placementSpots.length; i_ps++) {
-                    var pos = placementSpots[i_ps];
-                    // isPlacementValid will check edge matching etc.
-                    // The spot `pos` is already guaranteed to be an "outside" spot.
-                    // This is a new tile placement, so isNewTilePlacement is true.
-                    if (isPlacementValid(tile, pos.x, pos.y, boardState, true, effectiveDebug, true)) {
-                        // For Greedy 1, send evaluation message here, *after* validation
-                        self.postMessage({
-                            task: 'aiEvaluatingMove',
-                            moveData: { // For Greedy 1, this is always a 'place' action from hand
-                                tile: { id: tile.id, playerId: tile.playerId, edges: [].concat(tile.edges), orientation: tile.orientation },
-                                x: pos.x,
-                                y: pos.y,
-                                type: 'place'
-                            }
-                        });
+            var tempBoardState = deepCopyBoardState(boardState);
+            var simTile = new HexTile(move.tile.id, move.playerId, [].concat(move.tile.edges));
+            simTile.orientation = move.orientation;
+            simTile.x = move.x;
+            simTile.y = move.y;
 
-                        var tempBoardState = deepCopyBoardState(boardState);
-                        var simTile = new HexTile(tile.id, tile.playerId, [].concat(tile.edges));
-                        simTile.orientation = tile.orientation;
-                        simTile.x = pos.x;
-                        simTile.y = pos.y;
-                        tempBoardState["" + pos.x + "," + pos.y] = simTile;
-                        // Note: Greedy 1 currently only considers placing tiles from hand.
-                        // If it were to consider moves, the simulation here would need to handle 'move' types,
-                        // similar to Minimax, by adjusting tempBoardState (removing from old, adding to new)
-                        // and not altering the hand.
-                        // For this iteration, Greedy 1's `getAllPossibleMoves` equivalent is embedded.
-
-                        var removalResult = simulateRemovalCycle(tempBoardState, currentPlayerId, effectiveDebug); // Pass effectiveDebug
-                        var boardAfterSimulatedRemovals = removalResult.boardState;
-
-                        var scores = calculateScoresForBoard(boardAfterSimulatedRemovals);
-                        var scoreDiff = (currentPlayerId === 2 ? scores.player2Score - scores.player1Score : scores.player1Score - scores.player2Score);
-
-                        if (scoreDiff > bestScoreDiff) {
-                            bestScoreDiff = scoreDiff;
-                            bestMoves = [{ type: 'place', tileId: tile.id, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff }];
-                        } else if (scoreDiff === bestScoreDiff) {
-                            bestMoves.push({ type: 'place', tileId: tile.id, orientation: tile.orientation, x: pos.x, y: pos.y, score: scoreDiff });
-                        }
-                    }
-                }
-            }
-            tile.orientation = originalOrientation; // Restore original orientation of hand tile
-        }
-
-        // If gameMode is "moving", also consider moving tiles for Greedy 1
-        // This part is simplified for Greedy 1; it doesn't use the full getAllPossibleMoves for moves yet.
-        // It will iterate its own tiles on board and check valid moves.
-        // TODO: Integrate this with a unified getAllPossibleMoves if desired later for consistency,
-        // or enhance this section to be more robust for Greedy 1 moves.
-        // For now, the plan focuses on Minimax AI (Greedy2/4) for move considerations via getAllPossibleMoves.
-        // Greedy 1 will primarily place from hand. If we want Greedy 1 to also make moves,
-        // its move generation and evaluation loop here would need to be expanded significantly.
-        // The current plan description implies updates to Minimax AIs first.
-        // Let's assume Greedy 1 change for moves is out of scope for this specific plan item unless clarified.
-
-        // --- START OF GREEDY 1 MOVE LOGIC ADDITION ---
-        if (gameMode === "moving" && Object.keys(boardState).length > 0) {
-            if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Evaluating tile moves from board. PlayerID:", currentPlayerId);
-
-            var playerTilesOnBoard_g1 = [];
-            for (var key_bt_g1 in boardState) {
-                if (boardState.hasOwnProperty(key_bt_g1)) {
-                    var boardTile_g1 = boardState[key_bt_g1];
-                    if (boardTile_g1.playerId === currentPlayerId) {
-                        playerTilesOnBoard_g1.push(boardTile_g1);
-                    }
-                }
+            if (move.type === 'place') {
+                tempBoardState["" + move.x + "," + move.y] = simTile;
+            } else if (move.type === 'move') {
+                delete tempBoardState["" + move.originalX + "," + move.originalY];
+                tempBoardState["" + move.x + "," + move.y] = simTile;
             }
 
-            if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Found " + playerTilesOnBoard_g1.length + " tiles on board for player " + currentPlayerId);
+            var removalResult = simulateRemovalCycle(tempBoardState, currentPlayerId, effectiveDebug);
+            var boardAfterSimulatedRemovals = removalResult.boardState;
 
-            for (var i_ptb_g1 = 0; i_ptb_g1 < playerTilesOnBoard_g1.length; i_ptb_g1++) {
-                var tile_to_move_g1 = playerTilesOnBoard_g1[i_ptb_g1];
-                var originalBoardOrientation_g1 = tile_to_move_g1.orientation;
-                var maxMoveDistance_g1 = tile_to_move_g1.getOrientedEdges().filter(function(edge) { return edge === 0; }).length;
+            var scores = calculateScoresForBoard(boardAfterSimulatedRemovals);
+            var scoreDiff = (currentPlayerId === 2 ? scores.player2Score - scores.player1Score : scores.player1Score - scores.player2Score);
 
-                if (effectiveDebug) console.log("[Worker DEBUG] Greedy 1: Considering moving tile " + tile_to_move_g1.id + " from (" + tile_to_move_g1.x + "," + tile_to_move_g1.y + "), maxDist: " + maxMoveDistance_g1);
-
-                var uniqueOrientations_g1_move = getUniqueOrientations(tile_to_move_g1);
-
-                for (var i_uom_g1 = 0; i_uom_g1 < uniqueOrientations_g1_move.length; i_uom_g1++) {
-                    var o_move_g1 = uniqueOrientations_g1_move[i_uom_g1];
-
-                    var tempTileForValidation_g1 = new HexTile(tile_to_move_g1.id, tile_to_move_g1.playerId, [].concat(tile_to_move_g1.edges));
-                    tempTileForValidation_g1.orientation = o_move_g1;
-
-
-                    // Iterate over possible destination spots
-                    var searchRadius_g1 = maxMoveDistance_g1 + 1;
-                    for (var q_dest_g1 = tile_to_move_g1.x - searchRadius_g1; q_dest_g1 <= tile_to_move_g1.x + searchRadius_g1; q_dest_g1++) {
-                        for (var r_dest_g1 = tile_to_move_g1.y - searchRadius_g1; r_dest_g1 <= tile_to_move_g1.y + searchRadius_g1; r_dest_g1++) {
-                            var dist_g1 = (Math.abs(tile_to_move_g1.x - q_dest_g1) + Math.abs(tile_to_move_g1.x + tile_to_move_g1.y - q_dest_g1 - r_dest_g1) + Math.abs(tile_to_move_g1.y - r_dest_g1)) / 2;
-
-                            if (dist_g1 > maxMoveDistance_g1) continue;
-                            if (dist_g1 === 0 && o_move_g1 === originalBoardOrientation_g1) continue;
-
-                            var targetKey_move_g1 = "" + q_dest_g1 + "," + r_dest_g1;
-                            var existingTileAtTarget_g1 = boardState[targetKey_move_g1];
-                            if (existingTileAtTarget_g1 && existingTileAtTarget_g1.id !== tile_to_move_g1.id) continue;
-
-                            // Create a temporary board state for validation
-                            var tempBoardState_move_g1 = deepCopyBoardState(boardState);
-                            delete tempBoardState_move_g1["" + tile_to_move_g1.x + "," + tile_to_move_g1.y];
-
-                            // Update the temporary tile instance with new position for validation
-                            tempTileForValidation_g1.x = q_dest_g1;
-                            tempTileForValidation_g1.y = r_dest_g1;
-                            tempBoardState_move_g1[targetKey_move_g1] = tempTileForValidation_g1;
-
-                            var touchesExistingTile_move_g1 = false;
-                            var edgesMatch_move_g1 = true;
-                            var neighbors_move_dest_g1 = getNeighbors(q_dest_g1, r_dest_g1);
-
-                            if (Object.keys(tempBoardState_move_g1).length === 1 && tempBoardState_move_g1[targetKey_move_g1].id === tile_to_move_g1.id) {
-                                touchesExistingTile_move_g1 = true;
-                            } else if (Object.keys(tempBoardState_move_g1).length > 1) {
-                                for (var k_nmd_g1 = 0; k_nmd_g1 < neighbors_move_dest_g1.length; k_nmd_g1++) {
-                                    var neighborInfo_md_g1 = neighbors_move_dest_g1[k_nmd_g1];
-                                    var neighbor_md_g1 = tempBoardState_move_g1["" + neighborInfo_md_g1.nx + "," + neighborInfo_md_g1.ny];
-                                    if (neighbor_md_g1 && neighbor_md_g1.id !== tile_to_move_g1.id) {
-                                        touchesExistingTile_move_g1 = true;
-                                        var newOrientedEdges_md_g1 = tempTileForValidation_g1.getOrientedEdges();
-                                        var neighborOrientedEdges_md_g1 = neighbor_md_g1.getOrientedEdges();
-                                        if (newOrientedEdges_md_g1[neighborInfo_md_g1.edgeIndexOnNewTile] !== neighborOrientedEdges_md_g1[neighborInfo_md_g1.edgeIndexOnNeighborTile]) {
-                                            edgesMatch_move_g1 = false; break;
-                                        }
-                                    }
-                                }
-                            } else {
-                                touchesExistingTile_move_g1 = true;
-                            }
-
-                            var isConnected_move_g1 = isBoardConnected(tempBoardState_move_g1);
-
-                            if ((touchesExistingTile_move_g1 || Object.keys(tempBoardState_move_g1).length <= 1) && edgesMatch_move_g1 && isConnected_move_g1) {
-                                if (effectiveDebug) {
-                                    console.log("[Worker DEBUG] Greedy 1: Valid MOVE evaluated: Tile " + tile_to_move_g1.id +
-                                                " from (" + tile_to_move_g1.x + "," + tile_to_move_g1.y + ") to (" + q_dest_g1 + "," + r_dest_g1 +
-                                                ") ori " + o_move_g1);
-                                }
-                                self.postMessage({
-                                    task: 'aiEvaluatingMove',
-                                    moveData: {
-                                        tile: { id: tile_to_move_g1.id, playerId: tile_to_move_g1.playerId, edges: [].concat(tile_to_move_g1.edges), orientation: o_move_g1 },
-                                        x: q_dest_g1,
-                                        y: r_dest_g1,
-                                        originalX: tile_to_move_g1.x,
-                                        originalY: tile_to_move_g1.y,
-                                        type: 'move'
-                                    }
-                                });
-
-                                // Simulate the move on a fresh copy for scoring
-                                var scoringBoardState_g1 = deepCopyBoardState(boardState);
-                                delete scoringBoardState_g1["" + tile_to_move_g1.x + "," + tile_to_move_g1.y];
-                                var movedTileForScoring_g1 = new HexTile(tile_to_move_g1.id, tile_to_move_g1.playerId, [].concat(tile_to_move_g1.edges));
-                                movedTileForScoring_g1.orientation = o_move_g1;
-                                movedTileForScoring_g1.x = q_dest_g1;
-                                movedTileForScoring_g1.y = r_dest_g1;
-                                scoringBoardState_g1[targetKey_move_g1] = movedTileForScoring_g1;
-
-                                var removalResult_g1_move = simulateRemovalCycle(scoringBoardState_g1, currentPlayerId, effectiveDebug);
-                                var boardAfterSimRemovals_g1_move = removalResult_g1_move.boardState;
-                                var scores_g1_move = calculateScoresForBoard(boardAfterSimRemovals_g1_move);
-                                var scoreDiff_g1_move = (currentPlayerId === 2 ? scores_g1_move.player2Score - scores_g1_move.player1Score : scores_g1_move.player1Score - scores_g1_move.player2Score);
-
-                                if (scoreDiff_g1_move > bestScoreDiff) {
-                                    bestScoreDiff = scoreDiff_g1_move;
-                                    bestMoves = [{
-                                        type: 'move',
-                                        tileId: tile_to_move_g1.id,
-                                        orientation: o_move_g1,
-                                        x: q_dest_g1, y: r_dest_g1,
-                                        originalX: tile_to_move_g1.x,
-                                        originalY: tile_to_move_g1.y,
-                                        score: scoreDiff_g1_move
-                                    }];
-                                } else if (scoreDiff_g1_move === bestScoreDiff) {
-                                    bestMoves.push({
-                                        type: 'move',
-                                        tileId: tile_to_move_g1.id,
-                                        orientation: o_move_g1,
-                                        x: q_dest_g1, y: r_dest_g1,
-                                        originalX: tile_to_move_g1.x,
-                                        originalY: tile_to_move_g1.y,
-                                        score: scoreDiff_g1_move
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                // No need to restore tile_to_move_g1.orientation as we used tempTileForValidation_g1 for modifications within orientation loop
+            if (scoreDiff > bestScoreDiff) {
+                bestScoreDiff = scoreDiff;
+                bestMoves = [{
+                    type: move.type,
+                    tileId: move.tile.id,
+                    orientation: move.orientation,
+                    x: move.x,
+                    y: move.y,
+                    originalX: move.originalX,
+                    originalY: move.originalY,
+                    score: scoreDiff
+                }];
+            } else if (scoreDiff === bestScoreDiff) {
+                bestMoves.push({
+                    type: move.type,
+                    tileId: move.tile.id,
+                    orientation: move.orientation,
+                    x: move.x,
+                    y: move.y,
+                    originalX: move.originalX,
+                    originalY: move.originalY,
+                    score: scoreDiff
+                });
             }
         }
-        // --- END OF GREEDY 1 MOVE LOGIC ADDITION ---
 
-
-        // If hand is empty and it's "moving" mode, Greedy 1 *must* choose a 'move' type if available.
-        // If hand is not empty, it can choose between 'place' and 'move'.
-        if (player2Hand.length === 0 && gameMode === "moving") {
-            var moveActions = bestMoves.filter(function(m) { return m.type === 'move'; });
-            if (moveActions.length > 0) {
-                // If only move actions are available (because hand is empty), pick one of those.
-                // The bestScoreDiff and bestMoves should already reflect the best among moves if only moves were considered.
-                // If bestMoves contains both place and move, and hand is empty, this filters to moves.
-                // We need to ensure bestScoreDiff was appropriately updated if only moves were possible.
-                // The logic above iterates through place then move, so bestScoreDiff and bestMoves will contain the best overall.
-                // Here, we are just filtering to ensure a 'move' type is picked if hand is empty.
-                var bestMoveScoreAmongMoves = -Infinity;
-                var bestMoveActions = [];
-                for(var im=0; im<moveActions.length; im++){
-                    if(moveActions[im].score > bestMoveScoreAmongMoves){
-                        bestMoveScoreAmongMoves = moveActions[im].score;
-                        bestMoveActions = [moveActions[im]];
-                    } else if (moveActions[im].score === bestMoveScoreAmongMoves){
-                        bestMoveActions.push(moveActions[im]);
-                    }
-                }
-                if(bestMoveActions.length > 0){
-                    bestMove = bestMoveActions[Math.floor(Math.random() * bestMoveActions.length)];
-                } else {
-                    bestMove = null; // No valid moves found
-                }
-            } else {
-                bestMove = null; // No 'place' moves possible (hand empty), and no 'move' actions found.
-            }
-        } else if (bestMoves.length > 0) {
+        if (bestMoves.length > 0) {
             bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
-
-
     }
     return bestMove;
 });
 
-// Added gameMode to workerPerformAiMove and calculateGreedyMove
 var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOriginal, player1HandOriginal, opponentType, currentPlayerId, gameMode, debug) {
     var bestMove = null;
     var player2Hand = hydrateHand(player2HandOriginal);
@@ -408,66 +154,28 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
 
     if (opponentType === 'random') {
         yield new Promise(function(resolve) { return setTimeout(resolve, 200); });
-        if (player2Hand.length === 0) return null;
-        var tileToPlay = player2Hand[Math.floor(Math.random() * player2Hand.length)];
-        var originalOrientation_rand = tileToPlay.orientation;
-        var rotations = Math.floor(Math.random() * 6);
-        for (var i_rt = 0; i_rt < rotations; i_rt++) {
-            tileToPlay.rotate();
-        }
+        var possibleMoves_rand = getAllPossibleMoves(boardState, player2Hand, currentPlayerId, gameMode, debug);
 
-        var possiblePlacements_rand = [];
-        if (Object.keys(boardState).length === 0) {
-            // For an empty board, (0,0) is the only valid spot.
-            // isPlacementValid already handles the (0,0) check for the first tile.
-            // getOutsideEmptyCells also returns {"0,0"} for an empty board.
-            if (isPlacementValid(tileToPlay, 0, 0, boardState, true, debug, true)) { // Added isNewTilePlacement = true
-                 possiblePlacements_rand.push({ type: 'place', x: 0, y: 0, tile: tileToPlay, orientation: tileToPlay.orientation });
-            }
-        } else {
-            // Get all valid "outside" empty cells
-            var outsideCells = getOutsideEmptyCells(boardState);
-            // Convert Set to array for iteration
-            var outsideCellsArray = [];
-            outsideCells.forEach(function(cellKey) {
-                var parts = cellKey.split(',');
-                outsideCellsArray.push({ x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) });
-            });
-
-            for (var i_oc = 0; i_oc < outsideCellsArray.length; i_oc++) {
-                var cell = outsideCellsArray[i_oc];
-                // Check if the randomly selected tile (with its random orientation)
-                // can be validly placed at this "outside" spot.
-                // isPlacementValid will check for edge matches and other rules.
-                // The "outside" check is implicitly handled by iterating `outsideCellsArray`.
-                if (isPlacementValid(tileToPlay, cell.x, cell.y, boardState, true, debug, true)) { // Added isNewTilePlacement = true
-                    possiblePlacements_rand.push({ type: 'place', x: cell.x, y: cell.y, tile: tileToPlay, orientation: tileToPlay.orientation });
-                }
-            }
-        }
-
-        if (possiblePlacements_rand.length > 0) {
-            var chosenPlacement_rand = possiblePlacements_rand[Math.floor(Math.random() * possiblePlacements_rand.length)];
-            bestMove = { // Random AI always places, so type is 'place'
-                type: 'place',
-                tileId: chosenPlacement_rand.tile.id,
-                orientation: chosenPlacement_rand.orientation,
-                x: chosenPlacement_rand.x,
-                y: chosenPlacement_rand.y
-                // No score, originalX/Y for random
+        if (possibleMoves_rand.length > 0) {
+            var chosenMove_rand = possibleMoves_rand[Math.floor(Math.random() * possibleMoves_rand.length)];
+            bestMove = {
+                type: chosenMove_rand.type,
+                tileId: chosenMove_rand.tile.id,
+                orientation: chosenMove_rand.orientation,
+                x: chosenMove_rand.x,
+                y: chosenMove_rand.y,
+                originalX: chosenMove_rand.originalX,
+                originalY: chosenMove_rand.originalY
             };
+        } else {
+            bestMove = null; // No possible moves
         }
-        tileToPlay.orientation = originalOrientation_rand;
-
     } else if (opponentType === 'greedy') {
-        // Pass gameMode to calculateGreedyMove for Greedy 1
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, false, gameMode, debug);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 0);
     } else if (opponentType === 'greedy2') {
-        // Pass gameMode to calculateGreedyMove for Greedy 2
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, true, false, gameMode, debug);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 1);
     } else if (opponentType === 'greedy4') {
-        // Pass gameMode to calculateGreedyMove for Greedy 4
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, false, true, gameMode, debug);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 3);
     }
     // Ensure bestMove has the 'type' field, defaulting to 'place' if not set by a Minimax AI that returns it.
     // Greedy1 currently only makes 'place' moves. Random also only 'place'.
@@ -823,233 +531,116 @@ function simulateRemovalCycle(initialBoardState, actingPlayerId, effectiveDebug)
 
 // Added initialMaxDepth to track the starting depth for sending evaluation messages
 // Added gameMode parameter
+function _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug) {
+    var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
+    var handForCurrentPlayer = maximizingPlayer ? aiHand : opponentHand;
+    var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
+
+    var boardAfterMove = deepCopyBoardState(currentBoardState);
+    var newHand = handForCurrentPlayer.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
+    var newOpponentHand = (maximizingPlayer ? opponentHand : aiHand).map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
+
+    if (move.type === 'place') {
+        var tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
+        tileForSim.orientation = move.orientation;
+        tileForSim.x = move.x;
+        tileForSim.y = move.y;
+        boardAfterMove["" + move.x + "," + move.y] = tileForSim;
+        newHand = newHand.filter(function(t) { return t.id !== move.tile.id; });
+    } else if (move.type === 'move') {
+        delete boardAfterMove["" + move.originalX + "," + move.originalY];
+        var movedTileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
+        movedTileForSim.orientation = move.orientation;
+        movedTileForSim.x = move.x;
+        movedTileForSim.y = move.y;
+        boardAfterMove["" + move.x + "," + move.y] = movedTileForSim;
+    }
+
+    var removalResult = simulateRemovalCycle(boardAfterMove, currentPlayerForThisTurn, effectiveDebug);
+    boardAfterMove = removalResult.boardState;
+
+    var gainsCurrent = removalResult.handGains[currentPlayerForThisTurn] || [];
+    for(var j=0; j<gainsCurrent.length; j++) newHand.push(new HexTile(gainsCurrent[j].id, gainsCurrent[j].playerId, gainsCurrent[j].edges));
+
+    var gainsNext = removalResult.handGains[nextPlayerForThisTurn] || [];
+    for(var k=0; k<gainsNext.length; k++) newOpponentHand.push(new HexTile(gainsNext[k].id, gainsNext[k].playerId, gainsNext[k].edges));
+
+    if (newHand.length === 0) {
+        return evaluateBoard(boardAfterMove, aiPlayerId) + (maximizingPlayer ? 1000 : -1000);
+    }
+
+    var nextMaximizingPlayer = !maximizingPlayer;
+    var nextAiHand = nextMaximizingPlayer ? newOpponentHand : newHand;
+    var nextOpponentHand = nextMaximizingPlayer ? newHand : newOpponentHand;
+
+    var evalResult = findBestMoveMinimax(boardAfterMove, nextAiHand, nextOpponentHand, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, nextMaximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug);
+    return evalResult.score;
+}
+
 function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug) {
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
-    initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth; // Initialize if not provided
-
-    if (effectiveDebug) {
-        console.log("[Worker DEBUG] findBestMoveMinimax: Entry. Depth:", depth, "Alpha:", alpha, "Beta:", beta, "Maximizing:", maximizingPlayer, "InitialMaxDepth:", initialMaxDepth, "GameMode:", gameMode, "AI:", aiPlayerId, "Opp:", opponentPlayerId);
-        // To avoid excessive logging, let's not log entire board/hands here unless specifically needed for deeper debugging.
-    }
+    initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth;
 
     if (depth === 0) {
         stats.nodesAtHorizon++;
-        var evalScoreBase = evaluateBoard(currentBoardState, aiPlayerId);
-        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax: Base case (depth 0). Score:", evalScoreBase);
-        return { score: evalScoreBase, moves: [] };
+        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
 
-    var bestMoves = [];
-    // Hydrate hands for this level of the recursion
     var aiHand = hydrateHand(aiHandOriginal.map(function(t){ return Object.assign({}, t); }));
     var opponentHand = hydrateHand(opponentHandOriginal.map(function(t){ return Object.assign({}, t); }));
 
     var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
     var handForCurrentPlayer = maximizingPlayer ? aiHand : opponentHand;
-    var nextPlayerForThisTurn = maximizingPlayer ? opponentPlayerId : aiPlayerId;
 
-    if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
-    var modeForGetAllPossibleMoves = gameMode;
-    if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Depth " + depth + ", Player " + currentPlayerForThisTurn + "): Calling getAllPossibleMoves with mode: " + modeForGetAllPossibleMoves);
-
-    var possibleMoves = getAllPossibleMoves(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
-    if (effectiveDebug) {
-        console.timeEnd("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
-        console.log("[Worker DEBUG] findBestMoveMinimax: (Depth: " + depth + ") Possible moves:", possibleMoves.length);
-    }
+    var possibleMoves = getAllPossibleMoves(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, gameMode, effectiveDebug);
 
     if (possibleMoves.length === 0) {
-        var evalScoreNoMoves = evaluateBoard(currentBoardState, aiPlayerId);
-        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax: Base case (no possible moves). Score:", evalScoreNoMoves);
-        return { score: evalScoreNoMoves, moves: [] };
+        return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
 
-    if (maximizingPlayer) {
-        var maxEval = -Infinity;
-        for (var i_max_m = 0; i_max_m < possibleMoves.length; i_max_m++) {
-            var move = possibleMoves[i_max_m];
-            if (effectiveDebug) {
-                console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Evaluating move " + (i_max_m + 1) + "/" + possibleMoves.length + ": Tile " + move.tile.id + " at (" + move.x + "," + move.y + ") ori " + move.orientation);
-                console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1));
-            }
+    var bestMoves = [];
+    var bestEval = maximizingPlayer ? -Infinity : Infinity;
 
-            // If this is the top-level call for the maximizing player (AI's actual turn), send evaluation message
-            if (depth === initialMaxDepth && maximizingPlayer) {
-                self.postMessage({
-                    task: 'aiEvaluatingMove',
-                    moveData: {
-                        tile: { id: move.tile.id, playerId: move.tile.playerId, edges: [].concat(move.tile.edges), orientation: move.orientation },
-                        x: move.x,
-                        y: move.y,
-                        type: move.type // Pass type for visualization if needed
-                    }
-                });
-            }
+    for (var i = 0; i < possibleMoves.length; i++) {
+        var move = possibleMoves[i];
 
-            var boardAfterMove_sim = deepCopyBoardState(currentBoardState);
-            var handAfterMove_sim = aiHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
-            var opponentHandForNext_sim = opponentHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation); });
-
-            if (move.type === 'place') {
-                var tileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
-                tileForSim.orientation = move.orientation;
-                tileForSim.x = move.x;
-                tileForSim.y = move.y;
-                boardAfterMove_sim["" + move.x + "," + move.y] = tileForSim;
-                // Remove placed tile from hand
-                handAfterMove_sim = handAfterMove_sim.filter(function(t) { return t.id !== move.tile.id; });
-            } else if (move.type === 'move') {
-                // Remove tile from its original position on the board
-                delete boardAfterMove_sim["" + move.originalX + "," + move.originalY];
-                // Place tile in its new position
-                var movedTileForSim = new HexTile(move.tile.id, currentPlayerForThisTurn, [].concat(move.tile.edges));
-                movedTileForSim.orientation = move.orientation;
-                movedTileForSim.x = move.x;
-                movedTileForSim.y = move.y;
-                boardAfterMove_sim["" + move.x + "," + move.y] = movedTileForSim;
-                // Hand does not change for a 'move' action
-            }
-
-            if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): simulateRemovalCycle");
-            var removalResult = simulateRemovalCycle(boardAfterMove_sim, currentPlayerForThisTurn, effectiveDebug);
-            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): simulateRemovalCycle");
-            boardAfterMove_sim = removalResult.boardState;
-
-            var gainsCurrent = removalResult.handGains[currentPlayerForThisTurn] || [];
-            for(var j=0; j<gainsCurrent.length; j++) handAfterMove_sim.push(new HexTile(gainsCurrent[j].id, gainsCurrent[j].playerId, gainsCurrent[j].edges));
-
-            var gainsNext = removalResult.handGains[nextPlayerForThisTurn] || [];
-            for(var k=0; k<gainsNext.length; k++) opponentHandForNext_sim.push(new HexTile(gainsNext[k].id, gainsNext[k].playerId, gainsNext[k].edges));
-
-            var currentTurnEval;
-            if (handAfterMove_sim.length === 0) {
-                currentTurnEval = evaluateBoard(boardAfterMove_sim, aiPlayerId) + 1000; // Bonus for emptying hand
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Player emptied hand. Score:", currentTurnEval);
-            } else {
-                if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call");
-                var evalResult = findBestMoveMinimax(boardAfterMove_sim, handAfterMove_sim, opponentHandForNext_sim, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, false, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug);
-                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call");
-                currentTurnEval = evalResult.score;
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Recursive call returned. Score:", currentTurnEval);
-            }
-
-            if (currentTurnEval > maxEval) {
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): New best score. Old maxEval:", maxEval, "New:", currentTurnEval);
-                maxEval = currentTurnEval;
-                bestMoves = [{
-                    type: move.type,
-                    tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation},
+        if (depth === initialMaxDepth && maximizingPlayer) {
+            self.postMessage({
+                task: 'aiEvaluatingMove',
+                moveData: {
+                    tile: { id: move.tile.id, playerId: move.tile.playerId, edges: [].concat(move.tile.edges), orientation: move.orientation },
                     x: move.x,
                     y: move.y,
-                    originalX: move.originalX,
-                    originalY: move.originalY,
-                    score: maxEval
-                }];
-            } else if (currentTurnEval === maxEval) {
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Equal best score. Score:", currentTurnEval);
-                bestMoves.push({
-                    type: move.type,
-                    tile: {id: move.tile.id, playerId: currentPlayerForThisTurn, edges: [].concat(move.tile.edges), orientation: move.orientation},
-                    x: move.x,
-                    y: move.y,
-                    originalX: move.originalX,
-                    originalY: move.originalY,
-                    score: maxEval
-                });
+                    type: move.type
+                }
+            });
+        }
+
+        var currentTurnEval = _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug);
+
+        if (maximizingPlayer) {
+            if (currentTurnEval > bestEval) {
+                bestEval = currentTurnEval;
+                bestMoves = [{ type: move.type, tile: move.tile, orientation: move.orientation, x: move.x, y: move.y, originalX: move.originalX, originalY: move.originalY, score: bestEval }];
+            } else if (currentTurnEval === bestEval) {
+                bestMoves.push({ type: move.type, tile: move.tile, orientation: move.orientation, x: move.x, y: move.y, originalX: move.originalX, originalY: move.originalY, score: bestEval });
             }
-            var oldAlpha = alpha;
             alpha = Math.max(alpha, currentTurnEval);
-            if (effectiveDebug && oldAlpha !== alpha) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Alpha updated. Old:", oldAlpha, "New:", alpha);
-
-            if (useAlphaBetaPruning && alpha >= beta) {
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Pruning. Alpha:", alpha, "Beta:", beta);
-                stats.cutoffs++;
-                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1)); // End time for this iteration before break
-                break;
+        } else { // Minimizing player
+            if (currentTurnEval < bestEval) {
+                bestEval = currentTurnEval;
             }
-            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Loop iteration " + (i_max_m + 1));
+            beta = Math.min(beta, currentTurnEval);
         }
-        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Maximizing, Depth: " + depth + "): Returning. MaxEval:", maxEval, "BestMoves count:", bestMoves.length);
-        return { score: maxEval, moves: bestMoves };
-    } else { // Minimizing player
-        var minEval = Infinity;
-        for (var i_min_m = 0; i_min_m < possibleMoves.length; i_min_m++) {
-            var move_min = possibleMoves[i_min_m];
-            if (effectiveDebug) {
-                console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Evaluating move " + (i_min_m + 1) + "/" + possibleMoves.length + ": Tile " + move_min.tile.id + " at (" + move_min.x + "," + move_min.y + ") ori " + move_min.orientation);
-                console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1));
-            }
 
-            var boardAfterMove_sim_min = deepCopyBoardState(currentBoardState);
-            // When minimizing, the roles are swapped for the next recursive call's perspective.
-            // 'handAfterMove_sim_min' will be the opponent's hand in the next frame.
-            // 'nextMaximizingHand_sim' will be the AI's hand in the next frame.
-            var handAfterMove_sim_min = opponentHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
-            var nextMaximizingHand_sim = aiHand.map(function(t) { return new HexTile(t.id, t.playerId, [].concat(t.edges), t.orientation);});
-
-            if (move_min.type === 'place') {
-                var tileForSim_min = new HexTile(move_min.tile.id, currentPlayerForThisTurn, [].concat(move_min.tile.edges));
-                tileForSim_min.orientation = move_min.orientation;
-                tileForSim_min.x = move_min.x;
-                tileForSim_min.y = move_min.y;
-                boardAfterMove_sim_min["" + move_min.x + "," + move_min.y] = tileForSim_min;
-                // Remove placed tile from hand (currentMaximizingPlayerHand is opponent's hand here)
-                handAfterMove_sim_min = handAfterMove_sim_min.filter(function(t) { return t.id !== move_min.tile.id; });
-            } else if (move_min.type === 'move') {
-                // Remove tile from its original position
-                delete boardAfterMove_sim_min["" + move_min.originalX + "," + move_min.originalY];
-                // Place tile in its new position
-                var movedTileForSim_min = new HexTile(move_min.tile.id, currentPlayerForThisTurn, [].concat(move_min.tile.edges));
-                movedTileForSim_min.orientation = move_min.orientation;
-                movedTileForSim_min.x = move_min.x;
-                movedTileForSim_min.y = move_min.y;
-                boardAfterMove_sim_min["" + move_min.x + "," + move_min.y] = movedTileForSim_min;
-                // Hand does not change for a 'move' action
-            }
-
-            if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): simulateRemovalCycle");
-            var removalResult_min = simulateRemovalCycle(boardAfterMove_sim_min, currentPlayerForThisTurn, effectiveDebug);
-            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): simulateRemovalCycle");
-            boardAfterMove_sim_min = removalResult_min.boardState;
-
-            var gainsCurrent_min = removalResult_min.handGains[currentPlayerForThisTurn] || [];
-            for(var jm=0; jm<gainsCurrent_min.length; jm++) handAfterMove_sim_min.push(new HexTile(gainsCurrent_min[jm].id, gainsCurrent_min[jm].playerId, gainsCurrent_min[jm].edges));
-
-            var gainsNext_min = removalResult_min.handGains[nextPlayerForThisTurn] || [];
-            for(var km=0; km<gainsNext_min.length; km++) nextMaximizingHand_sim.push(new HexTile(gainsNext_min[km].id, gainsNext_min[km].playerId, gainsNext_min[km].edges));
-
-            var currentTurnEval_min;
-            if (handAfterMove_sim_min.length === 0) {
-                currentTurnEval_min = evaluateBoard(boardAfterMove_sim_min, aiPlayerId) - 1000; // Penalty for opponent emptying hand
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Opponent emptied hand. Score:", currentTurnEval_min);
-            } else {
-                if (effectiveDebug) console.time("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call");
-                var evalResult_min = findBestMoveMinimax(boardAfterMove_sim_min, nextMaximizingHand_sim, handAfterMove_sim_min, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, true, useAlphaBetaPruning, stats, initialMaxDepth, effectiveDebug);
-                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call");
-                currentTurnEval_min = evalResult_min.score;
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Recursive call returned. Score:", currentTurnEval_min);
-            }
-
-            if (currentTurnEval_min < minEval) {
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): New best score for opponent. Old minEval:", minEval, "New:", currentTurnEval_min);
-                minEval = currentTurnEval_min;
-            }
-            var oldBeta = beta;
-            beta = Math.min(beta, currentTurnEval_min);
-            if (effectiveDebug && oldBeta !== beta) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Beta updated. Old:", oldBeta, "New:", beta);
-
-            if (useAlphaBetaPruning && beta <= alpha) {
-                if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Pruning. Alpha:", alpha, "Beta:", beta);
-                stats.cutoffs++;
-                if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1)); // End time for this iteration before break
-                break;
-            }
-            if (effectiveDebug) console.timeEnd("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Loop iteration " + (i_min_m + 1));
+        if (useAlphaBetaPruning && beta <= alpha) {
+            stats.cutoffs++;
+            break;
         }
-        if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Minimizing, Depth: " + depth + "): Returning. MinEval:", minEval);
-        return { score: minEval, moves: [] }; // Minimizer only returns score, not moves array
     }
+
+    return maximizingPlayer ? { score: bestEval, moves: bestMoves } : { score: bestEval, moves: [] };
 }
 
 // --- Worker Message Handler ---
