@@ -1260,7 +1260,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     // Use the gameMode passed into findBestMoveMinimax. This mode applies to both players.
     var modeForGetAllPossibleMoves = gameMode; // The game mode is unified.
     if (effectiveDebug) console.log("[Worker DEBUG] findBestMoveMinimax (Depth " + depth + ", Player " + currentPlayerForThisTurn + "): Calling getAllPossibleMoves with mode: " + modeForGetAllPossibleMoves);
-    var possibleMoves = getAllPossibleMoves(currentBoardState, currentMaximizingPlayerHand, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
+    var possibleMoves = getAllPossibleMoves(currentBoardState, maximizingPlayer ? currentMaximizingPlayerHand : currentMinimizingPlayerHand, currentPlayerForThisTurn, modeForGetAllPossibleMoves, effectiveDebug);
     if (effectiveDebug) {
         console.timeEnd("[Worker DEBUG] findBestMoveMinimax: getAllPossibleMoves (Depth: " + depth + ")");
         console.log("[Worker DEBUG] findBestMoveMinimax: (Depth: " + depth + ") Possible moves:", possibleMoves.length);
