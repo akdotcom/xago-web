@@ -61,15 +61,15 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
 
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
             let bestInitialTurnMoves = [];
-            let maxInitialTurnScore = -Infinity;
+            let maxScoreAdvantage = -Infinity;
 
             for (const move of minimaxResult.moves) {
-                const initialTurnScore = calculateInitialTurnScore(move, boardState, currentPlayerId);
+                const scoreAdvantage = calculateInitialTurnScore(move, boardState, currentPlayerId, opponentPlayerId);
 
-                if (initialTurnScore > maxInitialTurnScore) {
-                    maxInitialTurnScore = initialTurnScore;
+                if (scoreAdvantage > maxScoreAdvantage) {
+                    maxScoreAdvantage = scoreAdvantage;
                     bestInitialTurnMoves = [move];
-                } else if (initialTurnScore === maxInitialTurnScore) {
+                } else if (scoreAdvantage === maxScoreAdvantage) {
                     bestInitialTurnMoves.push(move);
                 }
             }
@@ -265,7 +265,7 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
     return tileToRemove ? { id: tileToRemove.id, x: tileToRemove.x, y: tileToRemove.y, playerId: tileToRemove.playerId } : null;
 }
 
-function calculateInitialTurnScore(move, boardState, playerId) {
+function calculateInitialTurnScore(move, boardState, playerId, opponentPlayerId) {
     // Simulate the move to calculate the initial turn's score.
     const tempBoardState = deepCopyBoardState(boardState);
     const simTile = new HexTile(move.tile.id, playerId, [...move.tile.edges]);
@@ -280,9 +280,23 @@ function calculateInitialTurnScore(move, boardState, playerId) {
         tempBoardState[`${move.x},${move.y}`] = simTile;
     }
 
-    // Calculate points earned from this single move.
-    const initialScoreResult = calculateScoresForBoard(tempBoardState, `${move.x},${move.y}`);
-    return initialScoreResult.scoreDelta;
+    // After the move, simulate the removal cycle
+    const removalResult = simulateRemovalCycle(tempBoardState, playerId, false); // Assuming debug is false for this simulation
+    const boardAfterRemovals = removalResult.boardState;
+
+    // Calculate scores on the board *before* the move.
+    const scoresBefore = calculateScoresForBoard(boardState);
+    const initialScoreDiff = (playerId === 1 ? scoresBefore.player1Score - scoresBefore.player2Score : scoresBefore.player2Score - scoresBefore.player1Score);
+
+
+    // Calculate scores on the board *after* the move and removals.
+    const scoresAfter = calculateScoresForBoard(boardAfterRemovals);
+    const finalScoreDiff = (playerId === 1 ? scoresAfter.player1Score - scoresAfter.player2Score : scoresAfter.player2Score - scoresAfter.player1Score);
+
+    // The advantage is the change in score difference.
+    const scoreAdvantage = finalScoreDiff - initialScoreDiff;
+
+    return scoreAdvantage;
 }
 
 // --- Minimax AI Helper Functions ---
