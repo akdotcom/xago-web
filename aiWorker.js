@@ -251,14 +251,28 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
 }
 
 // --- Minimax AI Helper Functions ---
+function countTriangles(tile) {
+    if (!tile || !tile.edges) return 0;
+    return tile.edges.reduce((sum, edge) => sum + edge, 0);
+}
+
+function sortHand(hand) {
+    return hand.sort((a, b) => {
+        const trianglesA = countTriangles(a);
+        const trianglesB = countTriangles(b);
+        return trianglesB - trianglesA;
+    });
+}
 // Added gameMode parameter
 function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effectiveDebug) {
     var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false;
     var possibleMoves = [];
     var initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
 
+    var sortedHand = sortHand(hand);
+
     // 1. Generate moves by placing new tiles from hand
-    for (const tile of hand) {
+    for (const tile of sortedHand) {
         const placements = getAllPossiblePlacements(currentBoardState, tile, playerId);
         for (const placement of placements) {
             possibleMoves.push({
