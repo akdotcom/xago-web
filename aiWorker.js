@@ -60,16 +60,31 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         );
 
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            var chosenMinimaxMove = minimaxResult.moves[Math.floor(Math.random() * minimaxResult.moves.length)];
+            let bestInitialTurnMoves = [];
+            let maxInitialTurnScore = -Infinity;
+
+            for (const move of minimaxResult.moves) {
+                const initialTurnScore = calculateInitialTurnScore(move, boardState, currentPlayerId);
+
+                if (initialTurnScore > maxInitialTurnScore) {
+                    maxInitialTurnScore = initialTurnScore;
+                    bestInitialTurnMoves = [move];
+                } else if (initialTurnScore === maxInitialTurnScore) {
+                    bestInitialTurnMoves.push(move);
+                }
+            }
+
+            // From the moves that are best in the initial turn, pick one at random.
+            const chosenMove = bestInitialTurnMoves[Math.floor(Math.random() * bestInitialTurnMoves.length)];
             bestMove = {
-                type: chosenMinimaxMove.type,
-                tileId: chosenMinimaxMove.tile.id,
-                orientation: chosenMinimaxMove.orientation,
-                x: chosenMinimaxMove.x,
-                y: chosenMinimaxMove.y,
-                score: chosenMinimaxMove.score,
-                originalX: chosenMinimaxMove.originalX,
-                originalY: chosenMinimaxMove.originalY
+                type: chosenMove.type,
+                tileId: chosenMove.tile.id,
+                orientation: chosenMove.orientation,
+                x: chosenMove.x,
+                y: chosenMove.y,
+                score: chosenMove.score, // This is the minimax score, not the initial turn score
+                originalX: chosenMove.originalX,
+                originalY: chosenMove.originalY
             };
         }
     } else { // Simple Greedy (Greedy1, depth 0)
@@ -248,6 +263,26 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
         }
     }
     return tileToRemove ? { id: tileToRemove.id, x: tileToRemove.x, y: tileToRemove.y, playerId: tileToRemove.playerId } : null;
+}
+
+function calculateInitialTurnScore(move, boardState, playerId) {
+    // Simulate the move to calculate the initial turn's score.
+    const tempBoardState = deepCopyBoardState(boardState);
+    const simTile = new HexTile(move.tile.id, playerId, [...move.tile.edges]);
+    simTile.orientation = move.orientation;
+    simTile.x = move.x;
+    simTile.y = move.y;
+
+    if (move.type === 'place') {
+        tempBoardState[`${move.x},${move.y}`] = simTile;
+    } else if (move.type === 'move') {
+        delete tempBoardState[`${move.originalX},${move.originalY}`];
+        tempBoardState[`${move.x},${move.y}`] = simTile;
+    }
+
+    // Calculate points earned from this single move.
+    const initialScoreResult = calculateScoresForBoard(tempBoardState, `${move.x},${move.y}`);
+    return initialScoreResult.scoreDelta;
 }
 
 // --- Minimax AI Helper Functions ---
