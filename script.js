@@ -1727,7 +1727,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
 
     function placeTileOnBoard(tile, x, y) {
         // When placing a new tile from hand, isNewTilePlacement is true. isDragOver is false.
-        if (!isPlacementValid(tile, x, y, false, true)) {
+        if (!window.isPlacementValid(tile, x, y, boardState, false, true)) {
             return false;
         }
 
@@ -1798,79 +1798,6 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
             }
         }
 
-    function isPlacementValid(tile, x, y, isDragOver = false, isNewTilePlacement = true) { // Added isNewTilePlacement
-        const targetKey = `${x},${y}`;
-        if (boardState[targetKey]) {
-            if (!isDragOver) console.log("This cell is already occupied.");
-            return false; // Cell occupied
-        }
-
-        const placedTilesCount = Object.keys(boardState).length;
-        const orientedEdges = tile.getOrientedEdges();
-
-        if (placedTilesCount === 0) {
-            if (x === 0 && y === 0) {
-                if (!isDragOver) console.log("First tile placed at (0,0).");
-                return true;
-            } else {
-                if (!isDragOver) console.log("The first tile must be placed at the center (0,0).");
-                return false;
-            }
-        }
-
-        // Check if the placement is on an "outside" cell for NEW tiles from hand
-        // This check is NOT performed for moving existing tiles on the board.
-        if (isNewTilePlacement) {
-            const outsideCells = getOutsideEmptyCells(boardState);
-            if (!outsideCells.has(targetKey)) {
-                if (!isDragOver) console.log(`Cannot place new tile at (${x},${y}). It's not an 'outside' cell.`);
-                return false;
-            }
-        }
-        // For moving tiles (isNewTilePlacement = false), they can be moved to "inside" empty spots,
-        // so the above check is skipped. The isSpaceEnclosed check below is also skipped for moves.
-
-        let touchesExistingTile = false;
-        const neighbors = getNeighbors(x, y);
-
-        for (const neighborInfo of neighbors) {
-            const {nx, ny, edgeIndexOnNewTile, edgeIndexOnNeighborTile} = neighborInfo;
-            const neighborKey = `${nx},${ny}`;
-            const neighborTile = boardState[neighborKey];
-
-            if (neighborTile) {
-                touchesExistingTile = true;
-                const neighborOrientedEdges = neighborTile.getOrientedEdges();
-                const newTileEdgeType = orientedEdges[edgeIndexOnNewTile];
-                const neighborEdgeType = neighborOrientedEdges[edgeIndexOnNeighborTile];
-
-                if (newTileEdgeType !== neighborEdgeType) {
-                    if (!isDragOver) console.log(`Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`);
-                    return false;
-                }
-            }
-        }
-
-        if (!touchesExistingTile) {
-            if (!isDragOver) console.log("Tile must touch an existing tile.");
-            return false;
-        }
-
-        // The original isSpaceEnclosed check should only apply to NEW tile placements.
-        // Tiles being MOVED can go into an "inside" spot (which might be enclosed or not,
-        // the key is that it's not restricted by the "outside" rule for hand placements).
-        // The new "outside" rule for hand placements makes this specific `isSpaceEnclosed` check
-        // somewhat redundant for new tiles, as `getOutsideEmptyCells` should already filter out
-        // such fully enclosed single-cell "holes". However, keeping it for new tiles as a safeguard
-        // against any edge cases in `getOutsideEmptyCells` is fine. It should NOT apply to moves.
-        if (isNewTilePlacement && isSpaceEnclosed(x, y, boardState)) {
-            if (!isDragOver) console.log("Cannot place new tile in an enclosed space (isSpaceEnclosed check).");
-            return false;
-        }
-
-        if (!isDragOver) console.log("Valid placement.");
-        return true;
-    }
 
 
 
@@ -3444,13 +3371,13 @@ function animateView() {
                 let isSpotHighlightedGreenOrYellow = false;
                 if (!boardState[`${q},${r}`]) {
                     const originalOrientation = tileToPlace.orientation;
-                    if (isPlacementValid(tileToPlace, q, r, true)) {
+                    if (window.isPlacementValid(tileToPlace, q, r, boardState, true)) {
                         isSpotHighlightedGreenOrYellow = true;
                     } else {
                         for (let i = 0; i < 6; i++) {
                             if (i === originalOrientation) continue;
                             tileToPlace.orientation = i;
-                            if (isPlacementValid(tileToPlace, q, r, true)) {
+                            if (window.isPlacementValid(tileToPlace, q, r, boardState, true)) {
                                 isSpotHighlightedGreenOrYellow = true;
                                 break;
                             }
@@ -3577,13 +3504,13 @@ function animateView() {
         } else { // Standard placement
             if (!boardState[`${q},${r}`]) {
                 const originalOrientation = tileToPreview.orientation;
-                if (isPlacementValid(tileToPreview, q, r, true)) {
+                if (window.isPlacementValid(tileToPreview, q, r, boardState, true)) {
                     shouldShowFullPreview = true;
                 } else {
                     for (let i = 0; i < 6; i++) {
                         if (i === originalOrientation) continue;
                         tileToPreview.orientation = i;
-                        if (isPlacementValid(tileToPreview, q, r, true)) {
+                        if (window.isPlacementValid(tileToPreview, q, r, boardState, true)) {
                             shouldShowFullPreview = true; break;
                         }
                     }
