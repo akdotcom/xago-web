@@ -4,7 +4,7 @@
   "description": "The timeless tile strategy game",
   "start_url": "https://akdotcom.github.io/xago-web/",
   "display": "standalone",
-  "theme_color": "lightgrey",
+  "theme_color": "#DDD",
   "background_color": "#FFFFFF",
   "icons": [
     {
