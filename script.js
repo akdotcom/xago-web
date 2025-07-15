@@ -750,10 +750,32 @@ function getCookie(name) {
                 const base2X = midX + edgeDirX * halfBase;
                 const base2Y = midY + edgeDirY * halfBase;
 
+                const cornerRadius = triangleEdgeLength * 0.10;
+
+                // Adjusted vectors towards base vertices to accommodate the radius
+                const vecTipToBase1X = base1X - tipX;
+                const vecTipToBase1Y = base1Y - tipY;
+                const lenTipToBase1 = Math.sqrt(vecTipToBase1X * vecTipToBase1X + vecTipToBase1Y * vecTipToBase1Y);
+                const unitTipToBase1X = vecTipToBase1X / lenTipToBase1;
+                const unitTipToBase1Y = vecTipToBase1Y / lenTipToBase1;
+
+                const vecTipToBase2X = base2X - tipX;
+                const vecTipToBase2Y = base2Y - tipY;
+                const lenTipToBase2 = Math.sqrt(vecTipToBase2X * vecTipToBase2X + vecTipToBase2Y * vecTipToBase2Y);
+                const unitTipToBase2X = vecTipToBase2X / lenTipToBase2;
+                const unitTipToBase2Y = vecTipToBase2Y / lenTipToBase2;
+
+                const p1x = tipX + unitTipToBase1X * cornerRadius;
+                const p1y = tipY + unitTipToBase1Y * cornerRadius;
+                const p2x = tipX + unitTipToBase2X * cornerRadius;
+                const p2y = tipY + unitTipToBase2Y * cornerRadius;
+
                 ctx.beginPath();
-                ctx.moveTo(tipX, tipY);
-                ctx.lineTo(base1X, base1Y);
+                ctx.moveTo(p1x, p1y);
+                ctx.arcTo(tipX, tipY, p2x, p2y, cornerRadius);
+                ctx.lineTo(p2x, p2y); // Line to the point where the arc ends
                 ctx.lineTo(base2X, base2Y);
+                ctx.lineTo(base1X, base1Y);
                 ctx.closePath();
                 ctx.fillStyle = tile.getPlayerColor;
                 ctx.fill();
