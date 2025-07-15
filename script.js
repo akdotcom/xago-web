@@ -649,6 +649,35 @@ function getCookie(name) {
         const orientedEdges = tile.getOrientedEdges();
         const sideLength = BASE_HEX_SIDE_LENGTH * zoom;
 
+        // Helper function to draw a rounded triangle
+        function drawRoundedTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y, cornerRadius) {
+            // Adjusted vectors towards base vertices to accommodate the radius
+            const vecTipToBase1X = base1X - tipX;
+            const vecTipToBase1Y = base1Y - tipY;
+            const lenTipToBase1 = Math.sqrt(vecTipToBase1X * vecTipToBase1X + vecTipToBase1Y * vecTipToBase1Y);
+            const unitTipToBase1X = vecTipToBase1X / lenTipToBase1;
+            const unitTipToBase1Y = vecTipToBase1Y / lenTipToBase1;
+
+            const vecTipToBase2X = base2X - tipX;
+            const vecTipToBase2Y = base2Y - tipY;
+            const lenTipToBase2 = Math.sqrt(vecTipToBase2X * vecTipToBase2X + vecTipToBase2Y * vecTipToBase2Y);
+            const unitTipToBase2X = vecTipToBase2X / lenTipToBase2;
+            const unitTipToBase2Y = vecTipToBase2Y / lenTipToBase2;
+
+            const p1x = tipX + unitTipToBase1X * cornerRadius;
+            const p1y = tipY + unitTipToBase1Y * cornerRadius;
+            const p2x = tipX + unitTipToBase2X * cornerRadius;
+            const p2y = tipY + unitTipToBase2Y * cornerRadius;
+
+            ctx.beginPath();
+            ctx.moveTo(p1x, p1y);
+            ctx.arcTo(tipX, tipY, p2x, p2y, cornerRadius);
+            ctx.lineTo(p2x, p2y); // Line to the point where the arc ends
+            ctx.lineTo(base2X, base2Y);
+            ctx.lineTo(base1X, base1Y);
+            ctx.closePath();
+        }
+
         let originalShadowColor, originalShadowBlur, originalShadowOffsetX, originalShadowOffsetY;
         let raisedEffectApplied = false;
 
@@ -752,31 +781,7 @@ function getCookie(name) {
 
                 const cornerRadius = triangleEdgeLength * 0.10;
 
-                // Adjusted vectors towards base vertices to accommodate the radius
-                const vecTipToBase1X = base1X - tipX;
-                const vecTipToBase1Y = base1Y - tipY;
-                const lenTipToBase1 = Math.sqrt(vecTipToBase1X * vecTipToBase1X + vecTipToBase1Y * vecTipToBase1Y);
-                const unitTipToBase1X = vecTipToBase1X / lenTipToBase1;
-                const unitTipToBase1Y = vecTipToBase1Y / lenTipToBase1;
-
-                const vecTipToBase2X = base2X - tipX;
-                const vecTipToBase2Y = base2Y - tipY;
-                const lenTipToBase2 = Math.sqrt(vecTipToBase2X * vecTipToBase2X + vecTipToBase2Y * vecTipToBase2Y);
-                const unitTipToBase2X = vecTipToBase2X / lenTipToBase2;
-                const unitTipToBase2Y = vecTipToBase2Y / lenTipToBase2;
-
-                const p1x = tipX + unitTipToBase1X * cornerRadius;
-                const p1y = tipY + unitTipToBase1Y * cornerRadius;
-                const p2x = tipX + unitTipToBase2X * cornerRadius;
-                const p2y = tipY + unitTipToBase2Y * cornerRadius;
-
-                ctx.beginPath();
-                ctx.moveTo(p1x, p1y);
-                ctx.arcTo(tipX, tipY, p2x, p2y, cornerRadius);
-                ctx.lineTo(p2x, p2y); // Line to the point where the arc ends
-                ctx.lineTo(base2X, base2Y);
-                ctx.lineTo(base1X, base1Y);
-                ctx.closePath();
+                drawRoundedTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y, cornerRadius);
                 ctx.fillStyle = tile.getPlayerColor;
                 ctx.fill();
 
@@ -793,14 +798,8 @@ function getCookie(name) {
                     ctx.shadowOffsetY = 0;
 
                     // Redraw the triangle path to apply the shadow.
-                    // The fill of this path will cast the shadow.
-                    // We don't stroke it here, as the shadow is cast by the fill.
                     ctx.fillStyle = tile.getPlayerColor; // Fill must be opaque to cast shadow
-                    ctx.beginPath();
-                    ctx.moveTo(tipX, tipY);
-                    ctx.lineTo(base1X, base1Y);
-                    ctx.lineTo(base2X, base2Y);
-                    ctx.closePath();
+                    drawRoundedTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y, cornerRadius);
                     ctx.fill(); // This fill casts the shadow
 
                     ctx.restore(); // Restore context to remove shadow for subsequent drawings
