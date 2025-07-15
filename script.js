@@ -1399,7 +1399,7 @@ function getCookie(name) {
 
         for (const placement of placements) {
             const key = `${placement.x},${placement.y}`;
-        if (currentSelectedOrientation % (6 / numUniqueOrientations) === placement.orientation % (6 / numUniqueOrientations)) {
+        if ((currentSelectedOrientation % numUniqueOrientations) === (placement.orientation % numUniqueOrientations)) {
                 greenSpots.add(key);
             } else {
                 if (!yellowSpots.has(key)) {
