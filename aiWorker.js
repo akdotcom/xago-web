@@ -1,11 +1,12 @@
 // aiWorker.js
 importScripts('gameEngine.js');
 
-// Assuming gameEngine.js exports these functions, you might need to adjust based on actual export mechanism.
-// If gameEngine.js just defines them globally, importScripts makes them available.
-const { getEmptyNeighbors, isPlacementValid, isBoardConnected, deepCopyBoardState } = this;
+// Functions from gameEngine.js are available globally in the worker scope thanks to importScripts().
+// No need to redeclare them.
 
 function hydrateHand(handData) {
+    // Note: getEmptyNeighbors, isPlacementValid, isBoardConnected, deepCopyBoardState
+    // are expected to be available from gameEngine.js
     return handData.map(function(tileData) {
         var tile = new HexTile(tileData.id, tileData.playerId, [].concat(tileData.edges));
         tile.orientation = tileData.orientation;
