@@ -1394,9 +1394,12 @@ function getCookie(name) {
         const greenSpots = new Set();
         const yellowSpots = new Map();
 
+    const uniqueOrientations = getUniqueOrientations(tileToPlace);
+    const numUniqueOrientations = uniqueOrientations.length;
+
         for (const placement of placements) {
             const key = `${placement.x},${placement.y}`;
-            if (placement.orientation === currentSelectedOrientation) {
+        if (currentSelectedOrientation % (6 / numUniqueOrientations) === placement.orientation % (6 / numUniqueOrientations)) {
                 greenSpots.add(key);
             } else {
                 if (!yellowSpots.has(key)) {
