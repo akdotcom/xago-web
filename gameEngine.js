@@ -106,6 +106,33 @@ function getNeighbors(q, r) {
     return neighbors;
 }
 
+function getEmptyNeighbors(currentBoardState, tile, maxDistance) {
+    const emptyNeighbors = [];
+    const visited = new Set();
+    const queue = [{x: tile.x, y: tile.y, dist: 0}];
+    visited.add(`${tile.x},${tile.y}`);
+
+    let head = 0;
+    while (head < queue.length) {
+        const {x, y, dist} = queue[head++];
+
+        if (dist >= maxDistance) continue;
+
+        const neighbors = getNeighbors(x, y);
+        for (const neighborInfo of neighbors) {
+            const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
+            if (!visited.has(neighborKey)) {
+                visited.add(neighborKey);
+                if (!currentBoardState[neighborKey]) {
+                    emptyNeighbors.push({x: neighborInfo.nx, y: neighborInfo.ny});
+                }
+                queue.push({x: neighborInfo.nx, y: neighborInfo.ny, dist: dist + 1});
+            }
+        }
+    }
+    return emptyNeighbors;
+}
+
 function isTileSurrounded(q, r, currentBoardState) {
     const neighbors = getNeighbors(q, r);
     if (neighbors.length < 6) { // Should always be 6 for a hex tile not on an edge of a finite board
