@@ -367,7 +367,6 @@ function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effect
                 tempTileForMoveValidation.orientation = o_move;
 
                 // Iterate over possible destination spots
-                var searchRadius = maxMoveDistance + 1;
                 var potentialDestinations = getEmptyNeighbors(currentBoardState, tile_to_move, maxMoveDistance);
 
                 for (var i_pd = 0; i_pd < potentialDestinations.length; i_pd++) {
