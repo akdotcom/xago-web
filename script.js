@@ -1398,12 +1398,12 @@ function getCookie(name) {
         const greenSpots = new Set();
         const yellowSpots = new Map();
 
-    const uniqueOrientations = getUniqueOrientations(tileToPlace);
-    const numUniqueOrientations = uniqueOrientations.length;
+        const uniqueOrientations = getUniqueOrientations(tileToPlace);
+        const numUniqueOrientations = uniqueOrientations.length;
 
         for (const placement of placements) {
             const key = `${placement.x},${placement.y}`;
-        if ((currentSelectedOrientation % numUniqueOrientations) === (placement.orientation % numUniqueOrientations)) {
+            if ((currentSelectedOrientation % numUniqueOrientations) === (placement.orientation % numUniqueOrientations)) {
                 greenSpots.add(key);
             } else {
                 if (!yellowSpots.has(key)) {
@@ -3228,154 +3228,45 @@ function animateView() {
 
         const originalTileX = tileToMove.x;
         const originalTileY = tileToMove.y;
-        const originalTileOrientation = tileToMove.orientation; // Stored from selectedTile.tile, which is current
-        const originalTileKey = `${originalTileX},${originalTileY}`;
 
         // Highlight the original spot of the tile being moved
         drawPlacementPreview(originalTileX, originalTileY, tileToMove, 'rgba(128, 0, 128, 0.5)'); // Purple for origin
 
-        // Temporarily remove the tile from the main boardState for validation
-        const boardStateWithoutMovingTile = deepCopyBoardState(boardState);
-        delete boardStateWithoutMovingTile[originalTileKey];
+        const possibleMoves = getAllPossibleMoves(boardState, currentPlayer);
+        const currentSelectedOrientation = tileToMove.orientation;
 
-        // Check initial connectivity: Is the board (without tileToMove) connected?
-        // This is important for the optimized connectivity check later.
-        const isBoardConnectedWithoutMovingTile = isBoardConnected(boardStateWithoutMovingTile);
+        const greenSpots = new Set();
+        const yellowSpots = new Map();
 
-        const checkRadius = maxDistance + 2;
-        let qMin = originalTileX - checkRadius, qMax = originalTileX + checkRadius;
-        let rMin = originalTileY - checkRadius, rMax = originalTileY + checkRadius;
+        const uniqueOrientations = getUniqueOrientations(tileToMove);
+        const numUniqueOrientations = uniqueOrientations.length;
 
-        // Optimize bounds (optional, could be added if needed for very large boards)
-        // ...
-
-        for (let q = Math.floor(qMin); q <= Math.ceil(qMax); q++) {
-            for (let r = Math.floor(rMin); r <= Math.ceil(rMax); r++) {
-                const targetKey = `${q},${r}`;
-
-                // Skip if target is occupied by another tile
-                if (boardStateWithoutMovingTile[targetKey]) {
-                    continue;
-                }
-
-                // 1. Check distance
-                const dist = (Math.abs(originalTileX - q) + Math.abs(originalTileX + originalTileY - q - r) + Math.abs(originalTileY - r)) / 2;
-                if (dist > maxDistance) {
-                    continue;
-                }
-
-                // If dist is 0, it means we are checking the original spot (q=originalTileX, r=originalTileY)
-                // This is a valid "move" if the tile has been rotated or if maxDistance is 0.
-                // The tileToMove.orientation is already the potentially rotated one.
-                // The validation below will handle if this placement is valid.
-                // The `if (q === originalTileX && r === originalTileY) continue;` is removed to allow this.
-
-
-                // --- Validation Function for a specific target (q,r) and orientation ---
-                // Accepts originalTileData (the tile being moved, in its current state) and orientationToTest.
-                // It does NOT modify originalTileData.
-                const validateMoveSpot = (targetQ, targetR, originalTileData, orientationToTest) => {
-                    // Create a temporary tile for this specific validation
-                    const tempTestTile = new HexTile(originalTileData.id, originalTileData.playerId, [...originalTileData.edges]);
-                    tempTestTile.orientation = orientationToTest;
-                    tempTestTile.x = targetQ;
-                    tempTestTile.y = targetR;
-
-                    // Use a copy of the board state for validation to avoid modifying the live one
-                    const tempBoardStateForValidation = deepCopyBoardState(boardStateWithoutMovingTile);
-                    const tempTargetKey = `${targetQ},${targetR}`;
-                    tempBoardStateForValidation[tempTargetKey] = tempTestTile; // Add to board for validation
-
-                    let touchesExistingTile = false;
-                    let edgesMatch = true;
-                    let validationResult = false;
-                    const neighbors = getNeighbors(targetQ, targetR);
-                    const currentNumTilesOnBoard = Object.keys(tempBoardStateForValidation).length;
-
-                    if (currentNumTilesOnBoard === 1 && tempBoardStateForValidation[tempTargetKey]?.id === tempTestTile.id) { // Only tempTestTile is on the board
-                        touchesExistingTile = true; // Valid by definition
-                    } else if (currentNumTilesOnBoard > 1) {
-                        for (const neighborInfo of neighbors) {
-                            const neighbor = tempBoardStateForValidation[`${neighborInfo.nx},${neighborInfo.ny}`];
-                            if (neighbor && neighbor.id !== tempTestTile.id) { // Ensure neighbor is not the tile itself
-                                touchesExistingTile = true;
-                                const newTileOrientedEdges = tempTestTile.getOrientedEdges();
-                                const neighborOrientedEdges = neighbor.getOrientedEdges();
-                                if (newTileOrientedEdges[neighborInfo.edgeIndexOnNewTile] !== neighborOrientedEdges[neighborInfo.edgeIndexOnNeighborTile]) {
-                                    edgesMatch = false;
-                                    break;
-                                }
-                            }
-                        }
-                    } else { // Should not happen if we start with at least one tile (the one being moved)
-                        touchesExistingTile = false; // No tiles to touch if board becomes empty
-                    }
-
-
-                    let isMoveConnected = false;
-                    if (touchesExistingTile && edgesMatch) {
-                        if (currentNumTilesOnBoard <= 1) { // If only the moved tile is on board
-                             isMoveConnected = true;
-                        } else if (isBoardConnectedWithoutMovingTile) {
-                            // If the board was connected without the moving tile,
-                            // and the moving tile now touches any part of that board, it's connected.
-                            // touchesExistingTile already confirms this.
-                            isMoveConnected = true;
-                        } else {
-                            // Board was disconnected by removing tileToMove. Must do a full check.
-                            isMoveConnected = isBoardConnected(tempBoardStateForValidation);
-                        }
-                    }
-
-                    // Determine final validation result
-                    if (!touchesExistingTile && currentNumTilesOnBoard > 1) {
-                        validationResult = false;
-                    } else if (!edgesMatch) {
-                        validationResult = false;
-                    } else if (!isMoveConnected) {
-                        validationResult = false;
-                    } else {
-                        validationResult = true;
-                    }
-
-                    return validationResult;
-                };
-                // --- End of Validation Function ---
-
-                const tileBeingMoved = tileToMove; // tileToMove is selectedTile.tile
-                const currentOrientationOfSelectedTile = tileBeingMoved.orientation;
-
-                // Check with current orientation of selectedTile
-                const isValidWithCurrentOrientation = validateMoveSpot(q, r, tileBeingMoved, currentOrientationOfSelectedTile);
-
-                if (isValidWithCurrentOrientation) {
-                    // Pass tileBeingMoved directly, its orientation is the one we want for green.
-                    drawPlacementPreview(q, r, tileBeingMoved, 'green');
+        for (const move of possibleMoves) {
+            if (move.tile.id === tileToMove.id) {
+                const key = `${move.x},${move.y}`;
+                if ((currentSelectedOrientation % numUniqueOrientations) === (move.orientation % numUniqueOrientations)) {
+                    greenSpots.add(key);
                 } else {
-                    let canPlaceOtherOrientation = false;
-                    let validPreviewOrientation = -1;
-
-                    for (let i = 0; i < 6; i++) {
-                        if (i === currentOrientationOfSelectedTile) continue;
-                        // Pass tileBeingMoved (original data) and 'i' (orientation to test)
-                        if (validateMoveSpot(q, r, tileBeingMoved, i)) {
-                            canPlaceOtherOrientation = true;
-                            validPreviewOrientation = i;
-                            break;
-                        }
-                    }
-
-                    if (canPlaceOtherOrientation) {
-                        // For yellow preview, create a temp tile with the validPreviewOrientation for drawing.
-                        const tempTileForYellowPreview = new HexTile(tileBeingMoved.id, tileBeingMoved.playerId, [...tileBeingMoved.edges]);
-                        tempTileForYellowPreview.orientation = validPreviewOrientation;
-                        drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
+                    if (!yellowSpots.has(key)) {
+                        yellowSpots.set(key, move.orientation);
                     }
                 }
             }
         }
 
-        // No need to restore tileToMove to the main boardState as we used a copy for validation.
+        for (const key of greenSpots) {
+            const [q, r] = key.split(',').map(Number);
+            drawPlacementPreview(q, r, tileToMove, 'green');
+        }
+
+        for (const [key, orientation] of yellowSpots.entries()) {
+            if (!greenSpots.has(key)) {
+                const [q, r] = key.split(',').map(Number);
+                const tempTileForYellowPreview = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
+                tempTileForYellowPreview.orientation = orientation;
+                drawPlacementPreview(q, r, tempTileForYellowPreview, 'yellow');
+            }
+        }
     }
 
 

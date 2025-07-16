@@ -370,6 +370,94 @@ function getAllPossiblePlacements(boardState, tile, playerId) {
     return possiblePlacements;
 }
 
+function getAllPossibleOptions(currentBoardState, hand, playerId, gameMode) {
+    const possibleOptions = [];
+
+    // 1. Get all possible placements
+    for (const tile of hand) {
+        const placements = getAllPossiblePlacements(currentBoardState, tile, playerId);
+        for (const placement of placements) {
+            possibleOptions.push({
+                type: 'place',
+                tile: {id: tile.id, playerId: tile.playerId, edges: [...tile.edges]},
+                orientation: placement.orientation,
+                x: placement.x, y: placement.y,
+                playerId: playerId
+            });
+        }
+    }
+
+    // 2. Get all possible moves
+    if (gameMode === "moving") {
+        const moves = getAllPossibleMoves(currentBoardState, playerId);
+        possibleOptions.push(...moves);
+    }
+
+    return possibleOptions;
+}
+
+function getAllPossibleMoves(currentBoardState, playerId) {
+    const possibleMoves = [];
+    const initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
+    if (initialBoardIsEmpty) {
+        return possibleMoves;
+    }
+
+    const playerTilesOnBoard = Object.values(currentBoardState).filter(t => t.playerId === playerId);
+
+    for (const tileToMove of playerTilesOnBoard) {
+        const maxMoveDistance = tileToMove.getOrientedEdges().filter(edge => edge === 0).length;
+        const originalOrientation = tileToMove.orientation;
+
+        const uniqueOrientations = getUniqueOrientations(tileToMove);
+
+        for (const orientation of uniqueOrientations) {
+            tileToMove.orientation = orientation;
+
+            // Create a temporary board state without the tile to move
+            const tempBoardState = deepCopyBoardState(currentBoardState);
+            delete tempBoardState[`${tileToMove.x},${tileToMove.y}`];
+
+            // Check all empty cells within range
+            const queue = [{x: tileToMove.x, y: tileToMove.y, dist: 0}];
+            const visited = new Set([`${tileToMove.x},${tileToMove.y}`]);
+            let head = 0;
+
+            while(head < queue.length) {
+                const {x, y, dist} = queue[head++];
+                if (dist >= maxMoveDistance) continue;
+
+                const neighbors = getNeighbors(x, y);
+                for (const neighbor of neighbors) {
+                    const neighborKey = `${neighbor.nx},${neighbor.ny}`;
+                    if (!visited.has(neighborKey)) {
+                        visited.add(neighborKey);
+                        if (!currentBoardState[neighborKey]) { // It's an empty spot
+                            if (isPlacementValid(tileToMove, neighbor.nx, neighbor.ny, tempBoardState, true, false)) {
+                                if (isBoardConnected(tempBoardState)) {
+                                    possibleMoves.push({
+                                        type: 'move',
+                                        tile: {id: tileToMove.id, playerId: tileToMove.playerId, edges: [...tileToMove.edges]},
+                                        orientation: orientation,
+                                        x: neighbor.nx, y: neighbor.ny,
+                                        originalX: tileToMove.x,
+                                        originalY: tileToMove.y,
+                                        playerId: playerId
+                                    });
+                                }
+                            }
+                        }
+                        queue.push({x: neighbor.nx, y: neighbor.ny, dist: dist + 1});
+                    }
+                }
+            }
+        }
+        tileToMove.orientation = originalOrientation; // Restore original orientation
+    }
+
+    return possibleMoves;
+}
+
 function calculateScoresForBoard(currentBoardState, forTileKey = null) {
     let p1Score = 0;
     let p2Score = 0;

@@ -96,7 +96,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var bestScoreDiff = -Infinity;
         var bestMoves = [];
 
-        var possibleMoves = getAllPossibleMoves(boardState, player2Hand, currentPlayerId, gameMode, effectiveDebug);
+        var possibleMoves = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, effectiveDebug);
 
         for (var i_pm = 0; i_pm < possibleMoves.length; i_pm++) {
             var move = possibleMoves[i_pm];
@@ -173,7 +173,7 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
 
     if (opponentType === 'random') {
         yield new Promise(function(resolve) { return setTimeout(resolve, 200); });
-        var possibleMoves_rand = getAllPossibleMoves(boardState, player2Hand, currentPlayerId, gameMode, debug);
+        var possibleMoves_rand = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, debug);
 
         if (possibleMoves_rand.length > 0) {
             var chosenMove_rand = possibleMoves_rand[Math.floor(Math.random() * possibleMoves_rand.length)];
@@ -315,100 +315,6 @@ function sortHand(hand) {
         const trianglesB = countTriangles(b);
         return trianglesB - trianglesA;
     });
-}
-// Added gameMode parameter
-function getAllPossibleMoves(currentBoardState, hand, playerId, gameMode, effectiveDebug) {
-    var localDebug = (typeof effectiveDebug === 'boolean') ? effectiveDebug : false;
-    var possibleMoves = [];
-    var initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
-
-    var sortedHand = sortHand(hand);
-
-    // 1. Generate moves by placing new tiles from hand
-    for (const tile of sortedHand) {
-        const placements = getAllPossiblePlacements(currentBoardState, tile, playerId);
-        for (const placement of placements) {
-            possibleMoves.push({
-                type: 'place',
-                tile: {id: tile.id, playerId: tile.playerId, edges: [...tile.edges]},
-                orientation: placement.orientation,
-                x: placement.x, y: placement.y,
-                playerId: playerId
-            });
-        }
-    }
-
-    // 2. Generate moves by moving existing tiles on the board (if in "moving" mode)
-    if (gameMode === "moving" && !initialBoardIsEmpty) {
-        if (localDebug) console.log("[Worker DEBUG] getAllPossibleMoves: Player " + playerId + " is in 'moving' mode. Evaluating tile moves.");
-        var playerTilesOnBoard = [];
-        for (var key_bt in currentBoardState) {
-            if (currentBoardState.hasOwnProperty(key_bt)) {
-                var boardTile = currentBoardState[key_bt];
-                if (boardTile.playerId === playerId) {
-                    playerTilesOnBoard.push(boardTile);
-                }
-            }
-        }
-
-        for (var i_ptb = 0; i_ptb < playerTilesOnBoard.length; i_ptb++) {
-            var tile_to_move = playerTilesOnBoard[i_ptb];
-            var originalBoardOrientation = tile_to_move.orientation; // Store its current orientation on board
-            var maxMoveDistance = tile_to_move.getOrientedEdges().filter(function(edge) { return edge === 0; }).length;
-
-            if (localDebug) console.log("[Worker DEBUG] getAllPossibleMoves: Considering moving tile " + tile_to_move.id + " (Player " + tile_to_move.playerId + ") from (" + tile_to_move.x + "," + tile_to_move.y + "), maxDist: " + maxMoveDistance);
-
-            var uniqueOrientations_move = getUniqueOrientations(tile_to_move);
-
-            for (var i_uom = 0; i_uom < uniqueOrientations_move.length; i_uom++) {
-                var o_move = uniqueOrientations_move[i_uom];
-                // Create a temporary tile instance for validation with the new orientation
-                var tempTileForMoveValidation = new HexTile(tile_to_move.id, tile_to_move.playerId, [].concat(tile_to_move.edges));
-                tempTileForMoveValidation.orientation = o_move;
-
-                // Iterate over possible destination spots
-                var potentialDestinations = getEmptyNeighbors(currentBoardState, tile_to_move, maxMoveDistance);
-
-                for (var i_pd = 0; i_pd < potentialDestinations.length; i_pd++) {
-                    var dest = potentialDestinations[i_pd];
-                    var q_dest = dest.x;
-                    var r_dest = dest.y;
-
-                    var dist = (Math.abs(tile_to_move.x - q_dest) + Math.abs(tile_to_move.x + tile_to_move.y - q_dest - r_dest) + Math.abs(tile_to_move.y - r_dest)) / 2;
-
-                    if (dist > maxMoveDistance) continue;
-                    if (dist === 0 && o_move === originalBoardOrientation) continue;
-
-                    var tempTileForMoveValidation = new HexTile(tile_to_move.id, tile_to_move.playerId, [].concat(tile_to_move.edges));
-                    tempTileForMoveValidation.orientation = o_move;
-
-                    var tempBoardState = deepCopyBoardState(currentBoardState);
-                    delete tempBoardState[tile_to_move.x + "," + tile_to_move.y];
-                    tempTileForMoveValidation.x = q_dest;
-                    tempTileForMoveValidation.y = r_dest;
-                    tempBoardState[q_dest + "," + r_dest] = tempTileForMoveValidation;
-
-
-                    if (isPlacementValid(tempTileForMoveValidation, q_dest, r_dest, tempBoardState, true, false) && isBoardConnected(tempBoardState)) {
-                        if (localDebug) console.log("[Worker DEBUG] getAllPossibleMoves: Adding valid MOVE: Tile " + tile_to_move.id + " from (" + tile_to_move.x + "," + tile_to_move.y + ") to (" + q_dest + "," + r_dest + ") ori " + o_move);
-                        possibleMoves.push({
-                            type: 'move',
-                            tile: {id: tile_to_move.id, playerId: tile_to_move.playerId, edges: [].concat(tile_to_move.edges)},
-                            orientation: o_move,
-                            x: q_dest, y: r_dest,
-                            originalX: tile_to_move.x,
-                            originalY: tile_to_move.y,
-                            playerId: playerId
-                        });
-                    }
-                }
-            }
-            // No need to restore tile_to_move.orientation as we used tempTileForMoveValidation or it's a board tile whose state is in boardState
-        }
-    }
-
-    if (localDebug) console.log("[Worker DEBUG] getAllPossibleMoves: Total possible moves found: " + possibleMoves.length + " for player " + playerId);
-    return possibleMoves;
 }
 
 // It seems isBoardConnected is missing in aiWorker.js. It's defined in script.js.
@@ -588,7 +494,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
     var currentPlayerForThisTurn = maximizingPlayer ? aiPlayerId : opponentPlayerId;
     var handForCurrentPlayer = maximizingPlayer ? aiHand : opponentHand;
 
-    var possibleMoves = getAllPossibleMoves(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, gameMode, effectiveDebug);
+    var possibleMoves = getAllPossibleOptions(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, gameMode, effectiveDebug);
 
     if (possibleMoves.length === 0) {
         return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
