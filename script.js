@@ -580,6 +580,11 @@ function getCookie(name) {
 
 
 
+    function getPlayerColorValue(className) {
+        const style = getComputedStyle(document.documentElement);
+        return style.getPropertyValue(`--${className}`).trim();
+    }
+
     // --- Game Board Logic ---
     function initializeGameBoard() {
         // Clear the canvas
@@ -738,7 +743,7 @@ function getCookie(name) {
                 else ctx.lineTo(x, y);
             }
             ctx.closePath();
-            ctx.fillStyle = tile.getPlayerColor;
+            ctx.fillStyle = getPlayerColorValue(tile.getPlayerColor);
             ctx.fill();
         }
 
@@ -782,7 +787,7 @@ function getCookie(name) {
                 const cornerRadius = triangleEdgeLength * 0.10;
 
                 drawRoundedTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y, cornerRadius);
-                ctx.fillStyle = tile.getPlayerColor;
+                ctx.fillStyle = getPlayerColorValue(tile.getPlayerColor);
                 ctx.fill();
 
                 // Check if this specific triangle edge should be highlighted for pulsing shadow
@@ -792,13 +797,13 @@ function getCookie(name) {
 
                 if (highlightInfo && highlightInfo.pulseIntensity > 0) {
                     ctx.save();
-                    ctx.shadowColor = tile.getPlayerColor; // Shadow color same as triangle
+                    ctx.shadowColor = getPlayerColorValue(tile.getPlayerColor); // Shadow color same as triangle
                     ctx.shadowBlur = highlightInfo.pulseIntensity * 10 * zoom; // Intensity controls blur
                     ctx.shadowOffsetX = 0; // No offset for a glow effect
                     ctx.shadowOffsetY = 0;
 
                     // Redraw the triangle path to apply the shadow.
-                    ctx.fillStyle = tile.getPlayerColor; // Fill must be opaque to cast shadow
+                    ctx.fillStyle = getPlayerColorValue(tile.getPlayerColor); // Fill must be opaque to cast shadow
                     drawRoundedTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y, cornerRadius);
                     ctx.fill(); // This fill casts the shadow
 
@@ -1056,10 +1061,10 @@ function getCookie(name) {
 
         if (p1ScoreDisplayFloater && p2ScoreDisplayFloater) {
             p1ScoreDisplayFloater.textContent = player1Score;
-            p1ScoreDisplayFloater.style.color = 'lightblue'; // Player 1 color
+            p1ScoreDisplayFloater.className = 'player1-color'; // Player 1 color
 
             p2ScoreDisplayFloater.textContent = player2Score;
-            p2ScoreDisplayFloater.style.color = 'lightcoral'; // Player 2 color
+            p2ScoreDisplayFloater.className = 'player2-color'; // Player 2 color
         }
         updateHandHighlights(); // Update hand highlights based on current player
     }
@@ -2326,7 +2331,8 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
                 // Reset visual effect and call callback
                 scoreDisplayElement.textContent = newScore; // Ensure final score is accurate
                 scoreDisplayElement.style.transform = 'scale(1)';
-                scoreDisplayElement.style.color = playerId === 1 ? 'lightblue' : 'lightcoral'; // Reset to player color
+        scoreDisplayElement.style.color = ''; // Reset inline color
+        scoreDisplayElement.className = playerId === 1 ? 'player1-color' : 'player2-color'; // Reset to player color
 
                 console.log(`Player ${playerId} score animated from ${oldScore} to ${newScore}`);
                 if (callback) callback();

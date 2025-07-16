@@ -84,11 +84,11 @@ main {
 
 /* Player-specific score colors will be set by JS, but can have defaults */
 #p1-score-display {
-    color: lightblue; /* Default, will be overridden by JS for consistency */
+    color: var(--player1-color); /* Default, will be overridden by JS for consistency */
 }
 
 #p2-score-display {
-    color: lightcoral; /* Default, will be overridden by JS for consistency */
+    color: var(--player2-color); /* Default, will be overridden by JS for consistency */
 }
 
 

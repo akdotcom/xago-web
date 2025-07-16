@@ -26,7 +26,7 @@ class HexTile {
 
     // Basic representation for now
     get getPlayerColor() {
-        return this.playerId === 1 ? 'lightblue' : 'lightcoral';
+        return this.playerId === 1 ? 'player1-color' : 'player2-color';
     }
 }
 
