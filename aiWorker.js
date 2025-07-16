@@ -96,10 +96,10 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var bestScoreDiff = -Infinity;
         var bestMoves = [];
 
-        var possibleMoves = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, effectiveDebug);
+        var possibleOptions = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, effectiveDebug);
 
-        for (var i_pm = 0; i_pm < possibleMoves.length; i_pm++) {
-            var move = possibleMoves[i_pm];
+        for (var i_pm = 0; i_pm < possibleOptions.length; i_pm++) {
+            var move = possibleOptions[i_pm];
 
             self.postMessage({
                 task: 'aiEvaluatingMove',
@@ -173,10 +173,10 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
 
     if (opponentType === 'random') {
         yield new Promise(function(resolve) { return setTimeout(resolve, 200); });
-        var possibleMoves_rand = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, debug);
+        var possibleOptions_rand = getAllPossibleOptions(boardState, player2Hand, currentPlayerId, gameMode, debug);
 
-        if (possibleMoves_rand.length > 0) {
-            var chosenMove_rand = possibleMoves_rand[Math.floor(Math.random() * possibleMoves_rand.length)];
+        if (possibleOptions_rand.length > 0) {
+            var chosenMove_rand = possibleOptions_rand[Math.floor(Math.random() * possibleOptions_rand.length)];
             bestMove = {
                 type: chosenMove_rand.type,
                 tileId: chosenMove_rand.tile.id,
