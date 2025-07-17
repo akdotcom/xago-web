@@ -508,11 +508,17 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             return a.tile.id - b.tile.id; // Secondary sort: tile ID
         }
 
-        if (a.x !== b.x) {
-            return a.x - b.x; // Tertiary sort: position x
+        const angleA = Math.atan2(a.x, a.y);
+        const angleB = Math.atan2(b.x, b.y);
+        if (angleA !== angleB) { // Tertiary sort: angle from x axis
+            return angleB - angleA;
         }
 
-        return a.y - b.y; // Quaternary sort: position y
+        if (a.x !== b.x) {
+            return a.x - b.x; // Quaternary sort: position x
+        }
+
+        return a.orientation - b.orientation; // Final sort: orientation
     });
 
     if (possibleMoves.length === 0) {
