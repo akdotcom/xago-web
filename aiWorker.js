@@ -560,7 +560,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             beta = Math.min(beta, currentTurnEval);
         }
 
-        if (useAlphaBetaPruning && beta <= alpha) {
+        if (useAlphaBetaPruning && beta < alpha) {
             stats.cutoffs++;
             break;
         }
