@@ -496,6 +496,25 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
     var possibleMoves = getAllPossibleOptions(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, gameMode, effectiveDebug);
 
+    // Sort moves to improve pruning and user experience.
+    possibleMoves.sort((a, b) => {
+        const trianglesA = countTriangles(a.tile);
+        const trianglesB = countTriangles(b.tile);
+        if (trianglesA !== trianglesB) {
+            return trianglesB - trianglesA; // Primary sort: higher triangles first
+        }
+
+        if (a.tile.id !== b.tile.id) {
+            return a.tile.id - b.tile.id; // Secondary sort: tile ID
+        }
+
+        if (a.x !== b.x) {
+            return a.x - b.x; // Tertiary sort: position x
+        }
+
+        return a.y - b.y; // Quaternary sort: position y
+    });
+
     if (possibleMoves.length === 0) {
         return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
