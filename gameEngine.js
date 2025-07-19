@@ -72,12 +72,11 @@ function countTriangles(tile) {
 // --- Game Logic Helper Functions ---
 
 // Cache for getOutsideEmptyCells in worker
-var workerCachedOutsideEmptyCells = null;
-var workerBoardStateSignatureForCache = "";
+const workerCacheSize = 10;
+var workerCachedOutsideEmptyCells = []; // Array of {signature, result}
 
 function invalidateWorkerOutsideCellCache() {
-    workerCachedOutsideEmptyCells = null;
-    workerBoardStateSignatureForCache = "";
+    workerCachedOutsideEmptyCells = [];
     // console.log("[Worker] Outside cell cache invalidated.");
 }
 
@@ -180,15 +179,21 @@ function isSpaceEnclosed(q, r, currentBoardState) {
 
 function getOutsideEmptyCells(currentBoardState) {
     const newBoardStateSignature = JSON.stringify(currentBoardState);
-    if (newBoardStateSignature === workerBoardStateSignatureForCache && workerCachedOutsideEmptyCells !== null) {
-        return workerCachedOutsideEmptyCells;
+
+    // Check cache
+    const cachedEntry = workerCachedOutsideEmptyCells.find(entry => entry.signature === newBoardStateSignature);
+    if (cachedEntry) {
+        return cachedEntry.result;
     }
 
     const placedTileKeys = Object.keys(currentBoardState);
     if (placedTileKeys.length === 0) {
         const singleCellSet = new Set(["0,0"]);
-        workerCachedOutsideEmptyCells = singleCellSet;
-        workerBoardStateSignatureForCache = newBoardStateSignature;
+        // Add to cache
+        workerCachedOutsideEmptyCells.unshift({ signature: newBoardStateSignature, result: singleCellSet });
+        if (workerCachedOutsideEmptyCells.length > workerCacheSize) {
+            workerCachedOutsideEmptyCells.pop();
+        }
         return singleCellSet;
     }
 
@@ -259,8 +264,12 @@ function getOutsideEmptyCells(currentBoardState) {
         }
     }
 
-    workerCachedOutsideEmptyCells = outsideEmptyCells;
-    workerBoardStateSignatureForCache = newBoardStateSignature;
+    // Add to cache
+    workerCachedOutsideEmptyCells.unshift({ signature: newBoardStateSignature, result: outsideEmptyCells });
+    if (workerCachedOutsideEmptyCells.length > workerCacheSize) {
+        workerCachedOutsideEmptyCells.pop();
+    }
+
     return outsideEmptyCells;
 }
 
