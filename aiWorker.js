@@ -471,10 +471,24 @@ function _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand,
     }
 
     var nextMaximizingPlayer = !maximizingPlayer;
-    var nextAiHand = nextMaximizingPlayer ? newOpponentHand : newHand;
-    var nextOpponentHand = nextMaximizingPlayer ? newHand : newOpponentHand;
 
-    var evalResult = findBestMoveMinimax(boardAfterMove, nextAiHand, nextOpponentHand, aiPlayerId, opponentPlayerId, depth - 1, alpha, beta, nextMaximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug);
+    var evalResult = findBestMoveMinimax(
+        boardAfterMove,
+        newOpponentHand, // The opponent's hand for the next turn
+        newHand, // The current player's hand for the next turn
+        aiPlayerId,
+        opponentPlayerId,
+        depth - 1,
+        alpha,
+        beta,
+        nextMaximizingPlayer,
+        useAlphaBetaPruning,
+        stats,
+        initialMaxDepth,
+        gameMode,
+        effectiveDebug
+    );
+
     return evalResult.score;
 }
 
