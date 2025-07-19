@@ -3615,5 +3615,5 @@ function animateView() {
             return null; // Return null or default state if parsing fails
         }
     }
-
+    runTests();
 });
