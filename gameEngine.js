@@ -107,7 +107,7 @@ function getNeighbors(q, r) {
 }
 
 function getEmptyNeighbors(currentBoardState, tile, maxDistance) {
-    const emptyNeighbors = [];
+    const emptyNeighbors = new Set(); // Use a Set to avoid duplicates
     const visited = new Set();
     const queue = [{x: tile.x, y: tile.y, dist: 0}];
     visited.add(`${tile.x},${tile.y}`);
@@ -116,6 +116,14 @@ function getEmptyNeighbors(currentBoardState, tile, maxDistance) {
     while (head < queue.length) {
         const {x, y, dist} = queue[head++];
 
+        if (dist > maxDistance) continue;
+
+        // The starting tile itself is a valid destination for a 0-distance move (rotation).
+        // It is not on the board in the context of the check, so !currentBoardState[`${x},${y}`] is true.
+        if (!currentBoardState[`${x},${y}`]) {
+            emptyNeighbors.add(`${x},${y}`);
+        }
+
         if (dist >= maxDistance) continue;
 
         const neighbors = getNeighbors(x, y);
@@ -123,14 +131,17 @@ function getEmptyNeighbors(currentBoardState, tile, maxDistance) {
             const neighborKey = `${neighborInfo.nx},${neighborInfo.ny}`;
             if (!visited.has(neighborKey)) {
                 visited.add(neighborKey);
-                if (!currentBoardState[neighborKey]) {
-                    emptyNeighbors.push({x: neighborInfo.nx, y: neighborInfo.ny});
-                }
+                // We only add neighbors to the queue. The check for empty and adding to emptyNeighbors happens
+                // when we process the cell from the queue.
                 queue.push({x: neighborInfo.nx, y: neighborInfo.ny, dist: dist + 1});
             }
         }
     }
-    return emptyNeighbors;
+    // Convert the set of keys back to an array of objects
+    return Array.from(emptyNeighbors).map(key => {
+        const [x, y] = key.split(',').map(Number);
+        return {x, y};
+    });
 }
 
 function isTileSurrounded(q, r, currentBoardState) {
@@ -398,61 +409,52 @@ function getAllPossibleOptions(currentBoardState, hand, playerId, gameMode) {
 
 function getAllPossibleMoves(currentBoardState, playerId) {
     const possibleMoves = [];
-    const initialBoardIsEmpty = Object.keys(currentBoardState).length === 0;
-    if (initialBoardIsEmpty) {
-        return possibleMoves;
-    }
+    if (Object.keys(currentBoardState).length === 0) return possibleMoves;
 
     const playerTilesOnBoard = Object.values(currentBoardState).filter(t => t.playerId === playerId);
 
     for (const tileToMove of playerTilesOnBoard) {
+        // Correctly calculate max move distance based on BLANK (0) edges of the tile's current orientation on the board
         const maxMoveDistance = tileToMove.getOrientedEdges().filter(edge => edge === 0).length;
+        if (maxMoveDistance === 0) continue; // No blank edges, cannot move.
+
+        const originalX = tileToMove.x;
+        const originalY = tileToMove.y;
         const originalOrientation = tileToMove.orientation;
 
-        const uniqueOrientations = getUniqueOrientations(tileToMove);
+        // Create a temporary board state without the tile to move
+        const tempBoardState = deepCopyBoardState(currentBoardState);
+        delete tempBoardState[`${originalX},${originalY}`];
 
-        for (const orientation of uniqueOrientations) {
-            tileToMove.orientation = orientation;
+        // Check if the board remains connected after removing the tile
+        if (!isBoardConnected(tempBoardState)) {
+            continue; // This move would disconnect the board, so it's invalid.
+        }
 
-            // Create a temporary board state without the tile to move
-            const tempBoardState = deepCopyBoardState(currentBoardState);
-            delete tempBoardState[`${tileToMove.x},${tileToMove.y}`];
+        // Find all empty cells within range
+        const emptyCellsInRange = getEmptyNeighbors(currentBoardState, tileToMove, maxMoveDistance);
 
-            // Check all empty cells within range
-            const queue = [{x: tileToMove.x, y: tileToMove.y, dist: 0}];
-            const visited = new Set([`${tileToMove.x},${tileToMove.y}`]);
-            let head = 0;
+        // For each potential destination, check all unique orientations
+        for (const cell of emptyCellsInRange) {
+            const uniqueOrientations = getUniqueOrientations(tileToMove);
+            for (const orientation of uniqueOrientations) {
+                const tempTile = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
+                tempTile.orientation = orientation;
 
-            while(head < queue.length) {
-                const {x, y, dist} = queue[head++];
-                if (dist >= maxMoveDistance) continue;
-
-                const neighbors = getNeighbors(x, y);
-                for (const neighbor of neighbors) {
-                    const neighborKey = `${neighbor.nx},${neighbor.ny}`;
-                    if (!visited.has(neighborKey)) {
-                        visited.add(neighborKey);
-                        if (!currentBoardState[neighborKey]) { // It's an empty spot
-                            if (isPlacementValid(tileToMove, neighbor.nx, neighbor.ny, tempBoardState, true, false)) {
-                                if (isBoardConnected(tempBoardState)) {
-                                    possibleMoves.push({
-                                        type: 'move',
-                                        tile: {id: tileToMove.id, playerId: tileToMove.playerId, edges: [...tileToMove.edges]},
-                                        orientation: orientation,
-                                        x: neighbor.nx, y: neighbor.ny,
-                                        originalX: tileToMove.x,
-                                        originalY: tileToMove.y,
-                                        playerId: playerId
-                                    });
-                                }
-                            }
-                        }
-                        queue.push({x: neighbor.nx, y: neighbor.ny, dist: dist + 1});
-                    }
+                if (isPlacementValid(tempTile, cell.x, cell.y, tempBoardState, true, false)) {
+                    possibleMoves.push({
+                        type: 'move',
+                        tile: { id: tileToMove.id, playerId: tileToMove.playerId, edges: [...tileToMove.edges] },
+                        orientation: orientation,
+                        x: cell.x,
+                        y: cell.y,
+                        originalX: originalX,
+                        originalY: originalY,
+                        playerId: playerId
+                    });
                 }
             }
         }
-        tileToMove.orientation = originalOrientation; // Restore original orientation
     }
 
     return possibleMoves;
