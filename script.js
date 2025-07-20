@@ -81,6 +81,7 @@ function getCookie(name) {
     let mouseHoverR = null;
     let lastPlacedTileKey = null; // Stores the key (e.g., "x,y") of the most recently placed tile
     let aiEvaluatingDetails = null; // Stores details of the tile AI is currently evaluating
+    let aiEvaluationProgress = null; // Stores progress of AI evaluation { current: number, total: number }
     let lastMovedTileOriginalPosition = null; // Stores {q, r, playerId} of the last moved tile's origin
 
     // Cache for getOutsideEmptyCells
@@ -461,6 +462,11 @@ function getCookie(name) {
     //         return true; // Keep in list
     //     });
     // }
+
+    // --- Draw AI Progress Indicator ---
+    if (aiEvaluationProgress) {
+        drawProgressIndicator(aiEvaluationProgress.current, aiEvaluationProgress.total);
+    }
     }
 
     // --- Score Highlight Function ---
@@ -577,6 +583,36 @@ function getCookie(name) {
             callback();
         }
     }
+
+function drawProgressIndicator(current, total) {
+    const progress = current / total;
+    const radius = 30;
+    const x = 40; // Position from left
+    const y = gameCanvas.height - 40; // Position from bottom
+    const startAngle = -Math.PI / 2; // Start at the top
+    const endAngle = startAngle + (2 * Math.PI * progress);
+
+    // Draw background circle
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fill();
+
+    // Draw progress arc
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y, radius, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fill();
+
+    // Draw text
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${current}/${total}`, x, y);
+}
 
 
 
@@ -1135,6 +1171,7 @@ function getCookie(name) {
                 lastPlacedTileKey = loadedState.lastPlacedTileKey;
                 selectedTile = null;
                 aiEvaluatingDetails = null;
+                aiEvaluationProgress = null;
                 console.log(`Game state loaded from URL. Mode: ${player1GameMode}, Opponent: ${opponentType}`);
             } else {
                 console.warn("Failed to deserialize game state from URL. Using cookie-derived or hardcoded defaults.");
@@ -1163,6 +1200,7 @@ function getCookie(name) {
             currentSurroundedTilesForRemoval = [];
             lastPlacedTileKey = null;
             aiEvaluatingDetails = null;
+            aiEvaluationProgress = null;
 
             player1MadeFirstMove = false; // Always reset these for a new game or reset
             player2MadeFirstMove = false;
@@ -1250,10 +1288,11 @@ function getCookie(name) {
         aiWorker = new Worker('aiWorker.js');
         aiWorker.onmessage = function(e) {
             // console.log('[Main] Message received from worker:', e.data);
-            const { task, move, tileToRemove, moveData } = e.data; // Added moveData
+            const { task, move, tileToRemove, moveData, progress } = e.data; // Added moveData
 
             if (task === 'aiMoveResult') {
                 aiEvaluatingDetails = null; // Clear evaluation highlight
+                aiEvaluationProgress = null;
                 redrawBoardOnCanvas(); // Ensure it's cleared visually
                 handleAiMoveResult(move);
             } else if (task === 'aiTileRemovalResult') {
@@ -1263,6 +1302,9 @@ function getCookie(name) {
                 redrawBoardOnCanvas(); // Redraw to show the new highlight
             } else if (task === 'aiClearEvaluationHighlight') {
                 aiEvaluatingDetails = null;
+                redrawBoardOnCanvas();
+            } else if (task === 'aiEvaluatingProgress') {
+                aiEvaluationProgress = progress;
                 redrawBoardOnCanvas();
             }
         };
@@ -1871,6 +1913,7 @@ function processSuccessfulPlacement(placedTileKey, playerOfTurn, oldX = null, ol
     function switchTurn() {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         aiEvaluatingDetails = null; // Clear any AI evaluation highlight when turn switches
+        aiEvaluationProgress = null;
         updateGameInfo(); // Update score displays and current player display first
 
         // Check for game end condition *before* new turn actions (like AI move)

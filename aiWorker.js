@@ -565,6 +565,13 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
                     type: move.type
                 }
             });
+            self.postMessage({
+                task: 'aiEvaluatingProgress',
+                progress: {
+                    current: i + 1,
+                    total: possibleMoves.length
+                }
+            });
         }
 
         var currentTurnEval = _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug);
