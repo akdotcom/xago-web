@@ -53,7 +53,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
 
     self.postMessage({ task: 'aiClearEvaluationHighlight' });
 
-    if (depth > 0) { // Minimax-based Greedy (Greedy2, Greedy4)
+    if (depth > 1) { // Minimax-based Greedy (Greedy2, Greedy4)
         if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy (depth " + depth + ", " + gameMode + ") calculating move for Player " + currentPlayerId + ".");
         else console.log("[Worker] AI: Greedy (depth " + depth + ", " + gameMode + ") calculating move for Player " + currentPlayerId + ".");
 
@@ -64,22 +64,23 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         );
 
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
-            let bestInitialTurnMoves = [];
-            let maxScoreAdvantage = -Infinity;
+            // let bestInitialTurnMoves = [];
+            // let maxScoreAdvantage = -Infinity;
 
-            for (const move of minimaxResult.moves) {
-                const scoreAdvantage = calculateInitialTurnScore(move, boardState, currentPlayerId, opponentPlayerId);
+            // for (const move of minimaxResult.moves) {
+            //     const scoreAdvantage = calculateInitialTurnScore(move, boardState, currentPlayerId, opponentPlayerId);
 
-                if (scoreAdvantage > maxScoreAdvantage) {
-                    maxScoreAdvantage = scoreAdvantage;
-                    bestInitialTurnMoves = [move];
-                } else if (scoreAdvantage === maxScoreAdvantage) {
-                    bestInitialTurnMoves.push(move);
-                }
-            }
+            //     if (scoreAdvantage > maxScoreAdvantage) {
+            //         maxScoreAdvantage = scoreAdvantage;
+            //         bestInitialTurnMoves = [move];
+            //     } else if (scoreAdvantage === maxScoreAdvantage) {
+            //         bestInitialTurnMoves.push(move);
+            //     }
+            // }
 
-            // From the moves that are best in the initial turn, pick one at random.
-            const chosenMove = bestInitialTurnMoves[Math.floor(Math.random() * bestInitialTurnMoves.length)];
+            // // From the moves that are best in the initial turn, pick one at random.
+            // const chosenMove = bestInitialTurnMoves[Math.floor(Math.random() * bestInitialTurnMoves.length)];
+            const chosenMove = minimaxResult.moves[0];
             bestMove = {
                 type: chosenMove.type,
                 tileId: chosenMove.tile.id,
@@ -91,8 +92,8 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
                 originalY: chosenMove.originalY
             };
         }
-    } else { // Simple Greedy (Greedy1, depth 0)
-        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy (depth 0) calculating move for Player " + currentPlayerId + ".");
+    } else { // Simple Greedy (Greedy1, depth 1)
+        if (effectiveDebug) console.log("[Worker DEBUG] AI: Greedy (depth 1) calculating move for Player " + currentPlayerId + ".");
         var bestScoreDiff = -Infinity;
         var bestMoves = [];
 
@@ -190,11 +191,11 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
             bestMove = null; // No possible moves
         }
     } else if (opponentType === 'greedy') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 0);
-    } else if (opponentType === 'greedy2') {
         bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 1);
+    } else if (opponentType === 'greedy2') {
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 2);
     } else if (opponentType === 'greedy4') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 3);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 4);
     }
     // Ensure bestMove has the 'type' field, defaulting to 'place' if not set by a Minimax AI that returns it.
     // Greedy1 currently only makes 'place' moves. Random also only 'place'.
@@ -466,11 +467,6 @@ function _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand,
     var gainsNext = removalResult.handGains[nextPlayerForThisTurn] || [];
     for(var k=0; k<gainsNext.length; k++) newOpponentHand.push(new HexTile(gainsNext[k].id, gainsNext[k].playerId, gainsNext[k].edges));
 
-    if (newHand.length === 0) {
-        return evaluateBoard(boardAfterMove, aiPlayerId) + (maximizingPlayer ? 1000 : -1000);
-    }
-
-    var nextMaximizingPlayer = !maximizingPlayer;
 
     var evalResult = findBestMoveMinimax(
         boardAfterMove,
@@ -481,7 +477,7 @@ function _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand,
         depth - 1,
         alpha,
         beta,
-        nextMaximizingPlayer,
+        !maximizingPlayer,
         useAlphaBetaPruning,
         stats,
         initialMaxDepth,
@@ -492,12 +488,24 @@ function _simulateAndEvaluateMove(move, currentBoardState, aiHand, opponentHand,
     return evalResult.score;
 }
 
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    // Generate a random index from 0 to i
+    const j = Math.floor(Math.random() * (i + 1));
+
+    // Swap elements at indices i and j
+    [array[i], array[j]] = [array[j], array[i]]; // Using array destructuring for a concise swap
+  }
+  return array;
+}
+
 function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug) {
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
     initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth;
 
-    if (depth === 0) {
+   if (depth === 0) {
         stats.nodesAtHorizon++;
         return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
@@ -510,34 +518,36 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
 
     var possibleMoves = getAllPossibleOptions(currentBoardState, handForCurrentPlayer, currentPlayerForThisTurn, gameMode, effectiveDebug);
 
-    // Sort moves to improve pruning and user experience.
-    possibleMoves.sort((a, b) => {
-        const trianglesA = countTriangles(a.tile);
-        const trianglesB = countTriangles(b.tile);
-        if (trianglesA !== trianglesB) {
-            return trianglesB - trianglesA; // Primary sort: higher triangles first
-        }
+    // // Sort moves to improve pruning and user experience.
+    // possibleMoves.sort((a, b) => {
+    //     const trianglesA = countTriangles(a.tile);
+    //     const trianglesB = countTriangles(b.tile);
+    //     if (trianglesA !== trianglesB) {
+    //         return trianglesB - trianglesA; // Primary sort: higher triangles first
+    //     }
 
-        if (a.tile.id !== b.tile.id) {
-            return a.tile.id - b.tile.id; // Secondary sort: tile ID
-        }
+    //     if (a.tile.id !== b.tile.id) {
+    //         return a.tile.id - b.tile.id; // Secondary sort: tile ID
+    //     }
 
-        const angleA = Math.atan2(a.x, a.y);
-        const angleB = Math.atan2(b.x, b.y);
-        if (angleA !== angleB) { // Tertiary sort: angle from x axis
-            return angleB - angleA;
-        }
+    //     const angleA = Math.atan2(a.x, a.y);
+    //     const angleB = Math.atan2(b.x, b.y);
+    //     if (angleA !== angleB) { // Tertiary sort: angle from x axis
+    //         return angleB - angleA;
+    //     }
 
-        if (a.x !== b.x) {
-            return a.x - b.x; // Quaternary sort: position x
-        }
+    //     if (a.x !== b.x) {
+    //         return a.x - b.x; // Quaternary sort: position x
+    //     }
 
-        return a.orientation - b.orientation; // Final sort: orientation
-    });
+    //     return a.orientation - b.orientation; // Final sort: orientation
+    // });
 
     if (possibleMoves.length === 0) {
         return { score: evaluateBoard(currentBoardState, aiPlayerId), moves: [] };
     }
+
+    possibleMoves = shuffleArray(possibleMoves);
 
     var bestMoves = [];
     var bestEval = maximizingPlayer ? -Infinity : Infinity;
@@ -566,21 +576,28 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
             } else if (currentTurnEval === bestEval) {
                 bestMoves.push({ type: move.type, tile: move.tile, orientation: move.orientation, x: move.x, y: move.y, originalX: move.originalX, originalY: move.originalY, score: bestEval });
             }
-            alpha = Math.max(alpha, currentTurnEval);
+            alpha = Math.max(alpha, bestEval);
         } else { // Minimizing player
             if (currentTurnEval < bestEval) {
                 bestEval = currentTurnEval;
+                bestMoves = [{ type: move.type, tile: move.tile, orientation: move.orientation, x: move.x, y: move.y, originalX: move.originalX, originalY: move.originalY, score: bestEval }];
+            } else if (currentTurnEval === bestEval) {
+                bestMoves.push({ type: move.type, tile: move.tile, orientation: move.orientation, x: move.x, y: move.y, originalX: move.originalX, originalY: move.originalY, score: bestEval });
             }
-            beta = Math.min(beta, currentTurnEval);
+            beta = Math.min(beta, bestEval);
         }
 
-        if (useAlphaBetaPruning && beta < alpha) {
+        // Using <= here helps efficiency but AFAICT means that all "bestMoves" after the initial entry
+        // are only guaranteed to be *no better* than the the best possible move.
+        // Use < if you want to guarantee these are truly the best moves.
+        if (useAlphaBetaPruning && beta <= alpha) { // Using <= is important for correctness
             stats.cutoffs++;
             break;
         }
     }
 
-    return maximizingPlayer ? { score: bestEval, moves: bestMoves } : { score: bestEval, moves: [] };
+    // Return the best evaluation score and the corresponding moves
+    return { score: bestEval, moves: bestMoves };
 }
 
 // --- Worker Message Handler ---
