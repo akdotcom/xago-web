@@ -24,6 +24,12 @@ class HexTile {
         return rotatedEdges;
     }
 
+    // Method to get a single edge considering current orientation (if rotation is implemented)
+    getOrientedEdge(edgeId) {
+        let i = ((edgeId - this.orientation) + 6) % 6;
+        return this.edges[i];
+    }
+
     // Basic representation for now
     get getPlayerColor() {
         return this.playerId === 1 ? 'player1-color' : 'player2-color';
@@ -287,6 +293,28 @@ function getSurroundedTiles(currentBoardState) {
     return surroundedTiles;
 }
 
+function doEdgesMatch(tile, x, y, boardState) {
+    const neighbors = getNeighbors(x, y);
+    let touchesExistingTile = false;
+
+    for (const neighborInfo of neighbors) {
+        const {nx, ny, edgeIndexOnNewTile, edgeIndexOnNeighborTile} = neighborInfo;
+        const neighborKey = `${nx},${ny}`;
+        const neighborTile = boardState[neighborKey];
+
+        if (neighborTile) {
+            touchesExistingTile = true;
+            const newTileEdgeType = tile.getOrientedEdge(edgeIndexOnNewTile);
+            const neighborEdgeType = neighborTile.getOrientedEdge(edgeIndexOnNeighborTile);
+
+            if (newTileEdgeType !== neighborEdgeType) {
+                return false;
+            }
+        }
+    }
+    return touchesExistingTile;
+}
+
 function isPlacementValid(tile, x, y, boardState, isDragOver = false, isNewTilePlacement = true) { // Added isNewTilePlacement
     const targetKey = `${x},${y}`;
     if (boardState[targetKey]) {
@@ -319,29 +347,7 @@ function isPlacementValid(tile, x, y, boardState, isDragOver = false, isNewTileP
     // For moving tiles (isNewTilePlacement = false), they can be moved to "inside" empty spots,
     // so the above check is skipped. The isSpaceEnclosed check below is also skipped for moves.
 
-    let touchesExistingTile = false;
-    const neighbors = getNeighbors(x, y);
-
-    for (const neighborInfo of neighbors) {
-        const {nx, ny, edgeIndexOnNewTile, edgeIndexOnNeighborTile} = neighborInfo;
-        const neighborKey = `${nx},${ny}`;
-        const neighborTile = boardState[neighborKey];
-
-        if (neighborTile) {
-            touchesExistingTile = true;
-            const neighborOrientedEdges = neighborTile.getOrientedEdges();
-            const newTileEdgeType = orientedEdges[edgeIndexOnNewTile];
-            const neighborEdgeType = neighborOrientedEdges[edgeIndexOnNeighborTile];
-
-            if (newTileEdgeType !== neighborEdgeType) {
-                if (!isDragOver) console.log(`Edge mismatch with neighbor at ${nx},${ny}. New: ${newTileEdgeType}, Neighbor: ${neighborEdgeType}`);
-                return false;
-            }
-        }
-    }
-
-    if (!touchesExistingTile) {
-        if (!isDragOver) console.log("Tile must touch an existing tile.");
+    if (!doEdgesMatch(tile, x, y, boardState)) {
         return false;
     }
 
@@ -352,10 +358,14 @@ function isPlacementValid(tile, x, y, boardState, isDragOver = false, isNewTileP
     // somewhat redundant for new tiles, as `getOutsideEmptyCells` should already filter out
     // such fully enclosed single-cell "holes". However, keeping it for new tiles as a safeguard
     // against any edge cases in `getOutsideEmptyCells` is fine. It should NOT apply to moves.
-    if (isNewTilePlacement && isSpaceEnclosed(x, y, boardState)) {
-        if (!isDragOver) console.log("Cannot place new tile in an enclosed space (isSpaceEnclosed check).");
-        return false;
-    }
+    
+    // Not needed since we checked that it's in an outsideEmptyEmptyCell already
+
+    // if (isNewTilePlacement && isSpaceEnclosed(x, y, boardState)) {
+    //     if (!isDragOver) console.log("Cannot place new tile in an enclosed space (isSpaceEnclosed check).");
+    //     if (endLogging) endLogging('isPlacementValid');
+    //     return false;
+    // }
 
     if (!isDragOver) console.log("Valid placement.");
     return true;
@@ -372,14 +382,12 @@ function getAllPossiblePlacements(boardState, tile, playerId) {
         tile.orientation = orientation;
 
         if (initialBoardIsEmpty) {
-            if (isPlacementValid(tile, 0, 0, boardState, true, true)) {
-                possiblePlacements.push({ x: 0, y: 0, orientation });
-            }
+            possiblePlacements.push({ x: 0, y: 0, orientation });
         } else {
             const outsideCells = getOutsideEmptyCells(boardState);
             for (const cellKey of outsideCells) {
                 const [x, y] = cellKey.split(',').map(Number);
-                if (isPlacementValid(tile, x, y, boardState, true, true)) {
+                if (doEdgesMatch(tile, x, y, boardState)) {
                     possiblePlacements.push({ x, y, orientation });
                 }
             }
@@ -450,7 +458,7 @@ function getAllPossibleMoves(currentBoardState, playerId) {
                 const tempTile = new HexTile(tileToMove.id, tileToMove.playerId, [...tileToMove.edges]);
                 tempTile.orientation = orientation;
 
-                if (isPlacementValid(tempTile, cell.x, cell.y, tempBoardState, true, false)) {
+                if (doEdgesMatch(tempTile, cell.x, cell.y, tempBoardState)) {
                     possibleMoves.push({
                         type: 'move',
                         tile: { id: tileToMove.id, playerId: tileToMove.playerId, edges: [...tileToMove.edges] },
