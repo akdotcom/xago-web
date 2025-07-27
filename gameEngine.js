@@ -9,6 +9,14 @@ class HexTile {
         this.orientation = 0; // 0-5, representing rotation
         this.x = null; // Board x position
         this.y = null; // Board y position
+        this.orientedEdges = edges;
+        this.uniqueOrientations = null;
+        this.calculatedOrientation = 0;
+    }
+
+    _calculateOrientedEdges(baseEdges, orientation) {
+        return baseEdges.slice(6 - orientation, 6).concat(baseEdges.slice(0, 6 - orientation));
+        this.calculatedOrientation = orientation;
     }
 
     rotate() {
@@ -17,17 +25,33 @@ class HexTile {
 
     // Method to get edges considering current orientation (if rotation is implemented)
     getOrientedEdges() {
-        const rotatedEdges = [...this.edges];
-        for (let i = 0; i < this.orientation; i++) {
-            rotatedEdges.unshift(rotatedEdges.pop());
+        if (this.orientation != this.calculatedOrientation) {
+            this.orientedEdges = this._calculateOrientedEdges(this.edges, this.orientation);
+            this.calculatedOrientation = this.orientation;
         }
-        return rotatedEdges;
+        return this.orientedEdges;
     }
 
     // Method to get a single edge considering current orientation (if rotation is implemented)
     getOrientedEdge(edgeId) {
-        let i = ((edgeId - this.orientation) + 6) % 6;
-        return this.edges[i];
+        const orientedEdges = this.getOrientedEdges();
+        return orientedEdges[edgeId];
+    }
+
+    getUniqueOrientations() {
+        const uniqueEdgePatterns = new Set();
+
+        if (this.uniqueOrientations == null) {
+            this.uniqueOrientations = [];
+            for (let o = 0; o < 6; o++) {
+                const orientedEdges = this._calculateOrientedEdges(this.edges, o).join(',');
+                if(!uniqueEdgePatterns.has(orientedEdges)) {
+                    this.uniqueOrientations.push(o);
+                    uniqueEdgePatterns.add(orientedEdges);
+                }
+            }
+        }
+        return this.uniqueOrientations
     }
 
     // Basic representation for now
@@ -54,19 +78,7 @@ const UNIQUE_TILE_PATTERNS = [
 ];
 
 function getUniqueOrientations(tile) {
-    const uniqueEdgePatterns = new Set();
-    const uniqueOrientations = [];
-    const tempTile = new HexTile(tile.id, tile.playerId, [...tile.edges]);
-
-    for (let o = 0; o < 6; o++) {
-        tempTile.orientation = o;
-        const currentEdges = tempTile.getOrientedEdges().join(',');
-        if (!uniqueEdgePatterns.has(currentEdges)) {
-            uniqueEdgePatterns.add(currentEdges);
-            uniqueOrientations.push(o);
-        }
-    }
-    return uniqueOrientations;
+    return tile.getUniqueOrientations();
 }
 
 function countTriangles(tile) {
@@ -86,19 +98,19 @@ function invalidateWorkerOutsideCellCache() {
     // console.log("[Worker] Outside cell cache invalidated.");
 }
 
-function getNeighbors(q, r) {
-    const axialDirections = [
-        // dq, dr define the *neighbor's* offset from current tile (q,r)
-        // edgeIndexOnNewTile is the edge of the *current* tile that points to this neighbor
-        // edgeIndexOnNeighborTile is the corresponding edge on the *neighbor* tile
-        { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }, // Right
-        { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Bottom-Right
-        { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Left
-        { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Left
-        { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Top-Left
-        { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }  // Top-Right
-    ];
+const axialDirections = [
+    // dq, dr define the *neighbor's* offset from current tile (q,r)
+    // edgeIndexOnNewTile is the edge of the *current* tile that points to this neighbor
+    // edgeIndexOnNeighborTile is the corresponding edge on the *neighbor* tile
+    { dq: +1, dr:  0, edgeIndexOnNewTile: 0, edgeIndexOnNeighborTile: 3 }, // Right
+    { dq:  0, dr: +1, edgeIndexOnNewTile: 1, edgeIndexOnNeighborTile: 4 }, // Bottom-Right
+    { dq: -1, dr: +1, edgeIndexOnNewTile: 2, edgeIndexOnNeighborTile: 5 }, // Bottom-Left
+    { dq: -1, dr:  0, edgeIndexOnNewTile: 3, edgeIndexOnNeighborTile: 0 }, // Left
+    { dq:  0, dr: -1, edgeIndexOnNewTile: 4, edgeIndexOnNeighborTile: 1 }, // Top-Left
+    { dq: +1, dr: -1, edgeIndexOnNewTile: 5, edgeIndexOnNeighborTile: 2 }  // Top-Right
+];
 
+function getNeighbors(q, r) {
     const neighbors = [];
     for (const dir of axialDirections) {
         neighbors.push({
@@ -363,7 +375,6 @@ function isPlacementValid(tile, x, y, boardState, isDragOver = false, isNewTileP
 
     // if (isNewTilePlacement && isSpaceEnclosed(x, y, boardState)) {
     //     if (!isDragOver) console.log("Cannot place new tile in an enclosed space (isSpaceEnclosed check).");
-    //     if (endLogging) endLogging('isPlacementValid');
     //     return false;
     // }
 
