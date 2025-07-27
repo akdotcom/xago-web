@@ -44,7 +44,7 @@ function _asyncToGenerator(fn) {
 }
 
 // --- AI Player Logic ---
-var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, depth) {
+var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, depth, timeLimit) {
     const effectiveDebug = (typeof debug === 'boolean' ? debug : (typeof debug !== 'undefined' ? Boolean(debug) : false));
 
     yield new Promise(function(resolve) { return setTimeout(resolve, 500); });
@@ -60,7 +60,7 @@ var calculateGreedyMove = _asyncToGenerator(function* (boardState, player2Hand, 
         var stats = { nodesAtHorizon: 0, cutoffs: 0 };
         var minimaxResult = findBestMoveMinimax(
             boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId,
-            depth, -Infinity, Infinity, true, true, stats, depth, gameMode, effectiveDebug
+            depth, -Infinity, Infinity, true, true, stats, depth, gameMode, effectiveDebug, timeLimit
         );
 
         if (minimaxResult && minimaxResult.moves && minimaxResult.moves.length > 0) {
@@ -191,11 +191,13 @@ var workerPerformAiMove = _asyncToGenerator(function* (boardState, player2HandOr
             bestMove = null; // No possible moves
         }
     } else if (opponentType === 'greedy') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 1);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 1, null);
     } else if (opponentType === 'greedy2') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 2);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 2, null);
+    } else if (opponentType === 'greedy4i') {
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 4, 30000);
     } else if (opponentType === 'greedy4') {
-        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 4);
+        bestMove = yield calculateGreedyMove(boardState, player2Hand, player1Hand, currentPlayerId, opponentPlayerId, gameMode, debug, 4, null);
     }
     // Ensure bestMove has the 'type' field, defaulting to 'place' if not set by a Minimax AI that returns it.
     // Greedy1 currently only makes 'place' moves. Random also only 'place'.
@@ -220,13 +222,13 @@ function workerPerformAiTileRemoval(boardState, currentSurroundedTilesData, oppo
         } else if (currentSurroundedTilesData.length > 0) {
             tileToRemove = currentSurroundedTilesData[Math.floor(Math.random() * currentSurroundedTilesData.length)];
         }
-    } else if (['greedy', 'greedy2', 'greedy4'].includes(opponentType)) { // Consolidated greedy modes
+    } else if (['greedy', 'greedy2', 'greedy4i', 'greedy4'].includes(opponentType)) { // Consolidated greedy modes
         var opponentTiles_g = currentSurroundedTilesData.filter(function(t) { return t.playerId !== currentPlayerId; });
         var ownTiles_g = currentSurroundedTilesData.filter(function(t) { return t.playerId === currentPlayerId; });
 
         // Greedy 2 and 4 use a more sophisticated removal choice.
         // Greedy 1 uses a simpler removal choice (first available).
-        if (['greedy2', 'greedy4'].includes(opponentType)) {
+        if (['greedy2', 'greedy4i', 'greedy4'].includes(opponentType)) {
             var bestChoice = null;
             var bestScoreOverall = -Infinity;
 
@@ -500,10 +502,11 @@ function shuffleArray(array) {
   return array;
 }
 
-function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug) {
+function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOriginal, aiPlayerId, opponentPlayerId, depth, alpha, beta, maximizingPlayer, useAlphaBetaPruning, stats, initialMaxDepth, gameMode, effectiveDebug, timeLimit) {
     useAlphaBetaPruning = useAlphaBetaPruning === undefined ? true : useAlphaBetaPruning;
     stats = stats === undefined ? {nodesAtHorizon: 0, cutoffs: 0} : stats;
     initialMaxDepth = initialMaxDepth === undefined ? depth : initialMaxDepth;
+    const startTime = (depth === initialMaxDepth && maximizingPlayer) ? Date.now() : null;
 
    if (depth === 0) {
         stats.nodesAtHorizon++;
@@ -600,6 +603,10 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
         if (useAlphaBetaPruning && beta <= alpha) { // Using <= is important for correctness
             stats.cutoffs++;
             break;
+        }
+        if (depth === initialMaxDepth && maximizingPlayer && startTime && timeLimit && (Date.now() - startTime > timeLimit)) {
+            if (effectiveDebug) console.log(`[Worker DEBUG] AI: Time limit of ${timeLimit}ms reached. Reducing depth.`);
+            depth = initialMaxDepth - 2;
         }
     }
 
