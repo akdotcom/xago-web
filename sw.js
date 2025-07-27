@@ -1,4 +1,4 @@
-const CACHE_NAME = 'xago-cache-v2'; // Incremented cache version
+const CACHE_NAME = 'xago-cache-v3'; // Incremented cache version
 const urlsToCache = [
   '/',
   'index.html',
@@ -6,7 +6,6 @@ const urlsToCache = [
   'script.js',
   'aiWorker.js',
   'manifest.json',
-  // We will not cache the placeholder icons as they don't exist yet
   'icon-192x192.png',
   'icon-512x512.png'
 ];
