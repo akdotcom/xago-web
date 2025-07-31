@@ -606,7 +606,7 @@ function findBestMoveMinimax(currentBoardState, aiHandOriginal, opponentHandOrig
         }
         if (depth === initialMaxDepth && maximizingPlayer && startTime && timeLimit && (Date.now() - startTime > timeLimit)) {
             if (effectiveDebug) console.log(`[Worker DEBUG] AI: Time limit of ${timeLimit}ms reached. Reducing depth.`);
-            depth = initialMaxDepth - 1;
+            depth = initialMaxDepth - 2;
         }
     }
 
