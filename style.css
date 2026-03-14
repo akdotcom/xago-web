@@ -409,6 +409,18 @@ footer {
     background-color: #d32f2f;
 }
 
+#kickstarter-link {
+    margin-left: 20px;
+    vertical-align: middle;
+    text-decoration: none;
+    color: #0573e0;
+    font-weight: bold;
+}
+
+#kickstarter-link:hover {
+    text-decoration: underline;
+}
+
 /* Obsolete CSS related to DOM-based hexagon tiles and drop targets */
 /*
 .hexagon-tile {
